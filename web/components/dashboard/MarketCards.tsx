@@ -49,11 +49,10 @@ interface Instrument {
 }
 
 const EQUITY: Instrument[] = [
-  { symbol: "SPY",     label: "S&P 500",     sublabel: "SPY",       accent: "bg-blue-50 dark:bg-blue-900/30",    iconColor: "text-blue-500"   },
-  { symbol: "QQQ",     label: "Nasdaq 100",  sublabel: "QQQ",       accent: "bg-violet-50 dark:bg-violet-900/30",iconColor: "text-violet-500" },
-  { symbol: "IWM",     label: "Russell 2000",sublabel: "IWM",       accent: "bg-orange-50 dark:bg-orange-900/30",iconColor: "text-orange-500" },
-  { symbol: "BTC-USD", label: "Bitcoin",     sublabel: "BTC/USD",   accent: "bg-amber-50 dark:bg-amber-900/30",  iconColor: "text-amber-500"  },
-  { symbol: "GC=F",    label: "Gold",        sublabel: "Spot USD/oz",accent: "bg-yellow-50 dark:bg-yellow-900/30",iconColor: "text-yellow-500" },
+  { symbol: "SPY",     label: "S&P 500",     sublabel: "SPY",     accent: "bg-blue-50 dark:bg-blue-900/30",    iconColor: "text-blue-500"   },
+  { symbol: "QQQ",     label: "Nasdaq 100",  sublabel: "QQQ",     accent: "bg-violet-50 dark:bg-violet-900/30",iconColor: "text-violet-500" },
+  { symbol: "IWM",     label: "Russell 2000",sublabel: "IWM",     accent: "bg-orange-50 dark:bg-orange-900/30",iconColor: "text-orange-500" },
+  { symbol: "BTC-USD", label: "Bitcoin",     sublabel: "BTC/USD", accent: "bg-amber-50 dark:bg-amber-900/30",  iconColor: "text-amber-500"  },
 ];
 
 const FUTURES: Instrument[] = [
@@ -61,7 +60,15 @@ const FUTURES: Instrument[] = [
   { symbol: "NQ=F",    label: "Nasdaq 100",  sublabel: "NQ Futures",  accent: "bg-violet-50 dark:bg-violet-900/30",iconColor: "text-violet-500" },
   { symbol: "RTY=F",   label: "Russell 2000",sublabel: "RTY Futures", accent: "bg-orange-50 dark:bg-orange-900/30",iconColor: "text-orange-500" },
   { symbol: "BTC-USD", label: "Bitcoin",     sublabel: "BTC/USD",     accent: "bg-amber-50 dark:bg-amber-900/30",  iconColor: "text-amber-500"  },
-  { symbol: "GC=F",    label: "Gold",        sublabel: "Spot USD/oz",  accent: "bg-yellow-50 dark:bg-yellow-900/30",iconColor: "text-yellow-500" },
+];
+
+const COMMODITIES: Instrument[] = [
+  { symbol: "GC=F",  label: "Gold",        sublabel: "USD / oz",  accent: "bg-yellow-50 dark:bg-yellow-900/30",  iconColor: "text-yellow-500"  },
+  { symbol: "SI=F",  label: "Silver",      sublabel: "USD / oz",  accent: "bg-slate-50 dark:bg-slate-800/40",    iconColor: "text-slate-400"   },
+  { symbol: "CL=F",  label: "Crude Oil",   sublabel: "WTI USD/bbl",accent: "bg-gray-50 dark:bg-gray-800/40",     iconColor: "text-gray-400"    },
+  { symbol: "NG=F",  label: "Nat Gas",     sublabel: "USD / MMBtu",accent: "bg-sky-50 dark:bg-sky-900/30",       iconColor: "text-sky-500"     },
+  { symbol: "HG=F",  label: "Copper",      sublabel: "USD / lb",  accent: "bg-orange-50 dark:bg-orange-900/30", iconColor: "text-orange-400"  },
+  { symbol: "ZW=F",  label: "Wheat",       sublabel: "USD / bu",  accent: "bg-amber-50 dark:bg-amber-900/30",   iconColor: "text-amber-600"   },
 ];
 
 const INDIA: Instrument[] = [
@@ -200,7 +207,7 @@ export default function MarketCards() {
   const load = useCallback(async () => {
     try {
       setError(false);
-      const allSymbols = [...instruments.map((i) => i.symbol), ...INDIA.map((i) => i.symbol)];
+      const allSymbols = [...instruments.map((i) => i.symbol), ...INDIA.map((i) => i.symbol), ...COMMODITIES.map((i) => i.symbol)];
       const map = await fetchQuotes(allSymbols);
       setQuotes(map);
       setLast(new Date());
@@ -241,7 +248,7 @@ export default function MarketCards() {
         <p className="text-xs text-red-400 mb-2">Could not load market data — will retry automatically.</p>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {instruments.map((inst) => (
           <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
         ))}
@@ -252,6 +259,16 @@ export default function MarketCards() {
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">India Markets</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {INDIA.map((inst) => (
+            <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Commodities row ───────────────────────────────────────────── */}
+      <div className="mt-4">
+        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Commodities</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {COMMODITIES.map((inst) => (
             <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
           ))}
         </div>
