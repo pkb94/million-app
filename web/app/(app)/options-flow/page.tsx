@@ -24,21 +24,24 @@ function makeSlot(ticker: string): Slot {
 }
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
-function SummaryCards({ data }: { data: GexResult }) {
+// panelCount: how many panels are visible — drives how many cols to use
+function SummaryCards({ data, panelCount }: { data: GexResult; panelCount: number }) {
   const items = [
     { label: "Net GEX",    value: fmtGexUtil(data.net_gex),                                             pos: (data.net_gex ?? 0) >= 0 },
-    { label: "Zero Gamma", value: data.zero_gamma    != null ? `$${data.zero_gamma.toFixed(2)}`    : "—", pos: null },
+    { label: "Zero γ",     value: data.zero_gamma    != null ? `$${data.zero_gamma.toFixed(2)}`    : "—", pos: null },
     { label: "Spot",       value: data.spot          != null ? `$${data.spot.toFixed(2)}`          : "—", pos: null },
     { label: "Call Wall",  value: data.max_call_wall  != null ? `$${data.max_call_wall.toFixed(2)}`  : "—", pos: true  },
     { label: "Put Wall",   value: data.max_put_wall   != null ? `$${data.max_put_wall.toFixed(2)}`   : "—", pos: false },
     { label: "Max GEX",    value: data.max_gex_strike != null ? `$${data.max_gex_strike.toFixed(2)}` : "—", pos: true  },
   ];
+  // Always 2 cols per row so values never overflow; single panel gets 3
+  const gridCols = panelCount === 1 ? "grid-cols-3" : "grid-cols-2";
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+    <div className={`grid ${gridCols} gap-1.5 mb-3`}>
       {items.map(({ label, value, pos }) => (
-        <div key={label} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-2.5">
-          <p className="text-[10px] text-gray-400 mb-0.5">{label}</p>
-          <p className={`text-sm font-black ${
+        <div key={label} className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-2.5 py-2 min-w-0">
+          <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5 truncate">{label}</p>
+          <p className={`text-xs font-black truncate ${
             pos === null ? "text-gray-900 dark:text-white" : pos ? "text-green-500" : "text-red-500"
           }`}>{value}</p>
         </div>
@@ -49,13 +52,14 @@ function SummaryCards({ data }: { data: GexResult }) {
 
 // ── Single ticker panel ───────────────────────────────────────────────────────
 function TickerPanel({
-  slot, accentColor, nStrikes,
+  slot, accentColor, nStrikes, panelCount,
   onInputChange, onSearch, onToggleExpiry, onClearExpiry,
   data, isLoading, isError, isFetching, onRefresh,
 }: {
   slot: Slot;
   accentColor: string;
   nStrikes: number;
+  panelCount: number;
   onInputChange: (v: string) => void;
   onSearch: (e: React.FormEvent) => void;
   onToggleExpiry: (d: string) => void;
@@ -111,7 +115,7 @@ function TickerPanel({
 
       {data && (
         <>
-          <SummaryCards data={data} />
+          <SummaryCards data={data} panelCount={panelCount} />
 
           {/* Expiry filter chips */}
           {expiryDates.length > 1 && (
@@ -163,13 +167,14 @@ function TickerPanel({
 
 // ── Wrapper that owns its own query ───────────────────────────────────────────
 function TickerPanelWithQuery({
-  slot, accentColor, nStrikes, enabled,
+  slot, accentColor, nStrikes, enabled, panelCount,
   onInputChange, onSearch, onToggleExpiry, onClearExpiry,
 }: {
   slot: Slot;
   accentColor: string;
   nStrikes: number;
   enabled: boolean;
+  panelCount: number;
   onInputChange: (v: string) => void;
   onSearch: (e: React.FormEvent) => void;
   onToggleExpiry: (d: string) => void;
@@ -187,6 +192,7 @@ function TickerPanelWithQuery({
       slot={slot}
       accentColor={accentColor}
       nStrikes={nStrikes}
+      panelCount={panelCount}
       onInputChange={onInputChange}
       onSearch={onSearch}
       onToggleExpiry={onToggleExpiry}
@@ -295,6 +301,7 @@ export default function OptionsFlowPage() {
             slot={slot}
             accentColor={ACCENTS[i]}
             nStrikes={nStrikes}
+            panelCount={slots.length}
             enabled={true}
             onInputChange={(v) => updateSlot(i, { input: v })}
             onSearch={(e) => {
