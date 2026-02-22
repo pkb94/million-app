@@ -99,9 +99,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
             <th className="sticky top-[37px] z-10 bg-[var(--surface-2)] text-left px-2 py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wide border-b border-t border-[var(--border)] min-w-[90px]">
               STRIKE
             </th>
-            {cols.map(({ exp, short, kingStrike, netGex }) => {
-              const allStrikes = heatmap_strikes ?? [];
-              const hasKing = allStrikes.some((s) => s === kingStrike && strikes.includes(s));
+            {cols.map(({ exp, short, netGex }) => {
               const gexColor = netGex >= 0 ? "#00cc44" : "#ff4444";
               return (
                 <th
@@ -109,17 +107,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
                   className="sticky top-[37px] z-10 bg-[var(--surface-2)] text-right px-2 py-1 text-[9px] font-bold text-gray-500 uppercase border-b border-t border-l border-[var(--border)] min-w-[100px]"
                 >
                   <div className="flex flex-col items-end gap-0.5">
-                    <span>
-                      {short}
-                      {hasKing && (
-                        <span
-                          className="inline-block ml-1 text-[8px] font-black rounded px-1 align-middle leading-none"
-                          style={{ background: "#FFB800", color: "#111", boxShadow: "0 0 4px #FFB80099" }}
-                        >
-                          ★
-                        </span>
-                      )}
-                    </span>
+                    <span>{short}</span>
                     <span className="text-[8px] font-extrabold tracking-tight" style={{ color: gexColor }}>
                       {netGex >= 0 ? "+" : ""}{fmtGex(netGex)}
                     </span>
