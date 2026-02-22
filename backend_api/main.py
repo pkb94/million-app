@@ -110,6 +110,45 @@ def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+# ── Net-flow intraday snapshot store ─────────────────────────────────────────
+# A simple in-memory ring buffer per symbol.  Each time gamma-exposure is
+# fetched we record one snapshot so the chart builds up a time-series.
+from collections import deque
+from datetime import timezone as _tz
+
+_MAX_SNAPSHOTS = 390  # one full 6.5-hour trading day at 1-min resolution
+_flow_history: Dict[str, deque] = {}
+
+
+def _record_flow_snapshot(
+    symbol: str,
+    spot: float,
+    call_prem: float,
+    put_prem: float,
+    net_flow: float,
+) -> None:
+    if symbol not in _flow_history:
+        _flow_history[symbol] = deque(maxlen=_MAX_SNAPSHOTS)
+    _flow_history[symbol].append(
+        {
+            "t": datetime.now(_tz.utc).strftime("%H:%M"),
+            "price": round(spot, 2),
+            "call_prem": round(call_prem, 0),
+            "put_prem": round(put_prem, 0),
+            "net_flow": round(net_flow, 0),
+        }
+    )
+
+
+@app.get("/options/net-flow-history/{symbol}", response_model=List[Dict[str, Any]])
+def net_flow_history(symbol: str, _user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    """Return the intraday net-flow snapshot history for a symbol.
+    Snapshots are recorded each time gamma-exposure is fetched.
+    """
+    sym = symbol.upper()
+    return list(_flow_history.get(sym, []))
+
+
 @app.get("/market/quotes")
 def market_quotes(symbols: str) -> List[Dict[str, Any]]:
     """Return live quotes for a comma-separated list of symbols (e.g. SPY,QQQ,ES=F).
@@ -688,6 +727,14 @@ def gamma_exposure(symbol: str, _user=Depends(get_current_user)) -> Dict[str, An
     from logic.gamma import compute_gamma_exposure
 
     result = compute_gamma_exposure(symbol.upper())
+    # Record a snapshot for the net-flow history chart
+    _record_flow_snapshot(
+        symbol=result.symbol,
+        spot=result.spot,
+        call_prem=result.call_premium,
+        put_prem=result.put_premium,
+        net_flow=result.net_flow,
+    )
     return {
         "symbol": result.symbol,
         "spot": result.spot,
@@ -704,6 +751,11 @@ def gamma_exposure(symbol: str, _user=Depends(get_current_user)) -> Dict[str, An
         "max_put_wall": result.max_put_wall,
         "max_gex_strike": result.max_gex_strike,
         "net_gex": result.net_gex,
+        "call_premium": result.call_premium,
+        "put_premium": result.put_premium,
+        "net_flow": result.net_flow,
+        "flow_by_expiry": result.flow_by_expiry,
+        "top_flow_strikes": result.top_flow_strikes,
         "error": result.error,
     }
 
