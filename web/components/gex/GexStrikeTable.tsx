@@ -8,9 +8,10 @@ interface Props {
   data: GexResult;
   nStrikes: number;
   expiryFilter: string[] | null; // null = all
+  accentColor?: string; // optional per-ticker accent (for comparison mode)
 }
 
-export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) {
+export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentColor }: Props) {
   const { spot, heatmap_strikes, heatmap_expiries, heatmap_values, net_gex, zero_gamma } = data;
 
   // ── select expiries ──────────────────────────────────────────────────────
@@ -65,7 +66,10 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
   }
 
   return (
-    <div className="overflow-x-auto overflow-y-auto max-h-[640px] rounded-md border border-[var(--border)] bg-[var(--surface)] font-mono text-[11px]">
+    <div
+      className="overflow-x-auto overflow-y-auto max-h-[640px] rounded-md border border-[var(--border)] bg-[var(--surface)] font-mono text-[11px]"
+      style={accentColor ? { borderTopColor: accentColor, borderTopWidth: 3 } : undefined}
+    >
       <table className="border-collapse w-full">
         <thead>
           {/* ── Row A: summary header ── */}
@@ -74,6 +78,12 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
               colSpan={1 + cols.length}
               className="sticky top-0 z-10 bg-[var(--surface-2)] text-left px-3 py-2 border-b-2 border-[var(--border)] whitespace-nowrap"
             >
+              {accentColor && (
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
+                  style={{ background: accentColor }}
+                />
+              )}
               <span className="text-[17px] font-black text-gray-900 dark:text-gray-100 mr-2">
                 {data.symbol}
               </span>
