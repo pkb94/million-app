@@ -112,7 +112,10 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
                     <span>
                       {short}
                       {hasKing && (
-                        <span className="inline-block ml-1 bg-amber-700 text-white text-[7px] font-bold rounded px-1 align-middle">
+                        <span
+                          className="inline-block ml-1 text-[8px] font-black rounded px-1 align-middle leading-none"
+                          style={{ background: "#FFB800", color: "#111", boxShadow: "0 0 4px #FFB80099" }}
+                        >
                           ★
                         </span>
                       )}
@@ -167,7 +170,12 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
                     <td
                       key={exp}
                       className="px-2 py-[1px] text-right border-b border-l border-[var(--border)]"
-                      style={{ background: bg, color: fg }}
+                      style={{
+                        background: bg,
+                        color: fg,
+                        outline: isKing ? "2px solid #FFB800" : undefined,
+                        outlineOffset: isKing ? "-2px" : undefined,
+                      }}
                     >
                       {showBadge && (
                         <span
@@ -179,7 +187,15 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
                       )}
                       {fmtGex(v)}
                       {isKing && (
-                        <span className="inline-block ml-1 bg-amber-700 text-white text-[9px] font-extrabold rounded px-1 align-middle">
+                        <span
+                          className="inline-block ml-1.5 text-[9px] font-black align-middle leading-none px-1.5 py-[2px] rounded"
+                          style={{
+                            background: "#FFB800",
+                            color: "#111",
+                            boxShadow: "0 0 6px 1px #FFB80088",
+                            letterSpacing: "0.03em",
+                          }}
+                        >
                           ★ KING
                         </span>
                       )}
