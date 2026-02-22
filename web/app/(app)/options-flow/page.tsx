@@ -293,11 +293,6 @@ export default function OptionsFlowPage() {
   );
 }
 
-
-const STRIKE_OPTIONS = [10, 20, 30, 40, 50] as const;
-
-export default function OptionsFlowPage() {
-  const [ticker, setTicker]       = useState("SPY");
   const [input, setInput]         = useState("SPY");
   const [nStrikes, setNStrikes]   = useState<number>(20);
   const [expiryFilter, setExpiry] = useState<string[] | null>(null);
