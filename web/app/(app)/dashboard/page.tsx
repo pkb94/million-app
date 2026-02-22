@@ -2,12 +2,12 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
 import { fetchTrades, fetchOrders, fetchCashBalance, Trade, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
   Plus, X, TrendingUp, TrendingDown, DollarSign, Activity, Clock, ArrowRight,
-  Search, BarChart2,
+  Search,
 } from "lucide-react";
 import { PageHeader, SectionLabel, SkeletonStatGrid, Tabs, Badge, RefreshButton } from "@/components/ui";
 
@@ -86,21 +86,12 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const [showCash, setShowCash]       = useState(false);
   const [lookupQuery, setLookupQuery] = useState("");
-  const [lookupSymbol, setLookupSymbol] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  const lookupQ = useQuery({
-    queryKey: ["lookup", lookupSymbol],
-    queryFn: () => api.get<{ symbol: string; bars: {date:string;close:number}[]; current_price?: number; error?: string }>(`/stocks/${lookupSymbol}/history?period=3mo`),
-    enabled: !!lookupSymbol,
-    staleTime: 60_000,
-    retry: false,
-  });
 
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
     const t = lookupQuery.trim().toUpperCase();
-    if (t) setLookupSymbol(t);
+    if (t) router.push(`/search?q=${t}`);
   };
 
   const tradesQ = useQuery({ queryKey: ["trades"],       queryFn: fetchTrades,          staleTime: 30_000 });
@@ -149,7 +140,25 @@ export default function DashboardPage() {
         }
       />
 
-      {/* Stat cards */}
+      {/* ── Slim stock search bar ── */}
+      <form onSubmit={handleLookup} className="flex gap-2 mb-6">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            ref={searchRef}
+            value={lookupQuery}
+            onChange={(e) => setLookupQuery(e.target.value.toUpperCase())}
+            placeholder="Look up a ticker — AAPL, SPY, TSLA…"
+            className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-xl text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <button type="submit" disabled={!lookupQuery.trim()}
+          className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 transition">
+          View
+        </button>
+      </form>
+
+      {/* Stat cards */}}
       {isLoading ? (
         <div className="mb-6 sm:mb-8"><SkeletonStatGrid count={4} /></div>
       ) : (
@@ -206,101 +215,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
-      {/* ── Inline Stock Lookup ── */}
-      <SectionLabel>Stock Lookup</SectionLabel>
-      <div className="mb-6 sm:mb-8 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5">
-        <form onSubmit={handleLookup} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input
-              ref={searchRef}
-              value={lookupQuery}
-              onChange={(e) => setLookupQuery(e.target.value.toUpperCase())}
-              placeholder="Ticker — e.g. AAPL, SPY, TSLA"
-              className="w-full pl-10 pr-4 py-2.5 border border-[var(--border)] rounded-xl text-sm bg-[var(--surface-2)] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button type="submit" disabled={!lookupQuery.trim()}
-            className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
-            View
-          </button>
-          {lookupSymbol && (
-            <button type="button" onClick={() => { setLookupSymbol(null); setLookupQuery(""); }}
-              className="px-3 py-2.5 rounded-xl bg-[var(--surface-2)] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm transition">
-              ✕
-            </button>
-          )}
-        </form>
-
-        {lookupSymbol && (
-          <div className="mt-4">
-            {lookupQ.isLoading && (
-              <div className="space-y-2">
-                <div className="h-16 rounded-xl bg-[var(--surface-2)] animate-pulse" />
-                <div className="h-48 rounded-xl bg-[var(--surface-2)] animate-pulse" />
-              </div>
-            )}
-            {lookupQ.data && !lookupQ.data.error && (() => {
-              const bars = lookupQ.data.bars ?? [];
-              const last = bars.length ? bars[bars.length - 1].close : null;
-              const prev = bars.length > 1 ? bars[bars.length - 2].close : null;
-              const change = last && prev ? last - prev : null;
-              const pct = change && prev ? (change / prev) * 100 : null;
-              const up = (change ?? 0) >= 0;
-              return (
-                <div>
-                  <div className="flex items-end justify-between mb-3">
-                    <div>
-                      <p className="text-2xl font-black text-gray-900 dark:text-white">
-                        {lookupSymbol} {last != null ? `$${last.toFixed(2)}` : ""}
-                      </p>
-                      {change != null && pct != null && (
-                        <p className={`text-sm font-semibold mt-0.5 ${up ? "text-green-500" : "text-red-500"}`}>
-                          {up ? "▲" : "▼"} ${Math.abs(change).toFixed(2)} ({pct.toFixed(2)}%)
-                        </p>
-                      )}
-                    </div>
-                    <a href={`/orders?symbol=${lookupSymbol}`}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition">
-                      Trade
-                    </a>
-                  </div>
-                  {bars.length > 1 && (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={bars} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb22" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false}
-                          interval={Math.floor(bars.length / 6)} tickFormatter={(d: string) => d.slice(5)} />
-                        <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#9ca3af" }}
-                          tickLine={false} axisLine={false} width={60}
-                          tickFormatter={(v: number) => "$" + v.toFixed(0)} />
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <RTooltip formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Close"]}
-                          contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "inherit" }}
-                          labelStyle={{ color: "#9ca3af", fontSize: 11 }} />
-                        <Line type="monotone" dataKey="close" dot={false}
-                          stroke={up ? "#22c55e" : "#ef4444"} strokeWidth={2} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              );
-            })()}
-            {(lookupQ.data?.error || lookupQ.isError) && (
-              <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
-                No market data for <strong>{lookupSymbol}</strong>. You can still place orders manually.
-              </p>
-            )}
-          </div>
-        )}
-        {!lookupSymbol && (
-          <p className="text-xs text-gray-400 mt-3 flex items-center gap-1.5">
-            <BarChart2 size={12} className="opacity-50" />
-            Enter a ticker to see the chart and place a trade
-          </p>
-        )}
-      </div>
 
       {/* Quick actions */}
       <SectionLabel>Quick Actions</SectionLabel>

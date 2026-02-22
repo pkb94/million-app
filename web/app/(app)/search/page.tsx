@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { api } from "@/lib/api";
@@ -166,8 +167,9 @@ function StockDetail({ symbol }: { symbol: string }) {
 }
 
 export default function SearchPage() {
-  const [query, setQuery]   = useState("");
-  const [chosen, setChosen] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const [query, setQuery]   = useState(searchParams.get("q") ?? "");
+  const [chosen, setChosen] = useState<string | null>(searchParams.get("q")?.toUpperCase() ?? null);
   const trimmed = query.trim().toUpperCase();
 
   const handleSearch = (e: React.FormEvent) => {
