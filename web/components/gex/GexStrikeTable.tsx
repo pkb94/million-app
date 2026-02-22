@@ -172,7 +172,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter }: Props) 
                       {isKing && (
                         <span
                           className="ml-1 align-middle text-[11px]"
-                          style={{ color: "#FFB800", textShadow: "0 0 4px #FFB800" }}
+                          style={{ color: "#111111" }}
                           title="King Node"
                         >
                           ★
