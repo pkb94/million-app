@@ -111,16 +111,8 @@ def health() -> Dict[str, str]:
 
 @app.post("/auth/signup", response_model=AuthResponse)
 def signup(req: AuthSignupRequest, request: Request) -> AuthResponse:
-    try:
-        username = str(req.username).strip().lower()
-        user_id = services.create_user(username, req.password)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    token = create_access_token(subject=str(user_id), extra={"username": username})
-    ip = getattr(getattr(request, "client", None), "host", None)
-    ua = request.headers.get("user-agent")
-    refresh_token = services.create_refresh_token(user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
-    return AuthResponse(access_token=token, refresh_token=refresh_token, user_id=int(user_id), username=username)
+    # Registration is currently closed.
+    raise HTTPException(status_code=403, detail="Registration is not open at this time.")
 
 
 @app.post("/auth/login", response_model=AuthResponse)
