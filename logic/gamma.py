@@ -333,8 +333,25 @@ def _find_zero_gamma(by_strike: pd.DataFrame, spot: float) -> Optional[float]:
 
 def compute_gamma_exposure(symbol: str) -> GEXResult:
     """Main entry point. Returns a GEXResult ready to render."""
-    sym = str(symbol or "").strip().upper()
-    result = GEXResult(symbol=sym, spot=0.0, expiries=[])
+    # ── Symbol normalization ──────────────────────────────────────────────────
+    # Map common shorthand names to the yfinance ticker that actually has options.
+    # Users type "SPX"; yfinance needs "^SPX".
+    _SYMBOL_ALIASES: dict[str, str] = {
+        "SPX":   "^SPX",   # S&P 500 index
+        "NDX":   "^NDX",   # Nasdaq 100 index
+        "RUT":   "^RUT",   # Russell 2000 index
+        "VIX":   "^VIX",   # CBOE Volatility Index
+        "DJI":   "^DJI",   # Dow Jones
+        "DJIA":  "^DJI",
+        "SPY500":"^SPX",
+        "OEX":   "^OEX",
+        "XSP":   "^XSP",   # Mini-SPX
+    }
+    raw = str(symbol or "").strip().upper()
+    sym = _SYMBOL_ALIASES.get(raw, raw)
+    # Display symbol stays as the user typed (e.g. "SPX") for labels
+    display_sym = raw
+    result = GEXResult(symbol=display_sym, spot=0.0, expiries=[])
 
     try:
         with warnings.catch_warnings():
