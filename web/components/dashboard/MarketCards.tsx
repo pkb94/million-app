@@ -62,6 +62,13 @@ const FUTURES: Instrument[] = [
   { symbol: "BTC-USD", label: "Bitcoin",     sublabel: "BTC/USD",     accent: "bg-amber-50 dark:bg-amber-900/30",  iconColor: "text-amber-500"  },
 ];
 
+const INDIA: Instrument[] = [
+  { symbol: "^NSEI",   label: "Nifty 50",    sublabel: "NSE India",   accent: "bg-blue-50 dark:bg-blue-900/30",     iconColor: "text-blue-500"    },
+  { symbol: "^BSESN",  label: "Sensex",      sublabel: "BSE India",   accent: "bg-orange-50 dark:bg-orange-900/30", iconColor: "text-orange-500"  },
+  { symbol: "INR=X",   label: "INR / USD",   sublabel: "Spot Rate",   accent: "bg-emerald-50 dark:bg-emerald-900/30",iconColor: "text-emerald-500" },
+  { symbol: "GC=F",    label: "Gold",        sublabel: "Spot (USD/oz)",accent: "bg-yellow-50 dark:bg-yellow-900/30", iconColor: "text-yellow-500"  },
+];
+
 // ── Quote fetching ─────────────────────────────────────────────────────────────
 
 interface Quote {
@@ -95,6 +102,18 @@ async function fetchQuotes(symbols: string[]): Promise<QuoteMap> {
 function fmtPrice(sym: string, price: number): string {
   if (sym.includes("BTC")) {
     return "$" + price.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+  // Indian indices (points, no currency prefix)
+  if (sym === "^NSEI" || sym === "^BSESN") {
+    return price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // INR/USD rate
+  if (sym === "INR=X") {
+    return "₹" + price.toLocaleString("en-IN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  }
+  // Gold futures
+  if (sym === "GC=F") {
+    return "$" + price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   return "$" + price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -179,7 +198,8 @@ export default function MarketCards() {
   const load = useCallback(async () => {
     try {
       setError(false);
-      const map = await fetchQuotes(instruments.map((i) => i.symbol));
+      const allSymbols = [...instruments.map((i) => i.symbol), ...INDIA.map((i) => i.symbol)];
+      const map = await fetchQuotes(allSymbols);
       setQuotes(map);
       setLast(new Date());
     } catch {
@@ -223,6 +243,16 @@ export default function MarketCards() {
         {instruments.map((inst) => (
           <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
         ))}
+      </div>
+
+      {/* ── India markets row ─────────────────────────────────────────── */}
+      <div className="mt-4">
+        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">India Markets</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {INDIA.map((inst) => (
+            <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
+          ))}
+        </div>
       </div>
     </div>
   );
