@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { PageHeader, SectionLabel, SkeletonStatGrid, Tabs, Badge, RefreshButton } from "@/components/ui";
 import MarketCards from "@/components/dashboard/MarketCards";
+import VixPanel from "@/components/dashboard/VixPanel";
+import EconomicCalendar from "@/components/dashboard/EconomicCalendar";
 
 const QUICK = [
   { href: "/options-flow", label: "GEX Flow",    sub: "Gamma exposure data",  color: "from-purple-500 to-purple-700" },
@@ -219,6 +221,17 @@ export default function DashboardPage() {
 
       {/* Market ticker cards */}
       <MarketCards />
+
+      {/* ── VIX ── */}
+      <div className="mb-6 sm:mb-8">
+        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Volatility</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <VixPanel />
+        </div>
+      </div>
+
+      {/* ── Economic Calendar ── */}
+      <EconomicCalendar />
 
       {/* Quick actions */}
       <SectionLabel>Quick Actions</SectionLabel>

@@ -208,8 +208,8 @@ def market_quotes(symbols: str) -> List[Dict[str, Any]]:
     Uses yfinance — no API key required. Protected by the same CORS policy as the rest of the API.
     """
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    if not syms or len(syms) > 10:
-        raise HTTPException(status_code=400, detail="Provide 1–10 comma-separated symbols")
+    if not syms or len(syms) > 25:
+        raise HTTPException(status_code=400, detail="Provide 1–25 comma-separated symbols")
     results: List[Dict[str, Any]] = []
     for sym in syms:
         try:
