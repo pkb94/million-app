@@ -8,11 +8,12 @@ import { clsx } from "clsx";
 import {
   LayoutDashboard, Zap, BarChart2, ClipboardList,
   Wallet, PiggyBank, BookOpen, Settings, LogOut, Menu, X,
-  ChevronRight, PanelLeftClose, PanelLeftOpen,
+  ChevronRight, PanelLeftClose, PanelLeftOpen, Globe,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/markets",      label: "Markets",      icon: Globe           },
   { href: "/options-flow", label: "Options Flow", icon: Zap             },
   { href: "/trades",       label: "Trades",       icon: BarChart2       },
   { href: "/orders",       label: "Orders",       icon: ClipboardList   },

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Zap, Search, BarChart2, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Zap, Search, BarChart2, Globe } from "lucide-react";
 import { clsx } from "clsx";
 
 const TABS = [
@@ -9,7 +9,7 @@ const TABS = [
   { href: "/options-flow", label: "Flow",    icon: Zap             },
   { href: "/search",       label: "Search",  icon: Search          },
   { href: "/trades",       label: "Trades",  icon: BarChart2       },
-  { href: "/orders",       label: "Orders",  icon: ClipboardList   },
+  { href: "/markets",     label: "Markets", icon: Globe           },
 ];
 
 export default function BottomNav() {
