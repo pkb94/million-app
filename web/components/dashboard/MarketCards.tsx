@@ -68,7 +68,6 @@ const COMMODITIES: Instrument[] = [
   { symbol: "CL=F",  label: "Crude Oil",   sublabel: "WTI USD/bbl",accent: "bg-gray-50 dark:bg-gray-800/40",     iconColor: "text-gray-400"    },
   { symbol: "NG=F",  label: "Nat Gas",     sublabel: "USD / MMBtu",accent: "bg-sky-50 dark:bg-sky-900/30",       iconColor: "text-sky-500"     },
   { symbol: "HG=F",  label: "Copper",      sublabel: "USD / lb",  accent: "bg-orange-50 dark:bg-orange-900/30", iconColor: "text-orange-400"  },
-  { symbol: "ZW=F",  label: "Wheat",       sublabel: "USD / bu",  accent: "bg-amber-50 dark:bg-amber-900/30",   iconColor: "text-amber-600"   },
 ];
 
 const INDIA: Instrument[] = [
@@ -267,7 +266,7 @@ export default function MarketCards() {
       {/* ── Commodities row ───────────────────────────────────────────── */}
       <div className="mt-4">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Commodities</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {COMMODITIES.map((inst) => (
             <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
           ))}
