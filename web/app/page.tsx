@@ -128,12 +128,6 @@ function Hero() {
       </div>
 
       <div className="relative max-w-4xl mx-auto">
-        {/* Pill badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-semibold mb-6 tracking-wide">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="#F59E0B"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-          Options Flow · Trade Journal · Market Intelligence
-        </div>
-
         {/* Brand name — big */}
         <div className="flex items-center justify-center gap-3 mb-4">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="#F59E0B"
