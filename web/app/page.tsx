@@ -31,6 +31,55 @@ function FadeIn({ children, delay = 0, className = "" }: { children: React.React
   );
 }
 
+// ── Particle field ────────────────────────────────────────────────────────────
+
+const PARTICLES = Array.from({ length: 36 }, (_, i) => ({
+  id: i,
+  x:  (i * 37 + 11) % 100,   // deterministic spread, no Math.random (SSR safe)
+  y:  (i * 53 + 7)  % 100,
+  r:  1 + (i % 3) * 0.7,     // 1px / 1.7px / 2.4px
+  dur: 6 + (i % 7) * 2.2,    // 6-18s orbit
+  dx:  ((i % 5) - 2) * 18,   // -36 to +36 px drift
+  dy:  ((i % 4) - 1.5) * 14, // -21 to +21 px drift
+  delay: (i * 0.41) % 4,
+}));
+
+function ParticleField() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {PARTICLES.map((p) => (
+        <motion.span
+          key={p.id}
+          className="absolute rounded-full"
+          style={{
+            left:   `${p.x}%`,
+            top:    `${p.y}%`,
+            width:  p.r * 2,
+            height: p.r * 2,
+            background: p.id % 3 === 0
+              ? "rgba(99,130,248,0.55)"
+              : p.id % 3 === 1
+              ? "rgba(148,97,251,0.45)"
+              : "rgba(245,158,11,0.4)",
+            boxShadow: `0 0 ${p.r * 4}px ${p.r}px ${p.id % 3 === 0 ? "rgba(99,130,248,0.3)" : p.id % 3 === 1 ? "rgba(148,97,251,0.25)" : "rgba(245,158,11,0.25)"}`,
+          }}
+          animate={{
+            x: [0, p.dx, -p.dx * 0.6, 0],
+            y: [0, p.dy, p.dy * 0.4, 0],
+            opacity: [0.3, 0.9, 0.5, 0.3],
+            scale:   [1, 1.4, 0.8, 1],
+          }}
+          transition={{
+            duration: p.dur,
+            delay:    p.delay,
+            repeat:   Infinity,
+            ease:     "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 // ── Feature data ─────────────────────────────────────────────────────────────
 
 const FEATURES = [
@@ -159,6 +208,9 @@ function Hero() {
         <div className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
       </motion.div>
+
+      {/* Floating particles */}
+      <ParticleField />
 
       <div className="relative max-w-4xl mx-auto">
         {/* Brand name — staggered letter entrance */}
