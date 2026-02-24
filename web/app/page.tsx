@@ -1,4 +1,35 @@
+"use client";
 import Link from "next/link";
+import { motion, useInView, useScroll, useTransform } from "framer-motion";
+import { useRef } from "react";
+
+// ── Animation helpers ─────────────────────────────────────────────────────────
+
+function FadeUp({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  return (
+    <motion.div ref={ref} className={className}
+      initial={{ opacity: 0, y: 32 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}>
+      {children}
+    </motion.div>
+  );
+}
+
+function FadeIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  return (
+    <motion.div ref={ref} className={className}
+      initial={{ opacity: 0 }}
+      animate={inView ? { opacity: 1 } : {}}
+      transition={{ duration: 0.6, delay }}>
+      {children}
+    </motion.div>
+  );
+}
 
 // ── Feature data ─────────────────────────────────────────────────────────────
 
@@ -115,61 +146,85 @@ function Nav() {
 }
 
 function Hero() {
+  const { scrollY } = useScroll();
+  const blobY = useTransform(scrollY, [0, 400], [0, -60]);
+
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-5 overflow-hidden">
-      {/* Background glow blobs */}
-      <div className="absolute inset-0 pointer-events-none">
+      {/* Background glow blobs — parallax */}
+      <motion.div className="absolute inset-0 pointer-events-none" style={{ y: blobY }}>
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-600/10 blur-[120px]" />
         <div className="absolute top-1/2 left-1/4 w-[400px] h-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
         <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-amber-500/8 blur-[100px]" />
-        {/* Subtle grid */}
         <div className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
-      </div>
+      </motion.div>
 
       <div className="relative max-w-4xl mx-auto">
-        {/* Brand name — big */}
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="#F59E0B"
-            className="drop-shadow-[0_0_12px_rgba(245,158,11,0.8)] shrink-0">
+        {/* Brand name — staggered letter entrance */}
+        <motion.div className="flex items-center justify-center gap-3 mb-4"
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
+          <motion.svg width="36" height="36" viewBox="0 0 24 24" fill="#F59E0B"
+            className="drop-shadow-[0_0_12px_rgba(245,158,11,0.8)] shrink-0"
+            animate={{ rotate: [0, -8, 8, -4, 0] }}
+            transition={{ delay: 0.8, duration: 0.6, ease: "easeInOut" }}>
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
+          </motion.svg>
           <span className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tight text-white">
             Option<span className="text-amber-400">Flow</span>
           </span>
-        </div>
+        </motion.div>
 
         {/* Headline */}
-        <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight mb-6">
+        <motion.h1
+          className="text-2xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}>
           Trade smarter with{" "}
           <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-amber-400 bg-clip-text text-transparent">
             real edge
           </span>
-        </h1>
+        </motion.h1>
 
         {/* Sub */}
-        <p className="text-base sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+        <motion.p
+          className="text-base sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}>
           OptionFlow is a full-stack trading analytics platform — options flow, sector heatmaps,
           trade journaling, order management, and portfolio tracking in one place.
-        </p>
+        </motion.p>
 
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <motion.div
+          className="flex flex-col sm:flex-row items-center justify-center gap-3"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.55, ease: [0.22, 1, 0.36, 1] }}>
           <Link href="/signup"
-            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 transition shadow-xl shadow-blue-900/40">
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 hover:scale-[1.03] active:scale-[0.97] transition-all shadow-xl shadow-blue-900/40">
             Start for free →
           </Link>
           <Link href="/login"
-            className="w-full sm:w-auto px-8 py-3.5 rounded-xl border border-white/10 text-gray-300 font-semibold text-base hover:bg-white/5 transition">
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl border border-white/10 text-gray-300 font-semibold text-base hover:bg-white/5 hover:scale-[1.03] active:scale-[0.97] transition-all">
             Sign in
           </Link>
-        </div>
+        </motion.div>
       </div>
 
       {/* Scroll hint */}
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-gray-600 animate-bounce">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-      </div>
+      <motion.div
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-gray-600"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2, duration: 0.6 }}
+        style={{ animationName: "bounce" }}>
+        <motion.div animate={{ y: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </motion.div>
+      </motion.div>
     </section>
   );
 }
@@ -178,11 +233,11 @@ function Stats() {
   return (
     <section className="py-12 border-y border-white/5 bg-white/[0.02]">
       <div className="max-w-4xl mx-auto px-5 grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
-        {STATS.map(({ value, label }) => (
-          <div key={label}>
+        {STATS.map(({ value, label }, i) => (
+          <FadeUp key={label} delay={i * 0.1}>
             <p className="text-3xl sm:text-4xl font-black text-white mb-1">{value}</p>
             <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">{label}</p>
-          </div>
+          </FadeUp>
         ))}
       </div>
     </section>
@@ -194,7 +249,7 @@ function Features() {
     <section id="features" className="py-24 px-5">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
-        <div className="text-center mb-16">
+        <FadeUp className="text-center mb-16">
           <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3">Everything you need</p>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
             Built for serious traders
@@ -202,22 +257,26 @@ function Features() {
           <p className="text-gray-400 max-w-xl mx-auto text-base">
             From options flow to double-entry accounting — every feature you need to trade with conviction.
           </p>
-        </div>
+        </FadeUp>
 
         {/* Feature grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {FEATURES.map((f) => (
-            <div key={f.title}
-              className={`relative rounded-2xl border ${f.border} bg-gradient-to-b ${f.color} p-5 flex flex-col gap-3 hover:scale-[1.02] transition-transform duration-200`}>
-              <div className="text-2xl">{f.icon}</div>
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="font-bold text-white text-sm">{f.title}</h3>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${f.tagColor}`}>{f.tag}</span>
+          {FEATURES.map((f, i) => (
+            <FadeUp key={f.title} delay={i * 0.07}>
+              <motion.div
+                className={`relative rounded-2xl border ${f.border} bg-gradient-to-b ${f.color} p-5 flex flex-col gap-3 h-full`}
+                whileHover={{ scale: 1.03, y: -4 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+                <div className="text-2xl">{f.icon}</div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <h3 className="font-bold text-white text-sm">{f.title}</h3>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${f.tagColor}`}>{f.tag}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 leading-relaxed">{f.desc}</p>
                 </div>
-                <p className="text-xs text-gray-400 leading-relaxed">{f.desc}</p>
-              </div>
-            </div>
+              </motion.div>
+            </FadeUp>
           ))}
         </div>
       </div>
@@ -226,11 +285,16 @@ function Features() {
 }
 
 function Highlight() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
   return (
-    <section className="py-24 px-5 bg-white/[0.015] border-y border-white/5">
+    <section className="py-24 px-5 bg-white/[0.015] border-y border-white/5" ref={ref}>
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
         {/* Left: text */}
-        <div>
+        <motion.div
+          initial={{ opacity: 0, x: -40 }}
+          animate={inView ? { opacity: 1, x: 0 } : {}}
+          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}>
           <p className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-3">⚡ Core Product</p>
           <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-5">
             Options Flow is the edge<br />most traders don&apos;t have
@@ -253,10 +317,14 @@ function Highlight() {
               </li>
             ))}
           </ul>
-        </div>
+        </motion.div>
 
         {/* Right: GEX heatmap snapshot */}
-        <div className="relative rounded-2xl border border-amber-500/20 bg-[#0f1018] p-5 shadow-2xl">
+        <motion.div
+          className="relative rounded-2xl border border-amber-500/20 bg-[#0f1018] p-5 shadow-2xl"
+          initial={{ opacity: 0, x: 40 }}
+          animate={inView ? { opacity: 1, x: 0 } : {}}
+          transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
           {/* Window chrome */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -347,18 +415,24 @@ function Highlight() {
               {[545,550,555,560,565,570,575,580,585,590].map(s => <span key={s}>{s}</span>)}
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
 }
 
 function HeatmapHighlight() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
   return (
-    <section className="py-24 px-5">
+    <section className="py-24 px-5" ref={ref}>
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
         {/* Left: mock heatmap */}
-        <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-b from-blue-500/10 to-transparent p-6 order-2 lg:order-1">
+        <motion.div
+          className="rounded-2xl border border-blue-500/20 bg-gradient-to-b from-blue-500/10 to-transparent p-6 order-2 lg:order-1"
+          initial={{ opacity: 0, x: -40 }}
+          animate={inView ? { opacity: 1, x: 0 } : {}}
+          transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Technology Sector</p>
           <div className="space-y-2">
             {[
@@ -382,10 +456,14 @@ function HeatmapHighlight() {
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500/60 inline-block" /> Flat</span>
             <span className="ml-auto">Sized by market cap</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Right: text */}
-        <div className="order-1 lg:order-2">
+        <motion.div
+          className="order-1 lg:order-2"
+          initial={{ opacity: 0, x: 40 }}
+          animate={inView ? { opacity: 1, x: 0 } : {}}
+          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}>
           <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3">🌍 Markets Page</p>
           <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-5">
             The whole market,<br />at a glance
@@ -407,7 +485,7 @@ function HeatmapHighlight() {
               </li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
@@ -417,6 +495,7 @@ function CTA() {
   return (
     <section className="py-24 px-5">
       <div className="max-w-3xl mx-auto text-center">
+        <FadeUp>
         <div className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-blue-600/15 via-violet-600/10 to-transparent p-12 sm:p-16 overflow-hidden">
           {/* Glow */}
           <div className="absolute inset-0 pointer-events-none">
@@ -442,6 +521,7 @@ function CTA() {
             </div>
           </div>
         </div>
+        </FadeUp>
       </div>
     </section>
   );
