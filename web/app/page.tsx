@@ -96,7 +96,7 @@ function Nav() {
             className="drop-shadow-[0_0_6px_rgba(245,158,11,0.9)]">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
-          <span className="font-black text-white tracking-tight text-lg">Million</span>
+          <span className="font-black text-white tracking-tight text-lg">Option<span className="text-amber-400">Flow</span></span>
         </div>
         {/* CTA */}
         <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ function Hero() {
 
         {/* Sub */}
         <p className="text-base sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Million is a full-stack trading analytics platform — options flow, sector heatmaps,
+          OptionFlow is a full-stack trading analytics platform — options flow, sector heatmaps,
           trade journaling, order management, and portfolio tracking in one place.
         </p>
 
@@ -232,7 +232,7 @@ function Highlight() {
           </h2>
           <p className="text-gray-400 text-base leading-relaxed mb-8">
             Gamma exposure tells you where dealers are hedged and where they&apos;re not.
-            Million surfaces GEX across any ticker — so you can see the magnetic levels,
+            OptionFlow surfaces GEX across any ticker — so you can see the magnetic levels,
             flip points, and vol regime before you size in.
           </p>
           <ul className="space-y-3">
@@ -250,36 +250,97 @@ function Highlight() {
           </ul>
         </div>
 
-        {/* Right: mock UI card */}
-        <div className="relative rounded-2xl border border-amber-500/20 bg-gradient-to-b from-amber-500/10 to-transparent p-6">
+        {/* Right: GEX heatmap snapshot */}
+        <div className="relative rounded-2xl border border-amber-500/20 bg-[#0f1018] p-5 shadow-2xl">
+          {/* Window chrome */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-              <span className="text-sm font-bold text-white">GEX Flow — SPY</span>
+              <div className="flex gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
+              </div>
+              <span className="text-[10px] text-gray-500 ml-1 font-mono">optionflow · GEX · SPY</span>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">LIVE</span>
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold tracking-wide">● LIVE</span>
           </div>
-          {/* Fake chart bars */}
-          <div className="flex items-end gap-1 h-28 mb-3">
-            {[40,65,30,80,55,90,45,70,35,60,85,50,75,40,95,60,45,80,55,70].map((h, i) => (
-              <div key={i} className="flex-1 rounded-sm"
-                style={{ height: `${h}%`, background: i % 3 === 0 ? "#ef444480" : "#22c55e80" }} />
-            ))}
-          </div>
-          <div className="flex justify-between text-[9px] text-gray-500 mb-4">
-            <span>400</span><span>420</span><span>440</span><span>460</span><span>480</span><span>500</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
+
+          {/* Stat row */}
+          <div className="grid grid-cols-4 gap-2 mb-4">
             {[
-              { label: "Net GEX", value: "+$2.4B", color: "text-green-400" },
-              { label: "Call Wall", value: "480", color: "text-blue-400" },
-              { label: "Put Wall", value: "450", color: "text-red-400" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-white/5 rounded-lg p-2 text-center">
-                <p className="text-[9px] text-gray-500 uppercase tracking-wide">{label}</p>
-                <p className={`text-sm font-black ${color}`}>{value}</p>
+              { label: "Net GEX",    value: "+$2.4B",  color: "text-green-400",  bg: "bg-green-500/10"  },
+              { label: "Call Wall",  value: "580",      color: "text-blue-400",   bg: "bg-blue-500/10"   },
+              { label: "Put Wall",   value: "550",      color: "text-red-400",    bg: "bg-red-500/10"    },
+              { label: "Flip",       value: "565",      color: "text-amber-400",  bg: "bg-amber-500/10"  },
+            ].map(({ label, value, color, bg }) => (
+              <div key={label} className={`${bg} rounded-lg p-2 text-center`}>
+                <p className="text-[8px] text-gray-500 uppercase tracking-wide mb-0.5">{label}</p>
+                <p className={`text-xs font-black ${color}`}>{value}</p>
               </div>
             ))}
+          </div>
+
+          {/* GEX heatmap grid — strikes × expiry */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[8px] text-gray-600 uppercase tracking-widest">Strike →</span>
+              <span className="text-[8px] text-gray-600 uppercase tracking-widest">← Expiry</span>
+            </div>
+            {/* Header row */}
+            <div className="grid mb-1" style={{ gridTemplateColumns: "40px repeat(10, 1fr)" }}>
+              <span />
+              {[545,550,555,560,565,570,575,580,585,590].map(s => (
+                <span key={s} className="text-[7px] text-gray-600 text-center">{s}</span>
+              ))}
+            </div>
+            {/* Heatmap rows */}
+            {[
+              { exp: "0DTE",  vals: [5,15,80,95,100,85,40,20,10,5]  },
+              { exp: "1W",    vals: [8,20,55,75,90,70,45,25,12,6]   },
+              { exp: "2W",    vals: [10,25,45,60,70,55,38,20,10,5]  },
+              { exp: "1M",    vals: [6,15,30,45,55,42,28,15,8,4]    },
+              { exp: "2M",    vals: [4,10,20,30,38,30,20,10,5,3]    },
+            ].map(({ exp, vals }) => (
+              <div key={exp} className="grid mb-0.5 items-center" style={{ gridTemplateColumns: "40px repeat(10, 1fr)" }}>
+                <span className="text-[8px] text-gray-500 font-mono">{exp}</span>
+                {vals.map((v, i) => {
+                  const isCall = i >= 5;
+                  const intensity = v / 100;
+                  const bg = isCall
+                    ? `rgba(34,197,94,${intensity * 0.7})`
+                    : `rgba(239,68,68,${intensity * 0.7})`;
+                  return (
+                    <div key={i} className="h-5 rounded-sm mx-px flex items-center justify-center"
+                      style={{ background: bg }}>
+                      {v > 40 && <span className="text-[6px] font-bold text-white/80">{v}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+            {/* Axis label */}
+            <div className="flex justify-end gap-4 mt-2">
+              <span className="flex items-center gap-1 text-[8px] text-red-400"><span className="w-2 h-2 rounded-sm bg-red-500/50 inline-block" />Negative GEX</span>
+              <span className="flex items-center gap-1 text-[8px] text-green-400"><span className="w-2 h-2 rounded-sm bg-green-500/50 inline-block" />Positive GEX</span>
+            </div>
+          </div>
+
+          {/* Bottom bar chart — net GEX by strike */}
+          <div className="border-t border-white/5 pt-3">
+            <p className="text-[8px] text-gray-600 uppercase tracking-widest mb-2">Net GEX by Strike ($M)</p>
+            <div className="flex items-end gap-0.5 h-12">
+              {[-20,-45,-80,-120,-60,40,90,150,110,70].map((v, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center justify-end">
+                  {v > 0
+                    ? <div className="w-full rounded-t-sm" style={{ height: `${(v/150)*100}%`, background: "#22c55e90" }} />
+                    : <div className="w-full rounded-b-sm self-start" style={{ height: `${(Math.abs(v)/150)*100}%`, background: "#ef444490", marginTop: "auto" }} />
+                  }
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-[7px] text-gray-600 mt-1">
+              {[545,550,555,560,565,570,575,580,585,590].map(s => <span key={s}>{s}</span>)}
+            </div>
           </div>
         </div>
       </div>
@@ -387,7 +448,7 @@ function Footer() {
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#F59E0B"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-          <span className="font-black text-white text-sm">Million</span>
+          <span className="font-black text-white text-sm">Option<span className="text-amber-400">Flow</span></span>
           <span className="text-gray-600 text-xs ml-2">© 2026</span>
         </div>
         <p className="text-xs text-gray-600">Options Flow · Trade Journal · Market Intelligence · Portfolio Tracking</p>
