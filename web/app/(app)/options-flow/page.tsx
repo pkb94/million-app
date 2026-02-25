@@ -91,14 +91,14 @@ function TickerPanel({
 
   return (
     <div
-      className="flex flex-col rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface)]"
-      style={{ boxShadow: `0 0 0 1.5px ${accentColor}22` }}
+      className="flex flex-col rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface)] shadow-xl"
+      style={{ boxShadow: `0 0 0 1px ${accentColor}30, 0 8px 32px rgba(0,0,0,0.18)` }}
     >
-      {/* ── Accent bar ───────────────────────────────────────────────────── */}
-      <div className="h-[3px]" style={{ background: `linear-gradient(90deg, ${accentColor}dd, ${accentColor}33)` }} />
+      {/* ── Thick accent bar with gradient glow ──────────────────────── */}
+      <div className="h-[3px] w-full" style={{ background: `linear-gradient(90deg, ${accentColor}, ${accentColor}55, transparent)` }} />
 
       {/* ── Header: search + status ──────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--surface-2)]">
         <TickerSearchInput
           value={slot.input}
           onChange={onInputChange}
@@ -106,25 +106,27 @@ function TickerPanel({
           accentColor={accentColor}
           placeholder="Ticker or company…"
           actionLabel="LOAD"
-          className="flex-1 max-w-[300px]"
+          className="flex-1 max-w-[280px]"
         />
 
         {/* Live status */}
-        <div className="flex items-center gap-2 ml-auto text-gray-400">
+        <div className="flex items-center gap-2 ml-auto">
           {data && (
-            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+            <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border tracking-wide ${
               data.data_source === "tradier"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
-                : "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-400"
             }`}>
               {data.data_source === "tradier" ? "● LIVE" : "◌ 15min delay"}
             </span>
           )}
-          <span className={`w-1.5 h-1.5 rounded-full ${isFetching ? "bg-amber-400 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
-          {lastUpdated && <span className="text-[10px] font-mono tabular-nums hidden sm:block">{lastUpdated}</span>}
-          <button onClick={onRefresh} className="hover:text-gray-600 dark:hover:text-gray-200 transition" title="Refresh">
-            <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
-          </button>
+          <div className="flex items-center gap-1.5 text-gray-500">
+            <span className={`w-1.5 h-1.5 rounded-full ${isFetching ? "bg-amber-400 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+            {lastUpdated && <span className="text-[9px] font-mono tabular-nums hidden sm:block opacity-60">{lastUpdated}</span>}
+            <button onClick={onRefresh} className="hover:text-gray-300 transition p-1 rounded-md hover:bg-[var(--border)]" title="Refresh">
+              <RefreshCw size={12} className={isFetching ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -134,69 +136,69 @@ function TickerPanel({
       {data && (
         <>
           {/* ── GEX Key Levels ────────────────────────────────────────────── */}
-          <div className="px-4 py-3 border-b border-[var(--border)]">
+          <div className="px-4 pt-4 pb-3 border-b border-[var(--border)]">
             {/* Top row: spot price + regime */}
-            <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black tabular-nums text-gray-900 dark:text-white">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[28px] font-black tabular-nums text-white leading-none" style={{ textShadow: "0 0 20px rgba(250,204,21,0.2)" }}>
                   {data.spot != null ? `$${data.spot.toFixed(2)}` : "—"}
                 </span>
-                <span className="text-xs text-gray-400 font-medium">{slot.ticker}</span>
+                <span className="text-[11px] text-gray-500 font-bold tracking-wide">{slot.ticker}</span>
               </div>
               <GexRegimeBadge netGex={netGex} />
               {impliedMove != null && (
-                <span className="text-[10px] text-gray-400 border border-[var(--border)] rounded-full px-2 py-0.5 font-medium">
+                <span className="text-[9px] text-gray-500 border border-[var(--border)] rounded-full px-2.5 py-1 font-bold tracking-wide">
                   {impliedMove.toFixed(1)}% to zero-γ
                 </span>
               )}
             </div>
 
-            {/* Stat row */}
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-4 gap-y-2">
-              <KeyLevelBadge
-                label="Net GEX"
-                value={fmtGexUtil(netGex)}
-                color={isCallBias ? "text-emerald-500 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}
-              />
-              <KeyLevelBadge
-                label="Zero γ"
-                value={data.zero_gamma != null ? `$${data.zero_gamma.toFixed(2)}` : "—"}
-                color="text-yellow-500 dark:text-yellow-400"
-              />
-              <KeyLevelBadge
-                label="Call Wall"
-                value={data.max_call_wall != null ? `$${data.max_call_wall.toFixed(2)}` : "—"}
-                color="text-emerald-500 dark:text-emerald-400"
-              />
-              <KeyLevelBadge
-                label="Put Wall"
-                value={data.max_put_wall != null ? `$${data.max_put_wall.toFixed(2)}` : "—"}
-                color="text-red-500 dark:text-red-400"
-              />
-              <KeyLevelBadge
-                label="Max GEX"
-                value={data.max_gex_strike != null ? `$${data.max_gex_strike.toFixed(2)}` : "—"}
-                color="text-gray-700 dark:text-gray-200"
-              />
+            {/* Key level cards */}
+            <div className="grid grid-cols-5 gap-2">
+              {/* Net GEX */}
+              <div className={`rounded-xl border px-2.5 py-2 ${isCallBias ? "bg-emerald-500/5 border-emerald-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+                <p className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-1">Net GEX</p>
+                <p className={`text-[13px] font-black tabular-nums leading-none ${isCallBias ? "text-emerald-400" : "text-red-400"}`}>{fmtGexUtil(netGex)}</p>
+              </div>
+              {/* Zero Gamma */}
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-2">
+                <p className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-1">Zero γ</p>
+                <p className="text-[13px] font-black tabular-nums text-yellow-400 leading-none">{data.zero_gamma != null ? `$${data.zero_gamma.toFixed(0)}` : "—"}</p>
+              </div>
+              {/* Call Wall */}
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-2">
+                <p className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-1">Call Wall</p>
+                <p className="text-[13px] font-black tabular-nums text-emerald-400 leading-none">{data.max_call_wall != null ? `$${data.max_call_wall.toFixed(0)}` : "—"}</p>
+              </div>
+              {/* Put Wall */}
+              <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-2.5 py-2">
+                <p className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-1">Put Wall</p>
+                <p className="text-[13px] font-black tabular-nums text-red-400 leading-none">{data.max_put_wall != null ? `$${data.max_put_wall.toFixed(0)}` : "—"}</p>
+              </div>
+              {/* Max GEX */}
+              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-2.5 py-2">
+                <p className="text-[8px] text-gray-500 uppercase tracking-widest font-bold mb-1">Max GEX</p>
+                <p className="text-[13px] font-black tabular-nums text-purple-400 leading-none">{data.max_gex_strike != null ? `$${data.max_gex_strike.toFixed(0)}` : "—"}</p>
+              </div>
             </div>
           </div>
 
           {/* ── Insight bar ───────────────────────────────────────────────── */}
           {data.spot != null && data.max_call_wall != null && data.max_put_wall != null && (
-            <div className="px-4 py-2.5 border-b border-[var(--border)] bg-[var(--surface-2)]">
-              <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-                {isCallBias ? <TrendingDown size={12} className="text-emerald-500 shrink-0" /> : <TrendingUp size={12} className="text-red-400 shrink-0" />}
+            <div className={`px-4 py-2.5 border-b border-[var(--border)] ${ isCallBias ? "bg-emerald-500/[0.04]" : "bg-red-500/[0.04]"}`}>
+              <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                {isCallBias ? <TrendingDown size={11} className="text-emerald-400 shrink-0" /> : <TrendingUp size={11} className="text-red-400 shrink-0" />}
                 <span>
-                  Price <strong className="text-gray-700 dark:text-gray-200">{data.spot > data.zero_gamma! ? "above" : "below"} zero-gamma</strong>
-                  {" "}— dealers {isCallBias ? "hedge by selling rallies, buying dips (stabilising)" : "amplify moves (trending)"}
+                  Price <strong className="text-gray-200">{data.spot > data.zero_gamma! ? "above" : "below"} zero-gamma</strong>
+                  {" "}— dealers {isCallBias ? "hedge by selling rallies & buying dips" : "amplify moves (trending mode)"}
                   {data.max_call_wall && data.spot < data.max_call_wall && (
-                    <span className="ml-2 text-emerald-500">
-                      · Call wall resistance at <strong>${data.max_call_wall.toFixed(0)}</strong>
+                    <span className="ml-2 text-emerald-400">
+                      · Resistance <strong>${data.max_call_wall.toFixed(0)}</strong>
                     </span>
                   )}
                   {data.max_put_wall && data.spot > data.max_put_wall && (
                     <span className="ml-2 text-red-400">
-                      · Put wall support at <strong>${data.max_put_wall.toFixed(0)}</strong>
+                      · Support <strong>${data.max_put_wall.toFixed(0)}</strong>
                     </span>
                   )}
                 </span>
@@ -238,39 +240,39 @@ function TickerPanel({
 
           {/* ── P/C Ratio + Flow breakdown ───────────────────────────────────── */}
           {(data.call_premium > 0 || data.put_premium > 0) && (
-            <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]">
-              <div className="flex items-center gap-2 mb-2">
-                <Zap size={11} className="text-gray-400" />
-                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Premium Flow</span>
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap size={10} className="text-gray-500" />
+                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Premium Flow</span>
               </div>
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
                 {/* Call premium bar */}
-                <div className="flex-1 min-w-[120px]">
-                  <div className="flex justify-between mb-0.5">
-                    <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wide">Calls</span>
-                    <span className="text-[10px] font-bold text-emerald-500 tabular-nums">${(data.call_premium / 1e6).toFixed(1)}M</span>
+                <div className="flex-1">
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-[9px] text-emerald-400 font-black uppercase tracking-wide">Calls</span>
+                    <span className="text-[10px] font-black text-emerald-400 tabular-nums">${(data.call_premium / 1e6).toFixed(1)}M</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round((data.call_premium / (data.call_premium + data.put_premium)) * 100)}%` }} />
+                  <div className="h-2 rounded-full bg-[var(--border)] overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 shadow-sm" style={{ width: `${Math.round((data.call_premium / (data.call_premium + data.put_premium)) * 100)}%` }} />
                   </div>
                 </div>
                 {/* P/C ratio badge */}
-                <div className="flex flex-col items-center px-3 py-1 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[8px] text-gray-400 uppercase tracking-widest font-semibold">P/C Ratio</span>
-                  <span className={`text-sm font-black tabular-nums ${
+                <div className="flex flex-col items-center px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] shrink-0">
+                  <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold">P/C</span>
+                  <span className={`text-[15px] font-black tabular-nums leading-none mt-0.5 ${
                     data.put_premium / Math.max(data.call_premium, 1) > 1
-                      ? "text-red-500 dark:text-red-400"
-                      : "text-emerald-500 dark:text-emerald-400"
+                      ? "text-red-400"
+                      : "text-emerald-400"
                   }`}>{(data.put_premium / Math.max(data.call_premium, 1)).toFixed(2)}</span>
                 </div>
                 {/* Put premium bar */}
-                <div className="flex-1 min-w-[120px]">
-                  <div className="flex justify-between mb-0.5">
-                    <span className="text-[9px] text-red-400 font-bold uppercase tracking-wide">Puts</span>
-                    <span className="text-[10px] font-bold text-red-400 tabular-nums">${(data.put_premium / 1e6).toFixed(1)}M</span>
+                <div className="flex-1">
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-[9px] text-red-400 font-black uppercase tracking-wide">Puts</span>
+                    <span className="text-[10px] font-black text-red-400 tabular-nums">${(data.put_premium / 1e6).toFixed(1)}M</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
-                    <div className="h-full rounded-full bg-red-400" style={{ width: `${Math.round((data.put_premium / (data.call_premium + data.put_premium)) * 100)}%` }} />
+                  <div className="h-2 rounded-full bg-[var(--border)] overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-red-600 to-red-400 shadow-sm" style={{ width: `${Math.round((data.put_premium / (data.call_premium + data.put_premium)) * 100)}%` }} />
                   </div>
                 </div>
               </div>
@@ -280,27 +282,27 @@ function TickerPanel({
           {/* ── Top Flow Strikes ─────────────────────────────────────────────── */}
           {data.top_flow_strikes && data.top_flow_strikes.length > 0 && (
             <div className="px-4 py-3 border-b border-[var(--border)]">
-              <div className="flex items-center gap-2 mb-2">
-                <BarChart2 size={11} className="text-gray-400" />
-                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Top Flow Strikes</span>
+              <div className="flex items-center gap-2 mb-2.5">
+                <BarChart2 size={10} className="text-gray-500" />
+                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Top Flow Strikes</span>
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1.5">
                 {data.top_flow_strikes.slice(0, 5).map((tf) => {
                   const total = Math.max(tf.call_prem + tf.put_prem, 1);
                   const callPct = Math.round((tf.call_prem / total) * 100);
                   const isCallBias = tf.bias === "call";
                   return (
                     <div key={tf.strike} className="flex items-center gap-2 text-[10px]">
-                      <span className="w-16 font-bold tabular-nums text-gray-700 dark:text-gray-200 shrink-0">${tf.strike.toFixed(0)}</span>
-                      <div className="flex-1 h-2 rounded-full overflow-hidden bg-[var(--border)] relative">
-                        <div className="absolute left-0 top-0 h-full rounded-full bg-emerald-500" style={{ width: `${callPct}%` }} />
-                        <div className="absolute right-0 top-0 h-full rounded-full bg-red-400" style={{ width: `${100 - callPct}%` }} />
+                      <span className="w-[52px] font-black tabular-nums text-gray-200 shrink-0">${tf.strike.toFixed(0)}</span>
+                      <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-[var(--border)] min-w-0">
+                        <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-l-full" style={{ width: `${callPct}%` }} />
+                        <div className="h-full bg-gradient-to-l from-red-600 to-red-400 rounded-r-full" style={{ width: `${100 - callPct}%` }} />
                       </div>
-                      <span className={`shrink-0 font-bold text-[9px] flex items-center gap-0.5 ${ isCallBias ? "text-emerald-500" : "text-red-400" }`}>
+                      <span className={`shrink-0 font-black text-[8px] flex items-center gap-0.5 ${ isCallBias ? "text-emerald-400" : "text-red-400" }`}>
                         {isCallBias ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
                         {isCallBias ? "CALL" : "PUT"}
                       </span>
-                      <span className="text-gray-400 tabular-nums shrink-0">${(Math.abs(tf.net) / 1e6).toFixed(1)}M</span>
+                      <span className="text-gray-500 tabular-nums shrink-0 font-mono text-[9px]">${(Math.abs(tf.net) / 1e6).toFixed(1)}M</span>
                     </div>
                   );
                 })}
@@ -311,20 +313,22 @@ function TickerPanel({
           {/* ── Flow by Expiry ────────────────────────────────────────────────── */}
           {data.flow_by_expiry && data.flow_by_expiry.length > 0 && (
             <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity size={11} className="text-gray-400" />
-                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Flow by Expiry</span>
+              <div className="flex items-center gap-2 mb-2.5">
+                <Activity size={10} className="text-gray-500" />
+                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Flow by Expiry</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5">
                 {data.flow_by_expiry.slice(0, 6).map((fe) => {
                   const isPos = fe.net >= 0;
                   const dte0 = isToday(fe.expiry);
                   return (
-                    <div key={fe.expiry} className="flex items-center justify-between gap-2">
-                      <span className={`text-[9px] font-mono truncate ${dte0 ? "text-amber-500 font-bold" : "text-gray-500 dark:text-gray-400"}`}>
+                    <div key={fe.expiry} className={`flex items-center justify-between gap-2 px-2 py-1 rounded-lg ${
+                      dte0 ? "bg-amber-500/8 border border-amber-500/20" : "bg-[var(--border)]/30"
+                    }`}>
+                      <span className={`text-[8px] font-mono truncate font-bold ${dte0 ? "text-amber-400" : "text-gray-500"}`}>
                         {dte0 ? "⚡ 0DTE" : fe.expiry}
                       </span>
-                      <span className={`text-[10px] font-bold tabular-nums shrink-0 ${ isPos ? "text-emerald-500" : "text-red-400" }`}>
+                      <span className={`text-[9px] font-black tabular-nums shrink-0 ${ isPos ? "text-emerald-400" : "text-red-400" }`}>
                         {isPos ? "+" : ""}{(fe.net / 1e6).toFixed(1)}M
                       </span>
                     </div>
@@ -336,12 +340,12 @@ function TickerPanel({
 
           {/* ── GEX Strike Table ──────────────────────────────────────────── */}
           <div className="border-b border-[var(--border)]">
-            <div className="flex items-center justify-between px-4 py-2 bg-[var(--surface-2)]">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--surface-2)]">
               <div className="flex items-center gap-2">
-                <BarChart2 size={12} className="text-gray-400" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-bold">GEX by Strike</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
-                  style={{ background: `${accentColor}18`, color: accentColor }}>
+                <BarChart2 size={11} className="text-gray-500" />
+                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-black">GEX by Strike</span>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-md ml-1"
+                  style={{ background: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}30` }}>
                   {slot.ticker}
                 </span>
               </div>
@@ -514,14 +518,14 @@ export default function OptionsFlowPage() {
           <div className="flex flex-wrap items-center gap-4">
 
             {/* Title */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: "linear-gradient(135deg, #a855f7, #6366f1)" }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
+                style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #3b82f6 100%)", boxShadow: "0 4px 14px rgba(168,85,247,0.3)" }}>
                 <Activity size={16} className="text-white" />
               </div>
               <div>
-                <h1 className="text-base font-bold text-gray-900 dark:text-white leading-none">Options Flow</h1>
-                <p className="text-[11px] text-gray-400 mt-0.5">GEX · Net Premium · Strike Levels</p>
+                <h1 className="text-[15px] font-black text-white leading-none tracking-tight">Options Flow</h1>
+                <p className="text-[10px] text-gray-500 mt-0.5 font-semibold tracking-wide">GEX · Net Premium · Strike Levels</p>
               </div>
             </div>
 
