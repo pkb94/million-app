@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Zap, BarChart2, ClipboardList,
   Wallet, PiggyBank, BookOpen, Settings, LogOut, Menu, X,
   ChevronRight, PanelLeftClose, PanelLeftOpen, Globe, Sun, Moon,
+  Users, ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 
@@ -22,12 +23,13 @@ const NAV = [
   { href: "/budget",       label: "Budget",       icon: PiggyBank       },
   { href: "/ledger",       label: "Ledger",       icon: BookOpen        },
   { href: "/settings",     label: "Settings",     icon: Settings        },
+  { href: "/admin/users",  label: "Users",        icon: Users,  adminOnly: true },
 ];
 
 export default function Navbar() {
   const pathname             = usePathname();
   const router               = useRouter();
-  const { user, logout }          = useAuth();
+  const { user, logout, isAdmin }  = useAuth();
   const { collapsed, toggle }      = useSidebar();
   const { theme, toggle: toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -100,7 +102,7 @@ export default function Navbar() {
       {/* ── Desktop sidebar ──────────────────────────────────────────────── */}
       <aside
         className={clsx(
-          "hidden lg:flex flex-col h-screen sticky top-0 border-r border-[var(--border)] bg-[var(--surface)] z-30 shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden",
+          "hidden lg:flex flex-col min-h-screen self-stretch sticky top-0 border-r border-[var(--border)] bg-[var(--surface)] z-30 shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden",
           collapsed ? "w-[64px]" : "w-[240px]",
         )}
       >
@@ -143,7 +145,7 @@ export default function Navbar() {
           "flex-1 overflow-y-auto py-4 space-y-0.5",
           collapsed ? "px-2" : "px-3",
         )}>
-          {NAV.map((item) => (
+          {NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
           ))}
         </nav>
@@ -171,7 +173,13 @@ export default function Navbar() {
               <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center shrink-0">
                 <span className="text-[10px] font-black text-foreground uppercase">{user.username[0]}</span>
               </div>
-              <span className="text-xs font-semibold text-foreground truncate">{user.username}</span>
+              <span className="text-xs font-semibold text-foreground truncate flex-1">{user.username}</span>
+              {isAdmin && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/20 shrink-0">
+                  <ShieldCheck size={8} />
+                  ADMIN
+                </span>
+              )}
             </div>
           )}
           {collapsed && user?.username && (
@@ -239,6 +247,12 @@ export default function Navbar() {
                   <span className="text-[10px] font-black text-foreground uppercase">{user?.username?.[0] ?? "U"}</span>
                 </div>
                 <span className="text-sm font-bold text-foreground">{user?.username ?? "Menu"}</span>
+                {isAdmin && (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/20">
+                    <ShieldCheck size={8} />
+                    ADMIN
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
@@ -248,7 +262,7 @@ export default function Navbar() {
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-              {NAV.map((item) => (
+              {NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
                 <NavLink
                   key={item.href}
                   href={item.href}

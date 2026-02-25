@@ -169,6 +169,10 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     # Tokens with iat < auth_valid_after are invalid (logout-everywhere / password-change).
     auth_valid_after = Column(DateTime, nullable=False, default=_EPOCH_UTC_NAIVE)
+    # Role: "admin" | "user"
+    role = Column(String, nullable=False, default="user")
+    # Soft-disable without deleting
+    is_active = Column(Boolean, nullable=False, default=True)
 
 
 class RevokedToken(Base):

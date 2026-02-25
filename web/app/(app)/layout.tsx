@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex flex-col lg:flex-row w-full overflow-x-hidden">
+      <div className="min-h-screen flex flex-col lg:flex-row lg:items-stretch w-full overflow-x-hidden">
         <Navbar />
         <main className="flex-1 min-w-0 pb-nav lg:pb-0 animate-fade-up">{children}</main>
         <BottomNav />

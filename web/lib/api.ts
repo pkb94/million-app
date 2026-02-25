@@ -88,6 +88,8 @@ export const api = {
     apiFetch<T>(path, { method: "POST", body: JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  patch: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
 };
 
@@ -391,3 +393,22 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
 
 export const addCash = (amount: number, direction: "deposit" | "withdrawal", note?: string) =>
   api.post("/cash", { amount, direction, note });
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  user_id: number;
+  username: string;
+  role: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export const adminListUsers = () => api.get<AdminUser[]>("/admin/users");
+
+export const adminCreateUser = (username: string, password: string, role: "admin" | "user") =>
+  api.post<AdminUser>("/admin/users", { username, password, role });
+
+export const adminPatchUser = (user_id: number, patch: { role?: string; is_active?: boolean }) =>
+  api.patch<AdminUser>(`/admin/users/${user_id}`, patch);
+

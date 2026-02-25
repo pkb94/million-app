@@ -1083,7 +1083,7 @@ def is_refresh_rate_limited(*, ip: str | None = None) -> bool:
         session.close()
 
 
-def create_user(username, password):
+def create_user(username, password, role="user"):
     session = get_session()
     try:
         username = str(username).strip().lower()
@@ -1097,12 +1097,10 @@ def create_user(username, password):
         if not password:
             raise ValueError('password required')
         _validate_password_policy(password)
-        # Hash using passlib
         ph = pwd_context.hash(password)
-        user = User(username=username, password_hash=ph, salt=None)
+        user = User(username=username, password_hash=ph, salt=None, role=str(role), is_active=True)
         session.add(user)
         session.commit()
-        # return created user id
         return user.id
     except Exception:
         session.rollback()
@@ -1126,9 +1124,14 @@ def authenticate_user(username, password):
         u = session.query(User).filter(User.username == uname).first()
         if not u:
             return None
-        # verify hash
+        # Block disabled accounts
+        if hasattr(u, 'is_active') and not u.is_active:
+            return None
         ok = pwd_context.verify(password, u.password_hash)
-        return u.id if ok else None
+        if not ok:
+            return None
+        role = str(getattr(u, 'role', None) or 'user')
+        return {"user_id": u.id, "role": role}
     finally:
         session.close()
 
@@ -1138,6 +1141,35 @@ def get_user(user_id: int):
     try:
         from database.models import User
         return session.query(User).filter(User.id == int(user_id)).first()
+    finally:
+        session.close()
+
+
+def list_all_users():
+    session = get_session()
+    try:
+        from database.models import User
+        return session.query(User).order_by(User.created_at.asc()).all()
+    finally:
+        session.close()
+
+
+def patch_user_admin(user_id: int, *, role: str | None = None, is_active: bool | None = None):
+    session = get_session()
+    try:
+        from database.models import User
+        u = session.query(User).filter(User.id == int(user_id)).first()
+        if not u:
+            raise ValueError("user not found")
+        if role is not None:
+            u.role = str(role)
+        if is_active is not None:
+            u.is_active = bool(is_active)
+        session.add(u)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
