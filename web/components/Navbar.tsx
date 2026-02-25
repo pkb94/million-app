@@ -59,10 +59,10 @@ export default function Navbar() {
         )}
       >
         {active && !collapsed && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-blue-500" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[var(--foreground)]/40" />
         )}
         {active && collapsed && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-blue-500" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[var(--foreground)]/40" />
         )}
         {Icon === Zap ? (
           <svg
@@ -80,7 +80,7 @@ export default function Navbar() {
             className={clsx(
               "shrink-0 transition-colors",
               active
-                ? "text-blue-500 dark:text-blue-400"
+                ? "text-foreground"
                 : "text-foreground/70 group-hover:text-foreground dark:group-hover:text-foreground",
             )}
           />
@@ -88,7 +88,7 @@ export default function Navbar() {
         {!collapsed && (
           <>
             <span className="flex-1">{label}</span>
-            {active && <ChevronRight size={13} className="text-blue-400 opacity-60" />}
+            {active && <ChevronRight size={13} className="text-foreground/30" />}
           </>
         )}
       </Link>
@@ -111,7 +111,7 @@ export default function Navbar() {
         )}>
           {!collapsed && (
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <span className="w-8 h-8 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
                 <svg width={15} height={15} viewBox="0 0 24 24" fill="#F59E0B" className="drop-shadow-[0_0_3px_rgba(245,158,11,0.8)]">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
@@ -120,7 +120,7 @@ export default function Navbar() {
             </Link>
           )}
           {collapsed && (
-            <Link href="/dashboard" title="Dashboard" className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <Link href="/dashboard" title="Dashboard" className="w-9 h-9 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
               <svg width={15} height={15} viewBox="0 0 24 24" fill="#F59E0B" className="drop-shadow-[0_0_3px_rgba(245,158,11,0.8)]">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
@@ -168,16 +168,16 @@ export default function Navbar() {
         )}>
           {!collapsed && user?.username && (
             <div className="flex items-center gap-2 px-3 py-2 mb-1">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-violet-500 flex items-center justify-center shrink-0">
-                <span className="text-[10px] font-black text-white uppercase">{user.username[0]}</span>
+              <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-black text-foreground uppercase">{user.username[0]}</span>
               </div>
               <span className="text-xs font-semibold text-foreground truncate">{user.username}</span>
             </div>
           )}
           {collapsed && user?.username && (
             <div className="flex justify-center py-2 mb-1" title={user.username}>
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-violet-500 flex items-center justify-center">
-                <span className="text-[10px] font-black text-white uppercase">{user.username[0]}</span>
+              <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">nter">
+                <span className="text-[10px] font-black text-foreground uppercase">{user.username[0]}</span>
               </div>
             </div>
           )}
@@ -211,7 +211,7 @@ export default function Navbar() {
       {/* ── Mobile top bar ───────────────────────────────────────────────── */}
       <header className="lg:hidden sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-[var(--border)] glass">
         <Link href="/dashboard" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
-          <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
+          <span className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
             <Zap size={13} className="text-white" strokeWidth={2.5} />
           </span>
           <span className="text-[14px] font-black tracking-tight text-foreground">OptionFlow</span>
@@ -235,8 +235,8 @@ export default function Navbar() {
           <div className="relative w-72 h-full bg-[var(--surface)] border-r border-[var(--border)] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between px-4 h-14 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
-                  <span className="text-[10px] font-black text-white uppercase">{user?.username?.[0] ?? "U"}</span>
+                <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">nter">
+                  <span className="text-[10px] font-black text-foreground uppercase">{user?.username?.[0] ?? "U"}</span>
                 </div>
                 <span className="text-sm font-bold text-foreground">{user?.username ?? "Menu"}</span>
               </div>

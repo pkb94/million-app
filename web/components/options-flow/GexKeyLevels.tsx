@@ -90,11 +90,11 @@ export function GexKeyLevels({ data, ticker }: Props) {
         </div>
 
         {/* Max GEX */}
-        <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-2.5 py-2">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
           <p className="text-[8px] text-foreground/70 uppercase tracking-widest font-bold mb-1">
             Max GEX
           </p>
-          <p className="text-[13px] font-black tabular-nums text-purple-400 leading-none">
+          <p className="text-[13px] font-black tabular-nums text-foreground leading-none">
             {data.max_gex_strike != null ? `$${data.max_gex_strike.toFixed(0)}` : "—"}
           </p>
         </div>

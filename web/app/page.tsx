@@ -133,10 +133,10 @@ const FEATURES = [
     icon: "🌍",
     title: "Markets",
     desc: "Sector heatmaps sized by market cap, live VIX + India VIX charts, market breadth, fear & greed proxy, top movers, and all 11 SPDR sector ETFs in one view.",
-    color: "from-blue-500/20 to-blue-600/5",
-    border: "border-blue-500/30",
+    color: "from-white/5 to-transparent",
+    border: "border-white/10",
     tag: "Market Overview",
-    tagColor: "bg-blue-500/15 text-blue-400",
+    tagColor: "bg-white/10 text-white/60",
   },
   {
     icon: "📊",
@@ -151,10 +151,10 @@ const FEATURES = [
     icon: "📋",
     title: "Order Management",
     desc: "Place, fill, and cancel orders with a paper broker. Full order lifecycle from PENDING → FILLED, with strategy tagging and limit price support.",
-    color: "from-purple-500/20 to-purple-600/5",
-    border: "border-purple-500/30",
+    color: "from-white/5 to-transparent",
+    border: "border-white/10",
     tag: "Execution",
-    tagColor: "bg-purple-500/15 text-purple-400",
+    tagColor: "bg-white/10 text-white/60",
   },
   {
     icon: "🏦",
@@ -218,7 +218,7 @@ function Nav() {
         {/* CTA */}
         <div className="flex items-center gap-3">
           <Link href="/login"
-            className="text-sm px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white font-semibold hover:opacity-90 transition shadow-lg shadow-blue-900/30">
+            className="text-sm px-4 py-1.5 rounded-lg bg-white text-black font-semibold hover:bg-white/90 transition">
             Sign in
           </Link>
         </div>
@@ -235,10 +235,9 @@ function Hero() {
     <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-5 overflow-hidden">
       {/* Background glow blobs — parallax */}
       <motion.div className="absolute inset-0 pointer-events-none" style={{ y: blobY }}>
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-600/10 blur-[120px]" />
-        <div className="absolute top-1/2 left-1/4 w-[400px] h-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-amber-500/8 blur-[100px]" />
-        <div className="absolute inset-0 opacity-[0.03]"
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-white/[0.03] blur-[140px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-amber-500/5 blur-[100px]" />
+        <div className="absolute inset-0 opacity-[0.025]"
           style={{ backgroundImage: "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
       </motion.div>
 
@@ -269,7 +268,7 @@ function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}>
           Trade smarter with{" "}
-          <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-amber-400 bg-clip-text text-transparent">
+          <span className="text-amber-400">
             real edge
           </span>
         </motion.h1>
@@ -291,7 +290,7 @@ function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.55, ease: [0.22, 1, 0.36, 1] }}>
           <Link href="/login"
-            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 hover:scale-[1.03] active:scale-[0.97] transition-all shadow-xl shadow-blue-900/40">
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-white text-black font-bold text-base hover:bg-white/90 hover:scale-[1.03] active:scale-[0.97] transition-all">
             Sign in →
           </Link>
         </motion.div>

@@ -444,7 +444,7 @@ export default function NetFlowPanel({ data }: Props) {
               {/* Mini progress dots */}
               <div className="flex gap-1">
                 {[0,1,2,3,4].map(i => (
-                  <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i < chartData.length ? "bg-purple-500" : "bg-[var(--border)]"}`} />
+                  <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i < chartData.length ? "bg-foreground/60" : "bg-[var(--border)]"}`} />
                 ))}
               </div>
             </div>
@@ -610,7 +610,7 @@ export default function NetFlowPanel({ data }: Props) {
         {tableStrikes.length > 0 && (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden">
             <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
-              <div className="w-1 h-3 rounded-full bg-gradient-to-b from-purple-400 to-blue-400" />
+              <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
               <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Top Flow Strikes</p>
             </div>
             <div className="overflow-x-auto">
