@@ -277,7 +277,16 @@ def _fetch_chain_yfinance(symbol: str) -> tuple[float, pd.DataFrame]:
     if not expiries:
         return spot, pd.DataFrame()
 
-    today = pd.Timestamp.today().normalize()
+    # Use US/Eastern date — options expire in ET; servers running UTC would
+    # otherwise roll "today" over at 7pm ET and drop the 0-DTE expiry.
+    try:
+        import zoneinfo
+        _ET = zoneinfo.ZoneInfo("America/New_York")
+    except Exception:
+        import pytz  # type: ignore[import]
+        _ET = pytz.timezone("America/New_York")
+    from datetime import datetime as _dt
+    today = pd.Timestamp(_dt.now(_ET).date())
 
     # Build list of (exp, T) pairs — skip expired (include today = 0-DTE)
     valid: list[tuple[str, float]] = []
