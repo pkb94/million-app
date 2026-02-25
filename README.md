@@ -1,111 +1,77 @@
-# Million App
+# OptionFlow V1
 
-Trading / budget journal with a separated backend API (FastAPI) and frontend (Streamlit).
+Full-stack trading analytics platform — options flow (GEX), sector heatmaps, trade journaling, order management, and portfolio tracking.
 
-Maintenance checklist: see `MAINTENANCE.md`.
-Master plan (growing): see `MASTER_PLAN.md`.
+## Stack
 
-## Quick start (local)
+- **Backend**: FastAPI (Python 3.12) + SQLite via SQLAlchemy + Alembic migrations
+- **Frontend**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
+- **Auth**: JWT with refresh token rotation, PBKDF2 password hashing
 
-1. Create a virtualenv and install dependencies:
+## Project Structure
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+```
+OptionFlow_V1/
+├── backend_api/        # FastAPI app (main.py, schemas.py, security.py)
+├── database/           # SQLAlchemy models
+├── logic/              # Business logic (gamma.py, services.py)
+├── brokers/            # Paper broker / order execution adapters
+├── alembic/            # DB migration scripts
+├── scripts/            # Utility scripts (create_user.py, dev.sh)
+├── tests/              # pytest test suite (33 tests)
+├── web/                # Next.js frontend
+│   ├── app/(app)/      # Authenticated pages (dashboard, options-flow, search, trades, …)
+│   ├── components/     # Reusable React components
+│   └── lib/            # Shared utilities (gex.ts, api.ts, …)
+└── trading_journal.db  # SQLite database (local)
 ```
 
-2. Run tests:
+## Quick Start (Local)
+
+### 1. Backend (FastAPI)
 
 ```bash
-PYTHONPATH=. pytest -q
+cd OptionFlow_V1
+pip install -r requirements.txt   # use Python 3.12+
+
+# Start the API
+PYTHONPATH=$PWD python -m uvicorn backend_api.main:app \
+  --host 127.0.0.1 --port 8000
 ```
 
-3. Run the backend API (FastAPI):
+### 2. Frontend (Next.js)
 
 ```bash
-export DATABASE_URL="sqlite:///trading_journal.db"  # or your Postgres URL
-export JWT_SECRET="change-me"                       # required for production
-PYTHONPATH=$PWD python -m uvicorn backend_api.main:app --reload --host 127.0.0.1 --port 8000
+cd web
+npm install
+BACKEND_URL=http://127.0.0.1:8000 npx next dev -p 3000
 ```
 
-### One-command dev (API + Streamlit)
+App available at **http://localhost:3000**
 
-From the repo root, you can start both services with:
+### 3. Run Tests
 
 ```bash
-./scripts/dev.sh
+PYTHONPATH=. pytest tests/ -q
 ```
 
-### Broker / OMS adapter (execution-capable)
+## Default Credentials
 
-Orders can optionally be routed through a broker/OMS adapter.
+| Username      | Password    |
+|---------------|-------------|
+| demo          | demo123     |
+| karthik.kv12  | karthik123  |
 
-- Enable adapter: `export BROKER_ENABLED=1`
-- Choose provider: `export BROKER_PROVIDER=paper`
-
-When enabled, order creation will submit to the adapter and persist external linkage fields on the `orders` row (`external_order_id`, `venue`, `external_status`, `last_synced_at`). Cancelling an order will call the adapter cancel path and update `external_status`/`last_synced_at`.
-
-## Phase 1: Postgres + migrations (recommended)
-
-1. Point `DATABASE_URL` at Postgres (example):
-
-```bash
-export DATABASE_URL="postgresql+psycopg://USER:PASSWORD@HOST:5432/million"
-```
-
-2. Run migrations with Alembic:
+## Database Migrations
 
 ```bash
 alembic upgrade head
 ```
 
-Notes:
-- By default, the app auto-creates tables only for SQLite. For Postgres, run Alembic migrations.
-- Optional pooling knobs for the backend: `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT`.
+## Environment Variables
 
-## Docker (local Postgres + API + Streamlit)
-
-Run everything with Postgres via Docker Compose:
-
-```bash
-cd million-app
-docker compose up --build
-```
-
-- Streamlit: http://127.0.0.1:8501
-- API health: http://127.0.0.1:8000/health
-
-The API container runs `alembic upgrade head` on startup (Postgres only).
-
-4. Run the frontend (Streamlit):
-
-```bash
-export API_BASE_URL="http://127.0.0.1:8000"
-streamlit run app.py
-```
-
-Demo credentials: `demo` / `demo123` (if you created it in the configured DB)
-
-## Deploy
-
-This setup requires deploying the backend API and the Streamlit frontend separately.
-
-- Backend: host `backend_api.main:app` on any Python host (Render/Railway/Fly.io/etc.) and set `DATABASE_URL` and `JWT_SECRET`.
-- Frontend (Streamlit Community Cloud): set `API_BASE_URL` in Streamlit Secrets pointing to your backend URL.
-
-1. Push your `main` branch to GitHub (already done).
-2. On https://share.streamlit.io create a new app using this repository and branch `main`.
-3. If you want persistent data, provision a Postgres DB and set it as `DATABASE_URL` for the backend.
-
-The backend will use `DATABASE_URL` if present; otherwise it falls back to a local sqlite file `trading_journal.db` in the repo root.
-
-## Migrate data from local SQLite to Postgres
-
-See `scripts/migrate_sqlite_to_postgres.py` for a helper to copy data from the local sqlite database to a Postgres instance.
-
-## Notes
-- Password hashing uses `passlib` and `pbkdf2_sha256` for compatibility and security.
-- For production use a managed Postgres service and keep secrets out of the repo.
-# million-app
-My financial dashboard.
+| Variable     | Default                     | Description                  |
+|--------------|-----------------------------|------------------------------|
+| JWT_SECRET   | dev-secret (change in prod) | JWT signing key               |
+| DATABASE_URL | sqlite:///trading_journal.db | SQLAlchemy database URL      |
+| BACKEND_URL  | http://127.0.0.1:8000       | Next.js → API proxy target   |
