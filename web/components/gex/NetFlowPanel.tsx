@@ -233,10 +233,10 @@ export default function NetFlowPanel({ data }: Props) {
   const hasEnoughData = chartData.length >= 5;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f18] overflow-hidden shadow-2xl">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-xl">
 
       {/* ══ HEADER BAND ══════════════════════════════════════════════════════ */}
-      <div className="relative flex items-center justify-between px-5 py-4 border-b border-white/8 bg-gradient-to-r from-[#181b28] to-[#0d0f18]">
+      <div className="relative flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-gradient-to-r from-[var(--surface-2)] to-[var(--surface)]">
         {/* Ambient glow behind bias badge */}
         <div className={`absolute right-0 top-0 w-32 h-full opacity-10 pointer-events-none ${isCallBias ? "bg-emerald-500" : "bg-red-500"}`}
           style={{ maskImage: "linear-gradient(to left, black, transparent)" }} />
@@ -252,7 +252,7 @@ export default function NetFlowPanel({ data }: Props) {
             </div>
             {spot > 0 && (
               <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-black text-white tabular-nums leading-none drop-shadow-[0_0_12px_rgba(250,204,21,0.8)]" style={{textShadow:'0 0 20px rgba(250,204,21,0.6)'}}>${spot.toFixed(2)}</span>
+                <span className="text-2xl font-black text-yellow-400 tabular-nums leading-none">${spot.toFixed(2)}</span>
               </div>
             )}
           </div>
@@ -298,7 +298,7 @@ export default function NetFlowPanel({ data }: Props) {
         </div>
 
         {/* ══ CALL / PUT SPLIT BAR ═════════════════════════════════════════ */}
-        <div className="rounded-xl border border-white/10 bg-[#181b28] px-3 py-2.5">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
           <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest mb-2">
             <span className="flex items-center gap-1.5 text-emerald-400">
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
@@ -320,7 +320,7 @@ export default function NetFlowPanel({ data }: Props) {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden">
 
           {/* Chart controls row */}
-          <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-white/8">
+          <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-[var(--border)]/50">
             <div className="flex items-center gap-3 text-[10px]">
               {spot > 0 && (
                 <span className="flex items-center gap-1">
@@ -335,13 +335,13 @@ export default function NetFlowPanel({ data }: Props) {
                 {(stats.net_flow ?? 0) >= 0 ? "▲" : "▼"} {fmt(Math.abs(stats.net_flow ?? 0))}
               </span>
             </div>
-            <div className="flex items-center bg-[#181b28] rounded-lg p-0.5 gap-0.5 border border-white/10">
+            <div className="flex items-center bg-[var(--surface)] rounded-lg p-0.5 gap-0.5 border border-[var(--border)]">
               {DAY_RANGES.map(d => (
                 <button key={d} onClick={() => setDays(d)}
                   className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all ${
                     days === d
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-gray-400 hover:text-white"
+                      ? "bg-[var(--border)] text-white shadow-sm"
+                      : "text-gray-500 hover:text-gray-300"
                   }`}>{d}D</button>
               ))}
             </div>
@@ -473,10 +473,10 @@ export default function NetFlowPanel({ data }: Props) {
 
             {/* Flow by Expiry */}
             {expiryData.length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-[#0d0f18] p-3">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
                 <div className="flex items-center gap-1.5 mb-3">
                   <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
-                  <p className="text-[9px] text-gray-200 uppercase tracking-widest font-bold">Flow by Expiry</p>
+                  <p className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Flow by Expiry</p>
                 </div>
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={expiryData} barCategoryGap="28%" barGap={2} margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
@@ -501,10 +501,10 @@ export default function NetFlowPanel({ data }: Props) {
 
             {/* Net Flow by Strike */}
             {strikeData.length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-[#0d0f18] p-3">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
                 <div className="flex items-center gap-1.5 mb-3">
                   <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
-                  <p className="text-[9px] text-gray-200 uppercase tracking-widest font-bold">Net by Strike</p>
+                  <p className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Net by Strike</p>
                 </div>
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={strikeData} layout="vertical" margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
@@ -527,8 +527,8 @@ export default function NetFlowPanel({ data }: Props) {
 
         {/* ══ TOP FLOW STRIKES TABLE ════════════════════════════════════════ */}
         {tableStrikes.length > 0 && (
-          <div className="rounded-xl border border-white/10 bg-[#0d0f18] overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-white/8 flex items-center gap-2">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
               <div className="w-1 h-3 rounded-full bg-gradient-to-b from-purple-400 to-blue-400" />
               <p className="text-[9px] text-gray-200 uppercase tracking-widest font-bold">Top Flow Strikes</p>
             </div>
