@@ -199,9 +199,69 @@ class GEXResult:
 # Fetch + compute
 # ---------------------------------------------------------------------------
 
+def _parse_chain_rows(exp: str, chain: "object", spot: float, T: float) -> list[dict]:
+    """Convert one expiry's option_chain into a list of row dicts."""
+    rows: list[dict] = []
+    for otype, df in [("call", chain.calls), ("put", chain.puts)]:
+        if df is None or df.empty:
+            continue
+        for _, opt in df.iterrows():
+            try:
+                strike_raw = opt.get("strike", 0)
+                strike = float(strike_raw) if strike_raw is not None and not (isinstance(strike_raw, float) and math.isnan(strike_raw)) else 0.0
+                if strike <= 0:
+                    continue
+
+                oi_raw = opt.get("openInterest", 0)
+                if oi_raw is None or (isinstance(oi_raw, float) and math.isnan(oi_raw)):
+                    oi = 0
+                else:
+                    oi = int(float(oi_raw))
+                if oi <= 0:
+                    continue
+
+                iv_raw = opt.get("impliedVolatility", 0)
+                iv = float(iv_raw) if iv_raw is not None and not (isinstance(iv_raw, float) and math.isnan(iv_raw)) else 0.0
+
+                bid_raw = opt.get("bid", 0)
+                bid = float(bid_raw) if bid_raw is not None and not (isinstance(bid_raw, float) and math.isnan(bid_raw)) else 0.0
+                ask_raw = opt.get("ask", 0)
+                ask = float(ask_raw) if ask_raw is not None and not (isinstance(ask_raw, float) and math.isnan(ask_raw)) else 0.0
+                mid = (bid + ask) / 2.0
+
+                chain_gamma = opt.get("gamma", None)
+                if chain_gamma is not None and not (isinstance(chain_gamma, float) and math.isnan(chain_gamma)) and float(chain_gamma) > 0:
+                    gamma = float(chain_gamma)
+                elif iv > 0 and spot > 0:
+                    gamma = bs_gamma(S=spot, K=strike, T=T, r=0.045, sigma=iv)
+                else:
+                    gamma = 0.0
+
+                vol_raw = opt.get("volume", 0)
+                vol = int(float(vol_raw)) if vol_raw is not None and not (isinstance(vol_raw, float) and math.isnan(vol_raw)) else 0
+
+                rows.append({
+                    "strike": strike,
+                    "expiry": exp,
+                    "otype":  otype,
+                    "oi":     oi,
+                    "volume": vol,
+                    "iv":     iv,
+                    "mid":    mid,
+                    "gamma":  gamma,
+                    "T":      T,
+                })
+            except Exception:
+                continue
+    return rows
+
+
 def _fetch_chain_yfinance(symbol: str) -> tuple[float, pd.DataFrame]:
-    """Fetch options chain using yfinance. Returns (spot_price, options_df)."""
-    import yfinance as yf  # imported late so module loads without yfinance
+    """Fetch options chain using yfinance. Returns (spot_price, options_df).
+    All expiries are fetched concurrently via ThreadPoolExecutor.
+    """
+    import yfinance as yf
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     ticker = yf.Ticker(symbol.upper())
 
@@ -209,7 +269,6 @@ def _fetch_chain_yfinance(symbol: str) -> tuple[float, pd.DataFrame]:
     info = ticker.fast_info
     spot = float(getattr(info, "last_price", None) or getattr(info, "regularMarketPrice", None) or 0.0)
     if spot <= 0:
-        # fallback
         hist = ticker.history(period="1d", progress=False)
         if not hist.empty:
             spot = float(hist["Close"].iloc[-1])
@@ -218,75 +277,37 @@ def _fetch_chain_yfinance(symbol: str) -> tuple[float, pd.DataFrame]:
     if not expiries:
         return spot, pd.DataFrame()
 
-    rows: list[dict] = []
     today = pd.Timestamp.today().normalize()
+
+    # Build list of (exp, T) pairs — skip expired
+    valid: list[tuple[str, float]] = []
     for exp in expiries:
-        exp_dt = pd.to_datetime(exp)
-        T_days = (exp_dt - today).days
-        if T_days <= 0:
-            continue
-        T = T_days / 365.0
+        T_days = (pd.to_datetime(exp) - today).days
+        if T_days > 0:
+            valid.append((exp, T_days / 365.0))
+
+    if not valid:
+        return spot, pd.DataFrame()
+
+    def _fetch_one(exp: str, T: float) -> list[dict]:
         try:
             chain = ticker.option_chain(exp)
+            return _parse_chain_rows(exp, chain, spot, T)
         except Exception:
-            continue
+            return []
 
-        for otype, df in [("call", chain.calls), ("put", chain.puts)]:
-            if df is None or df.empty:
-                continue
-            for _, opt in df.iterrows():
-                try:
-                    strike_raw = opt.get("strike", 0)
-                    strike = float(strike_raw) if strike_raw is not None and not (isinstance(strike_raw, float) and math.isnan(strike_raw)) else 0.0
-                    if strike <= 0:
-                        continue
+    # Fetch all expiries in parallel — cap workers at min(len, 16) to avoid
+    # overwhelming yfinance's rate limit while still getting big speedups.
+    all_rows: list[dict] = []
+    max_workers = min(len(valid), 16)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_fetch_one, exp, T): exp for exp, T in valid}
+        for fut in as_completed(futures):
+            all_rows.extend(fut.result())
 
-                    oi_raw = opt.get("openInterest", 0)
-                    if oi_raw is None or (isinstance(oi_raw, float) and math.isnan(oi_raw)):
-                        oi = 0
-                    else:
-                        oi = int(float(oi_raw))
-                    if oi <= 0:
-                        continue
-
-                    iv_raw = opt.get("impliedVolatility", 0)
-                    iv = float(iv_raw) if iv_raw is not None and not (isinstance(iv_raw, float) and math.isnan(iv_raw)) else 0.0
-
-                    bid_raw = opt.get("bid", 0)
-                    bid = float(bid_raw) if bid_raw is not None and not (isinstance(bid_raw, float) and math.isnan(bid_raw)) else 0.0
-                    ask_raw = opt.get("ask", 0)
-                    ask = float(ask_raw) if ask_raw is not None and not (isinstance(ask_raw, float) and math.isnan(ask_raw)) else 0.0
-                    mid = (bid + ask) / 2.0
-
-                    # Use gamma from chain if available, else compute via BS
-                    chain_gamma = opt.get("gamma", None)
-                    if chain_gamma is not None and not (isinstance(chain_gamma, float) and math.isnan(chain_gamma)) and float(chain_gamma) > 0:
-                        gamma = float(chain_gamma)
-                    elif iv > 0 and spot > 0:
-                        gamma = bs_gamma(S=spot, K=strike, T=T, r=0.045, sigma=iv)
-                    else:
-                        gamma = 0.0
-
-                    vol_raw = opt.get("volume", 0)
-                    vol = int(float(vol_raw)) if vol_raw is not None and not (isinstance(vol_raw, float) and math.isnan(vol_raw)) else 0
-
-                    rows.append({
-                        "strike": strike,
-                        "expiry": exp,
-                        "otype": otype,
-                        "oi": oi,
-                        "volume": vol,
-                        "iv": iv,
-                        "mid": mid,
-                        "gamma": gamma,
-                        "T": T,
-                    })
-                except Exception:
-                    continue
-
-    if not rows:
+    if not all_rows:
         return spot, pd.DataFrame()
-    return spot, pd.DataFrame(rows)
+    return spot, pd.DataFrame(all_rows)
 
 
 def _compute_gex(df: pd.DataFrame, spot: float, lot_size: int = 100) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

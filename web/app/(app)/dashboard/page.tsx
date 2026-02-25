@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { AreaChart, Area, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
 import { fetchTrades, fetchOrders, fetchCashBalance, Trade } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import TickerSearchInput from "@/components/TickerSearchInput";
 import {
   TrendingUp, TrendingDown, DollarSign, Activity, Clock, ArrowRight,
-  Search,
 } from "lucide-react";
 import { PageHeader, SectionLabel, SkeletonStatGrid, Badge, RefreshButton } from "@/components/ui";
 import MarketCards from "@/components/dashboard/MarketCards";
@@ -75,7 +75,7 @@ export default function DashboardPage() {
   const isLoading = tradesQ.isLoading && cashQ.isLoading;
 
   return (
-    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto">
+    <div className="p-4 sm:p-6 w-full">
 
       <PageHeader
         title={user?.username ? `Hey, ${user.username} 👋` : "Dashboard"}
@@ -88,22 +88,19 @@ export default function DashboardPage() {
       />
 
       {/* ── Slim stock search bar ── */}
-      <form onSubmit={handleLookup} className="flex gap-2 mb-6">
-        <div className="relative flex-1">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input
-            ref={searchRef}
-            value={lookupQuery}
-            onChange={(e) => setLookupQuery(e.target.value.toUpperCase())}
-            placeholder="Look up a ticker — AAPL, SPY, TSLA…"
-            className="w-full pl-9 pr-4 py-2 border border-[var(--border)] rounded-xl text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <button type="submit" disabled={!lookupQuery.trim()}
-          className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 transition">
-          View
-        </button>
-      </form>
+      <div className="mb-6">
+        <TickerSearchInput
+          value={lookupQuery}
+          onChange={setLookupQuery}
+          onSelect={(sym) => {
+            setLookupQuery(sym);
+            router.push(`/options-flow?ticker=${encodeURIComponent(sym)}`);
+          }}
+          placeholder="Search ticker or company — AAPL, Apple, Nifty…"
+          actionLabel="View"
+          className="w-full max-w-xl"
+        />
+      </div>
 
       {/* Stat cards */}
       {isLoading ? (

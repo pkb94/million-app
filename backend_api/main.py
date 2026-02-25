@@ -10,14 +10,14 @@ from datetime import datetime, timezone, timedelta as _td
 # ── GEX response cache ────────────────────────────────────────────────────────
 # yfinance refreshes options data roughly every 15s; caching here prevents
 # hammering yfinance on rapid polls and keeps response times fast.
-_GEX_CACHE_TTL = 15  # seconds
+_GEX_CACHE_TTL = 10  # seconds
 _gex_cache: dict[str, tuple[float, Any]] = {}  # symbol -> (timestamp, result)
 
 # ── Background poller ─────────────────────────────────────────────────────────
 # Tracks which symbols are actively being watched (registered by the frontend).
-# The poller thread fetches & snapshots each watched symbol every 15 s so the
+# The poller thread fetches & snapshots each watched symbol every 10 s so the
 # net-flow history chart fills up with real data continuously.
-_POLL_INTERVAL = 15  # seconds — matches yfinance refresh cadence
+_POLL_INTERVAL = 10  # seconds — parallel fetches make this safe to tighten
 _watched: Set[str] = set()           # symbols currently open in any browser tab
 _watched_lock = threading.Lock()
 _watched_ttl: dict[str, float] = {}  # symbol -> last-heartbeat monotonic time
@@ -293,6 +293,55 @@ def get_current_user(
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+
+# ── Ticker search (no auth required — public autocomplete) ────────────────────
+_SEARCH_CACHE_TTL = 60  # seconds
+_search_cache: dict[str, tuple[float, list]] = {}  # query -> (ts, results)
+
+@app.get("/search/tickers")
+def search_tickers(q: str = "", limit: int = 8) -> List[Dict[str, Any]]:
+    """Fuzzy ticker + company name search backed by yfinance.Search.
+    Returns up to `limit` suggestions with symbol, name, type, exchange.
+    Results are cached for 60 s to avoid hammering Yahoo on rapid keystrokes.
+    """
+    q = q.strip()
+    if not q:
+        return []
+    key = q.lower()
+    cached = _search_cache.get(key)
+    now = time.monotonic()
+    if cached and (now - cached[0]) < _SEARCH_CACHE_TTL:
+        return cached[1][:limit]
+
+    try:
+        import yfinance as yf
+        res = yf.Search(q, max_results=min(limit, 20), enable_fuzzy_query=True)
+        quotes = res.quotes or []
+        results = []
+        seen: set[str] = set()
+        # Preferred exchange ordering: US > Indian > everything else
+        _PREFERRED = {"NASDAQ", "NYSE", "NYSE ARCA", "NYSE MKT", "NSE", "BSE", "Bombay"}
+        def _sort_key(r: dict) -> int:
+            ex = r.get("exchDisp", "") or ""
+            if ex in {"NASDAQ", "NYSE", "NYSE ARCA", "NYSE MKT"}:
+                return 0
+            if ex in {"NSE", "BSE", "Bombay"}:
+                return 1
+            return 2
+        for q_item in sorted(quotes, key=_sort_key):
+            sym = (q_item.get("symbol") or "").strip()
+            if not sym or sym in seen:
+                continue
+            seen.add(sym)
+            name = (q_item.get("shortname") or q_item.get("longname") or "").strip()
+            type_ = (q_item.get("typeDisp") or q_item.get("quoteType") or "").strip()
+            exch  = (q_item.get("exchDisp") or q_item.get("exchange") or "").strip()
+            results.append({"symbol": sym, "name": name, "type": type_, "exchange": exch})
+        _search_cache[key] = (now, results)
+        return results[:limit]
+    except Exception as exc:
+        return []
 
 
 @app.post("/options/watch", status_code=204)
@@ -949,28 +998,152 @@ def ledger_cash_balance(user=Depends(get_current_user)) -> Dict[str, Any]:
     return {"currency": "USD", "balance": float(bal)}
 
 
+_STOCK_INFO_CACHE: dict[str, tuple[float, Any]] = {}
+_STOCK_INFO_TTL = 300  # 5 minutes — fundamentals don't change quickly
+
+@app.get("/stocks/{symbol}/info", response_model=Dict[str, Any])
+def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Return fundamental and descriptive info for a ticker via yfinance.
+    Cached for 5 minutes. Returns gracefully if data is unavailable.
+    """
+    import yfinance as yf
+    sym = symbol.strip().upper()
+    now = time.monotonic()
+    cached = _STOCK_INFO_CACHE.get(sym)
+    if cached and (now - cached[0]) < _STOCK_INFO_TTL:
+        return cached[1]
+
+    def _safe_float(v: Any) -> Optional[float]:
+        try:
+            return float(v) if v is not None else None
+        except Exception:
+            return None
+
+    def _safe_int(v: Any) -> Optional[int]:
+        try:
+            return int(v) if v is not None else None
+        except Exception:
+            return None
+
+    try:
+        ticker = yf.Ticker(sym)
+        info = {}
+        try:
+            info = ticker.info or {}
+        except Exception:
+            pass
+
+        fast = None
+        try:
+            fast = ticker.fast_info
+        except Exception:
+            pass
+
+        def _fi(attr: str) -> Optional[float]:
+            try:
+                v = getattr(fast, attr, None)
+                return float(v) if v is not None else None
+            except Exception:
+                return None
+
+        result: Dict[str, Any] = {
+            "symbol":              sym,
+            "name":                info.get("longName") or info.get("shortName") or sym,
+            "sector":              info.get("sector"),
+            "industry":            info.get("industry"),
+            "description":         info.get("longBusinessSummary"),
+            "website":             info.get("website"),
+            "exchange":            info.get("exchange") or info.get("exchangeName"),
+            "currency":            info.get("currency", "USD"),
+            "quote_type":          info.get("quoteType"),
+            "country":             info.get("country"),
+            "employees":           _safe_int(info.get("fullTimeEmployees")),
+            # Price / market data
+            "market_cap":          _safe_float(info.get("marketCap")) or _fi("market_cap"),
+            "enterprise_value":    _safe_float(info.get("enterpriseValue")),
+            "shares_outstanding":  _safe_float(info.get("sharesOutstanding")) or _fi("shares"),
+            "float_shares":        _safe_float(info.get("floatShares")),
+            "avg_volume":          _safe_float(info.get("averageVolume")) or _safe_float(info.get("averageDailyVolume10Day")),
+            "avg_volume_10d":      _safe_float(info.get("averageDailyVolume10Day")),
+            # 52-week range
+            "week_52_high":        _safe_float(info.get("fiftyTwoWeekHigh")) or _fi("year_high"),
+            "week_52_low":         _safe_float(info.get("fiftyTwoWeekLow")) or _fi("year_low"),
+            "day_high":            _safe_float(info.get("dayHigh")) or _fi("day_high"),
+            "day_low":             _safe_float(info.get("dayLow")) or _fi("day_low"),
+            "fifty_day_avg":       _safe_float(info.get("fiftyDayAverage")) or _fi("fifty_day_average"),
+            "two_hundred_day_avg": _safe_float(info.get("twoHundredDayAverage")) or _fi("two_hundred_day_average"),
+            # Valuation
+            "pe_ratio":            _safe_float(info.get("trailingPE")),
+            "forward_pe":          _safe_float(info.get("forwardPE")),
+            "pb_ratio":            _safe_float(info.get("priceToBook")),
+            "ps_ratio":            _safe_float(info.get("priceToSalesTrailing12Months")),
+            "peg_ratio":           _safe_float(info.get("pegRatio")),
+            "ev_ebitda":           _safe_float(info.get("enterpriseToEbitda")),
+            # Earnings
+            "eps_ttm":             _safe_float(info.get("trailingEps")),
+            "eps_forward":         _safe_float(info.get("forwardEps")),
+            "revenue_ttm":         _safe_float(info.get("totalRevenue")),
+            "gross_margin":        _safe_float(info.get("grossMargins")),
+            "profit_margin":       _safe_float(info.get("profitMargins")),
+            "operating_margin":    _safe_float(info.get("operatingMargins")),
+            "return_on_equity":    _safe_float(info.get("returnOnEquity")),
+            "return_on_assets":    _safe_float(info.get("returnOnAssets")),
+            "debt_to_equity":      _safe_float(info.get("debtToEquity")),
+            "free_cash_flow":      _safe_float(info.get("freeCashflow")),
+            # Dividends
+            "dividend_yield":      _safe_float(info.get("dividendYield")),
+            "dividend_rate":       _safe_float(info.get("dividendRate")),
+            "payout_ratio":        _safe_float(info.get("payoutRatio")),
+            "ex_dividend_date":    info.get("exDividendDate"),
+            # Risk
+            "beta":                _safe_float(info.get("beta")),
+            "short_ratio":         _safe_float(info.get("shortRatio")),
+            "short_pct_float":     _safe_float(info.get("shortPercentOfFloat")),
+            # Next earnings
+            "earnings_date":       info.get("earningsTimestamp"),
+            "error":               None,
+        }
+        _STOCK_INFO_CACHE[sym] = (now, result)
+        return result
+    except Exception as exc:
+        err: Dict[str, Any] = {"symbol": sym, "error": str(exc)}
+        return err
+
+
 @app.get("/stocks/{symbol}/history", response_model=Dict[str, Any])
-def stock_history(symbol: str, period: str = "6mo", _user=Depends(get_current_user)) -> Dict[str, Any]:
-    """Return OHLCV history + current price for a symbol via yfinance."""
+def stock_history(symbol: str, period: str = "6mo", interval: str = "1d", _user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Return OHLCV history + current price for a symbol via yfinance.
+    `interval` supports: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+    For intraday intervals (< 1d), datetime strings include time component.
+    """
     import yfinance as yf
 
     sym = symbol.strip().upper()
-    allowed_periods = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
-    p = period if period in allowed_periods else "6mo"
+    allowed_periods  = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
+    allowed_intervals = {"1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"}
+    p  = period   if period   in allowed_periods   else "6mo"
+    iv = interval if interval in allowed_intervals else "1d"
+    intraday = iv not in {"1d", "5d", "1wk", "1mo", "3mo"}
     try:
         ticker = yf.Ticker(sym)
-        hist = ticker.history(period=p)
+        hist = ticker.history(period=p, interval=iv)
         if hist is None or hist.empty:
             return {"symbol": sym, "bars": [], "current_price": None, "error": f"No data for {sym}"}
         hist = hist.reset_index()
         bars: List[Dict[str, Any]] = []
         for _, row in hist.iterrows():
-            dt = row.get("Date") or row.get("Datetime")
+            dt = row.get("Datetime") or row.get("Date")
             close = row.get("Close")
             if dt is None or close is None:
                 continue
             try:
-                date_str = pd.to_datetime(dt).strftime("%Y-%m-%d")
+                ts = pd.to_datetime(dt)
+                # Normalise to UTC
+                if ts.tzinfo is None:
+                    ts = ts.tz_localize("UTC")
+                else:
+                    ts = ts.tz_convert("UTC")
+                date_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ") if intraday else ts.strftime("%Y-%m-%d")
                 close_f  = float(close)
             except Exception:
                 continue

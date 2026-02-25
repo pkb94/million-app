@@ -185,6 +185,114 @@ export const fetchGex = (symbol: string) =>
 export const watchSymbols = (symbols: string[]) =>
   api.post<void>("/options/watch", { symbols });
 
+// ── Ticker search ─────────────────────────────────────────────────────────────
+export interface TickerSuggestion {
+  symbol:   string;
+  name:     string;
+  type:     string;
+  exchange: string;
+}
+
+export const searchTickers = (q: string, limit = 8) =>
+  api.get<TickerSuggestion[]>(`/search/tickers?q=${encodeURIComponent(q)}&limit=${limit}`);
+
+// ── Stock info (fundamentals) ─────────────────────────────────────────────────
+export interface StockInfo {
+  symbol: string;
+  name?: string;
+  sector?: string;
+  industry?: string;
+  description?: string;
+  website?: string;
+  exchange?: string;
+  currency?: string;
+  quote_type?: string;
+  country?: string;
+  employees?: number;
+  // Market data
+  market_cap?: number;
+  enterprise_value?: number;
+  shares_outstanding?: number;
+  float_shares?: number;
+  avg_volume?: number;
+  avg_volume_10d?: number;
+  // Price range
+  week_52_high?: number;
+  week_52_low?: number;
+  day_high?: number;
+  day_low?: number;
+  fifty_day_avg?: number;
+  two_hundred_day_avg?: number;
+  // Valuation
+  pe_ratio?: number;
+  forward_pe?: number;
+  pb_ratio?: number;
+  ps_ratio?: number;
+  peg_ratio?: number;
+  ev_ebitda?: number;
+  // Earnings
+  eps_ttm?: number;
+  eps_forward?: number;
+  revenue_ttm?: number;
+  gross_margin?: number;
+  profit_margin?: number;
+  operating_margin?: number;
+  return_on_equity?: number;
+  return_on_assets?: number;
+  debt_to_equity?: number;
+  free_cash_flow?: number;
+  // Dividends
+  dividend_yield?: number;
+  dividend_rate?: number;
+  payout_ratio?: number;
+  ex_dividend_date?: number;
+  // Risk
+  beta?: number;
+  short_ratio?: number;
+  short_pct_float?: number;
+  // Earnings date
+  earnings_date?: number;
+  error?: string | null;
+}
+
+export const fetchStockInfo = (symbol: string) =>
+  api.get<StockInfo>(`/stocks/${symbol.toUpperCase()}/info`);
+
+// ── Stock history ─────────────────────────────────────────────────────────────
+export interface QuoteBar {
+  date: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close: number;
+  volume?: number;
+}
+
+export interface StockHistory {
+  symbol: string;
+  name?: string;
+  bars: QuoteBar[];
+  current_price?: number;
+  error?: string;
+}
+
+export const fetchStockHistory = (symbol: string, period = "1d", interval = "1m") =>
+  api.get<StockHistory>(`/stocks/${symbol.toUpperCase()}/history?period=${period}&interval=${interval}`);
+
+// ── Net flow history ──────────────────────────────────────────────────────────
+export interface FlowSnapshot {
+  ts: string;
+  price: number;
+  call_prem: number;
+  put_prem: number;
+  net_flow: number;
+  total_prem: number;
+  volume: number;
+}
+
+export const fetchNetFlowHistory = (symbol: string, days = 1) =>
+  api.get<FlowSnapshot[]>(`/options/net-flow-history/${symbol.toUpperCase()}?days=${days}`);
+
 // ── Trades ───────────────────────────────────────────────────────────────────
 
 export interface Trade {
