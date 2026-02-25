@@ -1331,6 +1331,26 @@ def admin_create_user(req: AdminCreateUserRequest, _admin=Depends(require_admin)
     )
 
 
+@app.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: int, admin=Depends(require_admin)) -> None:
+    if int(admin["sub"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        services.delete_user_admin(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: int, admin=Depends(require_admin)) -> None:
+    if int(admin["sub"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        services.delete_user_admin(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.patch("/admin/users/{user_id}", response_model=AdminUserOut)
 def admin_patch_user(user_id: int, req: AdminPatchUserRequest, admin=Depends(require_admin)) -> AdminUserOut:
     # Prevent admin from demoting themselves

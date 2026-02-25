@@ -414,3 +414,7 @@ export const adminCreateUser = (username: string, password: string, role: "admin
 export const adminPatchUser = (user_id: number, patch: { role?: string; is_active?: boolean }) =>
   api.patch<AdminUser>(`/admin/users/${user_id}`, patch);
 
+export const adminDeleteUser = async (user_id: number): Promise<void> => {
+  await apiFetch<void>(`/admin/users/${user_id}`, { method: "DELETE" });
+};
+

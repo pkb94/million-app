@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { adminListUsers, adminCreateUser, adminPatchUser, AdminUser } from "@/lib/api";
-import { Users, Plus, ShieldCheck, ShieldOff, UserCheck, UserX, X } from "lucide-react";
+import { adminListUsers, adminCreateUser, adminPatchUser, adminDeleteUser, AdminUser } from "@/lib/api";
+import { Users, Plus, ShieldCheck, ShieldOff, UserCheck, UserX, X, Trash2 } from "lucide-react";
 
 export default function AdminUsersPage() {
   const { isAdmin, loading } = useAuth();
@@ -16,6 +16,7 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [patchingId, setPatchingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!loading && !isAdmin) router.replace("/dashboard");
@@ -61,6 +62,17 @@ export default function AdminUsersPage() {
       setUsers((prev) => prev.map((x) => (x.user_id === u.user_id ? updated : x)));
     } finally {
       setPatchingId(null);
+    }
+  };
+
+  const handleDelete = async (user_id: number) => {
+    setPatchingId(user_id);
+    try {
+      await adminDeleteUser(user_id);
+      setUsers((prev) => prev.filter((x) => x.user_id !== user_id));
+    } finally {
+      setPatchingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -215,6 +227,31 @@ export default function AdminUsersPage() {
                     >
                       {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
                     </button>
+                    {confirmDeleteId === u.user_id ? (
+                      <>
+                        <button
+                          onClick={() => handleDelete(u.user_id)}
+                          disabled={patchingId === u.user_id}
+                          className="px-2 py-1 rounded-lg bg-red-500/10 text-red-500 text-xs font-semibold hover:bg-red-500/20 transition disabled:opacity-40"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-foreground/40 hover:text-foreground transition"
+                        >
+                          <X size={13} />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(u.user_id)}
+                        title="Delete user"
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-foreground/20 hover:text-red-500 transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

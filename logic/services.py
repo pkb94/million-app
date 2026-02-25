@@ -1174,6 +1174,22 @@ def patch_user_admin(user_id: int, *, role: str | None = None, is_active: bool |
         session.close()
 
 
+def delete_user_admin(user_id: int) -> None:
+    session = get_session()
+    try:
+        from database.models import User
+        u = session.query(User).filter(User.id == int(user_id)).first()
+        if not u:
+            raise ValueError("user not found")
+        session.delete(u)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def set_auth_valid_after_epoch(*, user_id: int, epoch_seconds: int) -> None:
     session = get_session()
     try:
