@@ -116,15 +116,21 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 /* ── Light-mode grey text → near-black ────────────────────────────────────── */
-/* All the gray-3xx through gray-6xx classes that look washed out on white     */
-/* backgrounds are overridden to render as the foreground colour in light mode. */
-/* Dark mode keeps Tailwind's original grey palette unchanged.                  */
+/* Overrides text-gray-300 through text-gray-700 AND all their dark: variants  */
+/* so every label, section heading, table cell etc. is readable on white bg.   */
 @media (prefers-color-scheme: light) {
   .text-gray-300,
   .text-gray-400,
   .text-gray-500,
-  .text-gray-600 {
-    color: #1a1d27;
+  .text-gray-600,
+  .text-gray-700,
+  .dark\:text-gray-100,
+  .dark\:text-gray-200,
+  .dark\:text-gray-300,
+  .dark\:text-gray-400,
+  .dark\:text-gray-500,
+  .dark\:text-gray-600 {
+    color: #1a1d27 !important;
   }
 }
 
