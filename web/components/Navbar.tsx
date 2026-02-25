@@ -53,7 +53,7 @@ export default function Navbar() {
           collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
           active
             ? "nav-active font-semibold"
-            : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white",
+            : "text-foreground/70 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-foreground dark:hover:text-white",
         )}
       >
         {active && !collapsed && (
@@ -79,7 +79,7 @@ export default function Navbar() {
               "shrink-0 transition-colors",
               active
                 ? "text-blue-500 dark:text-blue-400"
-                : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300",
+                : "text-foreground/70 group-hover:text-foreground dark:group-hover:text-foreground",
             )}
           />
         )}
@@ -114,7 +114,7 @@ export default function Navbar() {
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
               </span>
-              <span className="text-[15px] font-black tracking-tight text-gray-900 dark:text-white">OptionFlow</span>
+              <span className="text-[15px] font-black tracking-tight text-foreground">OptionFlow</span>
             </Link>
           )}
           {collapsed && (
@@ -129,7 +129,7 @@ export default function Navbar() {
             <button
               onClick={toggle}
               title="Collapse sidebar"
-              className="p-1.5 rounded-lg text-gray-400 hover:bg-[var(--surface-2)] hover:text-gray-600 dark:hover:text-gray-300 transition"
+              className="p-1.5 rounded-lg text-foreground/70 hover:bg-[var(--surface-2)] hover:text-foreground dark:hover:text-foreground transition"
             >
               <PanelLeftClose size={16} strokeWidth={1.8} />
             </button>
@@ -152,7 +152,7 @@ export default function Navbar() {
             <button
               onClick={toggle}
               title="Expand sidebar"
-              className="w-full flex items-center justify-center py-2.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] hover:text-gray-600 dark:hover:text-gray-300 transition"
+              className="w-full flex items-center justify-center py-2.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] hover:text-foreground dark:hover:text-foreground transition"
             >
               <PanelLeftOpen size={16} strokeWidth={1.8} />
             </button>
@@ -169,7 +169,7 @@ export default function Navbar() {
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-violet-500 flex items-center justify-center shrink-0">
                 <span className="text-[10px] font-black text-white uppercase">{user.username[0]}</span>
               </div>
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 truncate">{user.username}</span>
+              <span className="text-xs font-semibold text-foreground truncate">{user.username}</span>
             </div>
           )}
           {collapsed && user?.username && (
@@ -183,7 +183,7 @@ export default function Navbar() {
             onClick={handleLogout}
             title={collapsed ? "Sign out" : undefined}
             className={clsx(
-              "w-full flex items-center gap-3 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all",
+              "w-full flex items-center gap-3 rounded-xl text-sm font-medium text-foreground/70 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all",
               collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
             )}
           >
@@ -199,11 +199,11 @@ export default function Navbar() {
           <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
             <Zap size={13} className="text-white" strokeWidth={2.5} />
           </span>
-          <span className="text-[14px] font-black tracking-tight text-gray-900 dark:text-white">OptionFlow</span>
+          <span className="text-[14px] font-black tracking-tight text-foreground">OptionFlow</span>
         </Link>
         <button
           onClick={() => setMobileOpen((v) => !v)}
-          className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+          className="p-2 rounded-xl text-foreground/70 hover:bg-gray-100 dark:hover:bg-white/5 transition"
           aria-label="Toggle menu"
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -223,11 +223,11 @@ export default function Navbar() {
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
                   <span className="text-[10px] font-black text-white uppercase">{user?.username?.[0] ?? "U"}</span>
                 </div>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">{user?.username ?? "Menu"}</span>
+                <span className="text-sm font-bold text-foreground">{user?.username ?? "Menu"}</span>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                className="p-1.5 rounded-lg text-foreground/70 hover:bg-gray-100 dark:hover:bg-white/5 transition"
               >
                 <X size={18} />
               </button>
@@ -246,7 +246,7 @@ export default function Navbar() {
             <div className="px-3 pb-6 pt-2 border-t border-[var(--border)]">
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground/70 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all"
               >
                 <LogOut size={16} strokeWidth={1.8} />Sign out
               </button>

@@ -98,12 +98,12 @@ export default function EconomicCalendar() {
 
   const pillBase = "px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition cursor-pointer select-none";
   const pillOn   = "bg-white/15 border-white/20 text-white";
-  const pillOff  = "bg-transparent border-white/10 text-gray-400 hover:border-white/20 hover:text-gray-200";
+  const pillOff  = "bg-transparent border-white/10 text-foreground/70 hover:border-white/20 hover:text-foreground";
 
   return (
     <div className="mb-6 sm:mb-8">
       {/* Section title */}
-      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+      <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest mb-3">
         Economic Calendar
       </p>
 
@@ -111,7 +111,7 @@ export default function EconomicCalendar() {
       <div className="flex flex-wrap items-center gap-3 mb-3 px-1">
         {/* Importance toggles */}
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] text-gray-500 uppercase tracking-widest mr-0.5">Importance</span>
+          <span className="text-[9px] text-foreground/70 uppercase tracking-widest mr-0.5">Importance</span>
           {IMPORTANCE_OPTIONS.map(({ value, label }) => {
             const active = filters.importance.includes(value);
             return (
@@ -131,7 +131,7 @@ export default function EconomicCalendar() {
 
         {/* Country pills */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[9px] text-gray-500 uppercase tracking-widest mr-0.5">Countries</span>
+          <span className="text-[9px] text-foreground/70 uppercase tracking-widest mr-0.5">Countries</span>
           {COUNTRY_OPTIONS.map(({ value, label }) => {
             const active = filters.countries.includes(value);
             return (

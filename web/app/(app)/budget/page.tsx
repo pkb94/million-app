@@ -14,7 +14,7 @@ const TYPE_VARIANT: Record<string, "danger" | "success" | "info"> = {
   ASSET:   "info",
 };
 
-const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function NewEntryForm({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
@@ -34,31 +34,31 @@ function NewEntryForm({ onDone }: { onDone: () => void }) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 mb-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-gray-900 dark:text-white">New Entry</h3>
-        <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+        <h3 className="font-bold text-foreground">New Entry</h3>
+        <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Category</label>
+          <label className="text-xs text-foreground/70 block mb-1">Category</label>
           <input value={cat} onChange={(e) => setCat(e.target.value)} placeholder="e.g. Commissions" className={inp} />
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Type</label>
+          <label className="text-xs text-foreground/70 block mb-1">Type</label>
           <select value={type} onChange={(e) => setType(e.target.value)} className={inp}>
             <option>EXPENSE</option><option>INCOME</option><option>ASSET</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Amount ($)</label>
+          <label className="text-xs text-foreground/70 block mb-1">Amount ($)</label>
           <input type="number" step="0.01" value={amount} onChange={(e) => setAmt(e.target.value)} className={inp} />
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Date</label>
+          <label className="text-xs text-foreground/70 block mb-1">Date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} />
         </div>
       </div>
       <div className="mb-4">
-        <label className="text-xs text-gray-400 block mb-1">Description (opt.)</label>
+        <label className="text-xs text-foreground/70 block mb-1">Description (opt.)</label>
         <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional note…" className={inp} />
       </div>
       {err && <p className="text-xs text-red-500 mb-3">{err}</p>}
@@ -92,7 +92,7 @@ export default function BudgetPage() {
         title="Budget"
         action={
           <button onClick={() => setShowNew((v) => !v)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${showNew ? "bg-[var(--surface-2)] text-gray-600" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${showNew ? "bg-[var(--surface-2)] text-foreground" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
             {showNew ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New Entry</>}
           </button>
         }
@@ -112,7 +112,7 @@ export default function BudgetPage() {
             { label: "Net",      value: fmt(net),          cls: net >= 0 ? "text-green-500" : "text-red-500" },
           ].map(({ label, value, cls }) => (
             <div key={label} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 card-hover">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+              <p className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide mb-1">{label}</p>
               <p className={`text-xl sm:text-2xl font-black ${cls}`}>{value}</p>
             </div>
           ))}
@@ -125,7 +125,7 @@ export default function BudgetPage() {
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 lg:w-80 shrink-0">
           <SectionLabel>Expense Breakdown</SectionLabel>
           {pieData.length === 0 ? (
-            <p className="text-sm text-gray-400">No expenses recorded yet.</p>
+            <p className="text-sm text-foreground/70">No expenses recorded yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -165,10 +165,10 @@ export default function BudgetPage() {
                   <div key={i} className="flex items-center justify-between p-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-gray-900 dark:text-white">{e.category}</span>
+                        <span className="font-semibold text-sm text-foreground">{e.category}</span>
                         <Badge variant={TYPE_VARIANT[e.type.toUpperCase()] ?? "default"}>{e.type.toUpperCase()}</Badge>
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{e.date.slice(0, 10)} {e.description ? `· ${e.description}` : ""}</p>
+                      <p className="text-xs text-foreground/70 mt-0.5">{e.date.slice(0, 10)} {e.description ? `· ${e.description}` : ""}</p>
                     </div>
                     <span className={`font-bold text-sm ${e.type.toUpperCase() === "EXPENSE" ? "text-red-500" : e.type.toUpperCase() === "INCOME" ? "text-green-500" : "text-blue-500"}`}>
                       {fmt(e.amount)}
@@ -181,7 +181,7 @@ export default function BudgetPage() {
               <div className="hidden sm:block overflow-y-auto max-h-[340px]">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide sticky top-0 bg-[var(--surface)]">
+                    <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide sticky top-0 bg-[var(--surface)]">
                       {["Date", "Category", "Type", "Amount", "Desc"].map((h) => (
                         <th key={h} className="px-4 py-2.5 text-left font-semibold">{h}</th>
                       ))}
@@ -190,8 +190,8 @@ export default function BudgetPage() {
                   <tbody>
                     {filtered.map((e, i) => (
                       <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                        <td className="px-4 py-2.5 text-gray-400 text-xs">{e.date.slice(0, 10)}</td>
-                        <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-white">{e.category}</td>
+                        <td className="px-4 py-2.5 text-foreground/70 text-xs">{e.date.slice(0, 10)}</td>
+                        <td className="px-4 py-2.5 font-semibold text-foreground">{e.category}</td>
                         <td className="px-4 py-2.5">
                           <Badge variant={TYPE_VARIANT[e.type.toUpperCase()] ?? "default"}>
                             {e.type.toUpperCase()}
@@ -200,7 +200,7 @@ export default function BudgetPage() {
                         <td className={`px-4 py-2.5 font-bold text-xs ${e.type.toUpperCase() === "EXPENSE" ? "text-red-500" : e.type.toUpperCase() === "INCOME" ? "text-green-500" : "text-blue-500"}`}>
                           {fmt(e.amount)}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-400 text-xs truncate max-w-[140px]">{e.description ?? "—"}</td>
+                        <td className="px-4 py-2.5 text-foreground/70 text-xs truncate max-w-[140px]">{e.description ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -25,15 +25,15 @@ function CashModal({ onClose }: { onClose: () => void }) {
     onError: (e: Error) => setErr(e.message),
   });
 
-  const inputCls = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const inputCls = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
       <div className="bg-[var(--surface)] rounded-t-3xl sm:rounded-2xl p-6 w-full sm:max-w-sm shadow-2xl border border-[var(--border)]">
         <div className="w-10 h-1 rounded-full bg-[var(--surface-2)] mx-auto mb-5 sm:hidden" />
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-bold text-gray-900 dark:text-white text-lg">Cash Transaction</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+          <h3 className="font-bold text-foreground text-lg">Cash Transaction</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
         </div>
         <Tabs
           tabs={[
@@ -44,9 +44,9 @@ function CashModal({ onClose }: { onClose: () => void }) {
           onChange={(k) => setType(k as "deposit" | "withdrawal")}
           className="w-full mb-4 [&>button]:flex-1"
         />
-        <label className="block text-xs text-gray-500 mb-1">Amount ($)</label>
+        <label className="block text-xs text-foreground/70 mb-1">Amount ($)</label>
         <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className={`${inputCls} mb-3`} />
-        <label className="block text-xs text-gray-500 mb-1">Account (optional)</label>
+        <label className="block text-xs text-foreground/70 mb-1">Account (optional)</label>
         <select value={account} onChange={(e) => setAccount(e.target.value)} className={`${inputCls} mb-4`}>
           <option value="">— Any —</option>
           {(accountsQ.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -70,7 +70,7 @@ function useHoldings(accountId: number | null) {
   });
 }
 
-const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function NewAccountForm({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
@@ -88,8 +88,8 @@ function NewAccountForm({ onDone }: { onDone: () => void }) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 mb-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-gray-900 dark:text-white">Add Account</h3>
-        <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+        <h3 className="font-bold text-foreground">Add Account</h3>
+        <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         {[
@@ -98,7 +98,7 @@ function NewAccountForm({ onDone }: { onDone: () => void }) {
           { label: "Currency", val: currency, set: setCurrency, ph: "USD" },
         ].map(({ label, val, set, ph }) => (
           <div key={label}>
-            <label className="text-xs text-gray-400 block mb-1">{label}</label>
+            <label className="text-xs text-foreground/70 block mb-1">{label}</label>
             <input value={val} onChange={(e) => set(e.target.value)} placeholder={ph} className={inp} />
           </div>
         ))}
@@ -130,8 +130,8 @@ function UpsertHoldingForm({ accountId, onDone }: { accountId: number; onDone: (
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 mt-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-gray-900 dark:text-white text-sm">Add / Update Holding</h3>
-        <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+        <h3 className="font-bold text-foreground text-sm">Add / Update Holding</h3>
+        <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         {[
@@ -140,7 +140,7 @@ function UpsertHoldingForm({ accountId, onDone }: { accountId: number; onDone: (
           { label: "Avg Cost (opt.)",  type: "number", val: cost, set: setCost, ph: "—" },
         ].map(({ label, type, val, set, ph }) => (
           <div key={label}>
-            <label className="text-xs text-gray-400 block mb-1">{label}</label>
+            <label className="text-xs text-foreground/70 block mb-1">{label}</label>
             <input type={type} step={type === "number" ? "0.01" : undefined} value={val}
               onChange={(e) => set(e.target.value)} placeholder={ph} className={inp} />
           </div>
@@ -194,7 +194,7 @@ export default function AccountsPage() {
               <span>Cash</span>
             </button>
             <button onClick={() => setShowAddAcct((v) => !v)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${showAddAcct ? "bg-[var(--surface-2)] text-gray-600" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${showAddAcct ? "bg-[var(--surface-2)] text-foreground" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
               {showAddAcct ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Add Account</>}
             </button>
           </div>
@@ -218,7 +218,7 @@ export default function AccountsPage() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition ${
                   (selectedId === a.id) || (!selectedId && a.id === accounts[0]?.id)
                     ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                    : "bg-[var(--surface)] border-[var(--border)] text-gray-600 dark:text-gray-300 hover:border-blue-400"
+                    : "bg-[var(--surface)] border-[var(--border)] text-foreground hover:border-blue-400"
                 }`}>
                 <Wallet size={13} />
                 {a.name}
@@ -232,11 +232,11 @@ export default function AccountsPage() {
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
                 <div>
-                  <h2 className="font-bold text-gray-900 dark:text-white text-sm">{selected?.name ?? "Holdings"}</h2>
-                  <p className="text-xs text-gray-400">{holdings.length} position{holdings.length !== 1 ? "s" : ""}</p>
+                  <h2 className="font-bold text-foreground text-sm">{selected?.name ?? "Holdings"}</h2>
+                  <p className="text-xs text-foreground/70">{holdings.length} position{holdings.length !== 1 ? "s" : ""}</p>
                 </div>
                 <button onClick={() => setShowHolding((v) => !v)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${showHolding ? "bg-[var(--surface-2)] text-gray-500" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100"}`}>
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${showHolding ? "bg-[var(--surface-2)] text-foreground/70" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100"}`}>
                   {showHolding ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add Holding</>}
                 </button>
               </div>
@@ -264,8 +264,8 @@ export default function AccountsPage() {
                     {holdings.map((h) => (
                       <div key={h.id} className="flex items-center justify-between p-4">
                         <div>
-                          <p className="font-bold text-gray-900 dark:text-white">{h.symbol}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
+                          <p className="font-bold text-foreground">{h.symbol}</p>
+                          <p className="text-xs text-foreground/70 mt-0.5">
                             {h.quantity} shares{h.avg_cost != null ? ` · avg $${h.avg_cost.toFixed(2)}` : ""}
                           </p>
                         </div>
@@ -281,7 +281,7 @@ export default function AccountsPage() {
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide bg-[var(--surface-2)]">
+                        <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide bg-[var(--surface-2)]">
                           {["Symbol", "Qty", "Avg Cost", "Last Updated", ""].map((h) => (
                             <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                           ))}
@@ -290,10 +290,10 @@ export default function AccountsPage() {
                       <tbody>
                         {holdings.map((h) => (
                           <tr key={h.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                            <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{h.symbol}</td>
-                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{h.quantity}</td>
-                            <td className="px-4 py-3 text-gray-500">{h.avg_cost != null ? `$${h.avg_cost.toFixed(2)}` : "—"}</td>
-                            <td className="px-4 py-3 text-gray-400 text-xs">{h.updated_at ? String(h.updated_at).slice(0, 10) : "—"}</td>
+                            <td className="px-4 py-3 font-bold text-foreground">{h.symbol}</td>
+                            <td className="px-4 py-3 text-foreground">{h.quantity}</td>
+                            <td className="px-4 py-3 text-foreground/70">{h.avg_cost != null ? `$${h.avg_cost.toFixed(2)}` : "—"}</td>
+                            <td className="px-4 py-3 text-foreground/70 text-xs">{h.updated_at ? String(h.updated_at).slice(0, 10) : "—"}</td>
                             <td className="px-4 py-3">
                               <button onClick={() => deleteHolding.mutate(h.id)}
                                 className="text-xs px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition">

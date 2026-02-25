@@ -111,11 +111,11 @@ export default function DashboardPage() {
           <div className="col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 card-hover">
             <div className="flex items-start justify-between mb-3">
               <div>
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Realized P/L</p>
+                <p className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide mb-1">Realized P/L</p>
                 <p className={`text-2xl sm:text-3xl font-black ${pnlUp ? "text-green-500" : "text-red-500"}`}>
                   {tradesQ.data ? (pnlUp ? "+" : "-") + fmt(pnl) : "—"}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">{closedCount} closed trade{closedCount !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-foreground/70 mt-1">{closedCount} closed trade{closedCount !== 1 ? "s" : ""}</p>
               </div>
               <span className={`p-2 rounded-xl ${pnlUp ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
                 {pnlUp ? <TrendingUp size={18} className="text-green-500" /> : <TrendingDown size={18} className="text-red-500" />}
@@ -138,23 +138,23 @@ export default function DashboardPage() {
           <Link href="/accounts"
             className="text-left bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 hover:border-blue-300 dark:hover:border-blue-700 active:scale-[0.98] transition group card-hover">
             <div className="flex items-start justify-between mb-2">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Cash</p>
+              <p className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide">Cash</p>
               <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30"><DollarSign size={15} className="text-blue-500" /></span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">{cash == null ? "—" : fmt(cash)}</p>
-            <p className="text-xs text-gray-400 mt-1 group-hover:text-blue-500 transition">manage in accounts</p>
+            <p className="text-xl sm:text-2xl font-black text-foreground">{cash == null ? "—" : fmt(cash)}</p>
+            <p className="text-xs text-foreground/70 mt-1 group-hover:text-blue-500 transition">manage in accounts</p>
           </Link>
 
           {/* Positions */}
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 card-hover">
             <div className="flex items-start justify-between mb-2">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Positions</p>
+              <p className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide">Positions</p>
               <span className="p-2 rounded-xl bg-purple-50 dark:bg-purple-900/30"><Activity size={15} className="text-purple-500" /></span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">{openCount}</p>
+            <p className="text-xl sm:text-2xl font-black text-foreground">{openCount}</p>
             <div className="flex items-center gap-1 mt-1">
               <Clock size={11} className="text-yellow-500" />
-              <p className="text-xs text-gray-400">{pendingOrders} pending order{pendingOrders !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-foreground/70">{pendingOrders} pending order{pendingOrders !== 1 ? "s" : ""}</p>
             </div>
           </div>
         </div>
@@ -165,7 +165,7 @@ export default function DashboardPage() {
 
       {/* ── VIX ── */}
       <div className="mb-6 sm:mb-8">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Volatility</p>
+        <p className="text-[11px] font-bold text-foreground uppercase tracking-widest mb-3">Volatility</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <VixPanel />
           <VixPanel
@@ -224,12 +224,12 @@ export default function DashboardPage() {
                 <div key={t.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900 dark:text-white text-sm">{t.symbol}</span>
+                      <span className="font-bold text-foreground text-sm">{t.symbol}</span>
                       <Badge variant={t.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{t.action}</Badge>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">{t.qty} × ${t.price?.toFixed(2)} · {String(t.date ?? "").slice(0, 10)}</p>
+                    <p className="text-xs text-foreground/70 mt-0.5">{t.qty} × ${t.price?.toFixed(2)} · {String(t.date ?? "").slice(0, 10)}</p>
                   </div>
-                  <div className={`text-sm font-bold ${rowPnl == null ? "text-gray-400" : rowPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                  <div className={`text-sm font-bold ${rowPnl == null ? "text-foreground/60" : rowPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
                     {rowPnl == null ? <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">Open</span> : `${rowPnl >= 0 ? "+" : ""}${fmt(rowPnl)}`}
                   </div>
                 </div>
@@ -241,7 +241,7 @@ export default function DashboardPage() {
           <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide bg-[var(--surface-2)]">
+                <tr className="border-b border-[var(--border)] text-[11px] text-foreground uppercase tracking-wide bg-[var(--surface-2)]">
                   {["Date", "Ticker", "Action", "Qty", "Entry", "Exit", "P/L"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                   ))}
@@ -255,15 +255,15 @@ export default function DashboardPage() {
                     : null;
                   return (
                     <tr key={t.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 text-gray-400 text-xs">{String(t.date ?? "").slice(0, 10)}</td>
-                      <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{t.symbol}</td>
+                      <td className="px-4 py-3 text-foreground/70 text-xs">{String(t.date ?? "").slice(0, 10)}</td>
+                      <td className="px-4 py-3 font-bold text-foreground">{t.symbol}</td>
                       <td className="px-4 py-3">
                         <Badge variant={t.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{t.action}</Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{t.qty}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">${t.price?.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-gray-400">{ep != null ? `$${ep.toFixed(2)}` : "—"}</td>
-                      <td className={`px-4 py-3 font-bold ${rowPnl == null ? "text-gray-400" : rowPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                      <td className="px-4 py-3 text-foreground">{t.qty}</td>
+                      <td className="px-4 py-3 text-foreground">${t.price?.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-foreground/70">{ep != null ? `$${ep.toFixed(2)}` : "—"}</td>
+                      <td className={`px-4 py-3 font-bold ${rowPnl == null ? "text-foreground/60" : rowPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
                         {rowPnl == null ? "—" : `${rowPnl >= 0 ? "+" : ""}${fmt(rowPnl)}`}
                       </td>
                     </tr>

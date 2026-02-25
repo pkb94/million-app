@@ -9,16 +9,16 @@ import { PageHeader, EmptyState, SkeletonCard, Badge, RefreshButton } from "@/co
 const STATUS_COLOR: Record<string, string> = {
   PENDING:   "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
   FILLED:    "bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400",
-  CANCELLED: "bg-[var(--surface-2)] text-gray-500 dark:text-gray-400",
+  CANCELLED: "bg-[var(--surface-2)] text-foreground/70",
   REJECTED:  "bg-red-100    text-red-600    dark:bg-red-900/30    dark:text-red-400",
 };
 
 function StatusBadge({ status }: { status: string }) {
   const s = status?.toUpperCase() ?? "";
-  return <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase", STATUS_COLOR[s] ?? "bg-gray-100 text-gray-500")}>{s}</span>;
+  return <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase", STATUS_COLOR[s] ?? "bg-gray-100 text-foreground/70")}>{s}</span>;
 }
 
-const inputCls = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+const inputCls = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function NewOrderForm({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
@@ -41,8 +41,8 @@ function NewOrderForm({ onDone }: { onDone: () => void }) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 mb-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-gray-900 dark:text-white">New Order</h3>
-        <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+        <h3 className="font-bold text-foreground">New Order</h3>
+        <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
         {[
@@ -53,7 +53,7 @@ function NewOrderForm({ onDone }: { onDone: () => void }) {
           { label: "Limit Price (opt.)", el: <input type="number" step="0.01" value={limitPx} onChange={(e) => setLimitPx(e.target.value)} placeholder="Market" className={inputCls} /> },
         ].map(({ label, el }) => (
           <div key={label}>
-            <label className="text-xs text-gray-400 block mb-1">{label}</label>
+            <label className="text-xs text-foreground/70 block mb-1">{label}</label>
             {el}
           </div>
         ))}
@@ -89,12 +89,12 @@ function FillModal({ order, onDone }: { order: Order; onDone: () => void }) {
         <div className="w-10 h-1 rounded-full bg-[var(--surface-2)] mx-auto mb-5 sm:hidden" />
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-bold text-gray-900 dark:text-white text-lg">Order #{order.id}</h3>
-            <p className="text-xs text-gray-400">{order.symbol} · {order.action} × {order.quantity}</p>
+            <h3 className="font-bold text-foreground text-lg">Order #{order.id}</h3>
+            <p className="text-xs text-foreground/70">{order.symbol} · {order.action} × {order.quantity}</p>
           </div>
-          <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+          <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
         </div>
-        <label className="block text-xs text-gray-500 mb-1">Fill Price ($)</label>
+        <label className="block text-xs text-foreground/70 mb-1">Fill Price ($)</label>
         <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}
           className={`${inputCls} mb-4`} />
         {err && <p className="text-xs text-red-500 mb-3">{err}</p>}
@@ -108,7 +108,7 @@ function FillModal({ order, onDone }: { order: Order; onDone: () => void }) {
             {cancelMut.isPending ? "Cancelling…" : "Cancel Order"}
           </button>
           <button onClick={onDone}
-            className="py-2.5 rounded-xl border border-[var(--border)] text-sm text-gray-500 hover:bg-[var(--surface-2)] transition">
+            className="py-2.5 rounded-xl border border-[var(--border)] text-sm text-foreground/70 hover:bg-[var(--surface-2)] transition">
             Close
           </button>
         </div>
@@ -123,17 +123,17 @@ function OrderCard({ o, onFill }: { o: Order; onFill: () => void }) {
       <div className="flex items-start justify-between mb-2">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-black text-gray-900 dark:text-white">{o.symbol}</span>
+            <span className="font-black text-foreground">{o.symbol}</span>
             <Badge variant={o.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{o.action}</Badge>
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">#{o.id} · {String(o.created_at ?? "").slice(0, 10)}</p>
+          <p className="text-xs text-foreground/70 mt-0.5">#{o.id} · {String(o.created_at ?? "").slice(0, 10)}</p>
         </div>
         <StatusBadge status={o.status} />
       </div>
       <div className="grid grid-cols-3 gap-2 text-xs mb-3">
-        <div><p className="text-gray-400">Qty</p><p className="font-semibold text-gray-900 dark:text-white">{o.quantity}</p></div>
-        <div><p className="text-gray-400">Limit</p><p className="font-semibold text-gray-900 dark:text-white">{o.limit_price != null ? `$${o.limit_price.toFixed(2)}` : "Market"}</p></div>
-        <div><p className="text-gray-400">Fill</p><p className="font-semibold text-gray-900 dark:text-white">{o.filled_price != null ? `$${o.filled_price.toFixed(2)}` : "—"}</p></div>
+        <div><p className="text-foreground/70">Qty</p><p className="font-semibold text-foreground">{o.quantity}</p></div>
+        <div><p className="text-foreground/70">Limit</p><p className="font-semibold text-foreground">{o.limit_price != null ? `$${o.limit_price.toFixed(2)}` : "Market"}</p></div>
+        <div><p className="text-foreground/70">Fill</p><p className="font-semibold text-foreground">{o.filled_price != null ? `$${o.filled_price.toFixed(2)}` : "—"}</p></div>
       </div>
       {o.status?.toUpperCase() === "PENDING" && (
         <button onClick={onFill}
@@ -165,7 +165,7 @@ export default function OrdersPage() {
             <RefreshButton onRefresh={refetch} isRefreshing={isFetching} />
             <button onClick={() => setShowNew((v) => !v)}
               className={clsx("flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition",
-                showNew ? "bg-[var(--surface-2)] text-gray-600 dark:text-gray-300" : "bg-blue-600 text-white hover:bg-blue-700"
+                showNew ? "bg-[var(--surface-2)] text-foreground" : "bg-blue-600 text-white hover:bg-blue-700"
               )}>
               {showNew ? <><X size={14} /> Cancel</> : <><Plus size={14} /> New Order</>}
             </button>
@@ -180,7 +180,7 @@ export default function OrdersPage() {
         {statuses.map((s) => (
           <button key={s} onClick={() => setFilter(s)}
             className={clsx("px-3 py-1 rounded-full text-xs font-semibold border transition",
-              filter === s ? "bg-blue-600 text-white border-blue-600" : "border-[var(--border)] text-gray-500 hover:border-blue-400"
+              filter === s ? "bg-blue-600 text-white border-blue-600" : "border-[var(--border)] text-foreground/70 hover:border-blue-400"
             )}>
             {s}
           </button>
@@ -208,7 +208,7 @@ export default function OrdersPage() {
           <div className="hidden md:block bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide bg-[var(--surface-2)]">
+                <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide bg-[var(--surface-2)]">
                   {["ID", "Date", "Symbol", "Action", "Qty", "Limit", "Status", "Filled At", "Fill Price", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                   ))}
@@ -217,17 +217,17 @@ export default function OrdersPage() {
               <tbody>
                 {[...shown].reverse().map((o) => (
                   <tr key={o.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">#{o.id}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{String(o.created_at ?? "").slice(0, 10)}</td>
-                    <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{o.symbol}</td>
+                    <td className="px-4 py-3 text-foreground/70 font-mono text-xs">#{o.id}</td>
+                    <td className="px-4 py-3 text-foreground/70 text-xs whitespace-nowrap">{String(o.created_at ?? "").slice(0, 10)}</td>
+                    <td className="px-4 py-3 font-bold text-foreground">{o.symbol}</td>
                     <td className="px-4 py-3">
                       <Badge variant={o.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{o.action}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{o.quantity}</td>
-                    <td className="px-4 py-3 text-gray-500">{o.limit_price != null ? `$${o.limit_price.toFixed(2)}` : "Market"}</td>
+                    <td className="px-4 py-3 text-foreground">{o.quantity}</td>
+                    <td className="px-4 py-3 text-foreground/70">{o.limit_price != null ? `$${o.limit_price.toFixed(2)}` : "Market"}</td>
                     <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{o.filled_at ? String(o.filled_at).slice(0, 10) : "—"}</td>
-                    <td className="px-4 py-3 text-gray-500">{o.filled_price != null ? `$${o.filled_price.toFixed(2)}` : "—"}</td>
+                    <td className="px-4 py-3 text-foreground/70 text-xs whitespace-nowrap">{o.filled_at ? String(o.filled_at).slice(0, 10) : "—"}</td>
+                    <td className="px-4 py-3 text-foreground/70">{o.filled_price != null ? `$${o.filled_price.toFixed(2)}` : "—"}</td>
                     <td className="px-4 py-3">
                       {o.status?.toUpperCase() === "PENDING" && (
                         <button onClick={() => setFilling(o)}

@@ -55,7 +55,7 @@ function BreadthBar({ quotes }: { quotes: QuoteMap }) {
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 flex flex-col gap-3 overflow-hidden">
-      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Market Breadth</p>
+      <p className="text-[11px] font-bold text-foreground uppercase tracking-widest">Market Breadth</p>
       {/* Counts row — wraps on small sizes */}
       <div className="grid grid-cols-3 gap-1 text-center">
         <div className="flex flex-col items-center gap-0.5">
@@ -63,8 +63,8 @@ function BreadthBar({ quotes }: { quotes: QuoteMap }) {
           <span className="text-[9px] font-semibold text-green-500/80 uppercase tracking-wide">Up</span>
         </div>
         <div className="flex flex-col items-center gap-0.5">
-          <span className="text-base font-black text-gray-400 leading-none">{unc}</span>
-          <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide">Flat</span>
+          <span className="text-base font-black text-foreground leading-none">{unc}</span>
+          <span className="text-[9px] font-semibold text-foreground/70 uppercase tracking-wide">Flat</span>
         </div>
         <div className="flex flex-col items-center gap-0.5">
           <span className="text-base font-black text-red-500 leading-none">{dec}</span>
@@ -77,7 +77,7 @@ function BreadthBar({ quotes }: { quotes: QuoteMap }) {
         <div style={{ width: `${uncPct}%` }} className="bg-gray-600 transition-all duration-700" />
         <div style={{ width: `${decPct}%` }} className="bg-red-500 transition-all duration-700" />
       </div>
-      <p className="text-[10px] text-gray-500 leading-snug">
+      <p className="text-[10px] text-foreground/70 leading-snug">
         {advPct.toFixed(0)}% advancing · {total} symbols
       </p>
     </div>
@@ -102,7 +102,7 @@ const SECTOR_ETFS = [
 function SectorETFRow({ quotes }: { quotes: QuoteMap }) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5">
-      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Sector ETFs (SPDR)</p>
+      <p className="text-[11px] font-bold text-foreground uppercase tracking-widest mb-3">Sector ETFs (SPDR)</p>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {SECTOR_ETFS.map(({ symbol, label, color }) => {
           const q   = quotes[symbol];
@@ -111,13 +111,13 @@ function SectorETFRow({ quotes }: { quotes: QuoteMap }) {
           return (
             <div key={symbol} className="flex flex-col gap-0.5 p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
               <span className={`text-[10px] font-bold ${color}`}>{symbol}</span>
-              <span className="text-[9px] text-gray-400 truncate">{label}</span>
+              <span className="text-[9px] text-foreground/70 truncate">{label}</span>
               {pct != null ? (
                 <span className={`text-xs font-bold ${up ? "text-green-500" : "text-red-500"}`}>
                   {up ? "+" : ""}{pct.toFixed(2)}%
                 </span>
               ) : (
-                <span className="text-xs text-gray-500">—</span>
+                <span className="text-xs text-foreground/50">—</span>
               )}
             </div>
           );
@@ -146,10 +146,10 @@ function TopMovers({ quotes }: { quotes: QuoteMap }) {
             ? <TrendingUp size={11} className="text-green-500" />
             : <TrendingDown size={11} className="text-red-500" />}
         </span>
-        <span className="text-xs font-bold text-gray-900 dark:text-white">{sym}</span>
+        <span className="text-xs font-bold text-foreground">{sym}</span>
       </div>
       <div className="text-right">
-        <p className="text-xs text-gray-400">${q.price!.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        <p className="text-xs text-foreground/70">${q.price!.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         <p className={`text-xs font-bold ${variant === "gain" ? "text-green-500" : "text-red-500"}`}>
           {q.changePct! >= 0 ? "+" : ""}{q.changePct!.toFixed(2)}%
         </p>
@@ -162,21 +162,19 @@ function TopMovers({ quotes }: { quotes: QuoteMap }) {
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp size={13} className="text-green-500" />
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Top Gainers</p>
+          <p className="text-[11px] font-bold text-foreground uppercase tracking-widest">Top Gainers</p>
         </div>
         {gainers.length === 0
-          ? <p className="text-xs text-gray-500">No data yet</p>
-          : gainers.map(([sym, q]) => <Row key={sym} sym={sym} q={q} variant="gain" />)
+          ? <p className="text-xs text-foreground/60">No data yet</p>
         }
       </div>
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <TrendingDown size={13} className="text-red-500" />
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Top Losers</p>
+          <p className="text-[11px] font-bold text-foreground uppercase tracking-widest">Top Losers</p>
         </div>
         {losers.length === 0
-          ? <p className="text-xs text-gray-500">No data yet</p>
-          : losers.map(([sym, q]) => <Row key={sym} sym={sym} q={q} variant="loss" />)
+          ? <p className="text-xs text-foreground/60">No data yet</p>
         }
       </div>
     </div>
@@ -205,8 +203,8 @@ function FearGreedProxy({ quotes }: { quotes: QuoteMap }) {
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 sm:p-5">
-      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">Sentiment (Proxy)</p>
-      <p className="text-[9px] text-gray-500 mb-3">Based on breadth + SPY performance</p>
+      <p className="text-[11px] font-bold text-foreground uppercase tracking-widest mb-1">Sentiment (Proxy)</p>
+      <p className="text-[9px] text-foreground/60 mb-3">Based on breadth + SPY performance</p>
       <div className="flex items-center gap-5">
         {/* Gauge */}
         <div className="relative w-20 h-10 flex-shrink-0">
@@ -228,7 +226,7 @@ function FearGreedProxy({ quotes }: { quotes: QuoteMap }) {
         <div>
           <p className={`text-2xl font-black leading-none ${color}`}>{score}</p>
           <p className={`text-xs font-bold mt-0.5 ${color}`}>{label}</p>
-          {spy != null && <p className="text-[10px] text-gray-400 mt-1">SPY {spy >= 0 ? "+" : ""}{spy.toFixed(2)}%</p>}
+          {spy != null && <p className="text-[10px] text-foreground/70 mt-1">SPY {spy >= 0 ? "+" : ""}{spy.toFixed(2)}%</p>}
         </div>
       </div>
     </div>
@@ -280,7 +278,7 @@ export default function MarketsPage() {
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={load} isRefreshing={isRefreshing} />
             {lastUp && (
-              <span className="text-[10px] text-gray-400 hidden sm:inline">
+              <span className="text-[10px] text-foreground/70 hidden sm:inline">
                 Updated {lastUp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </span>
             )}
@@ -310,7 +308,7 @@ export default function MarketsPage() {
 
       {/* ── Top movers ─────────────────────────────────────────── */}
       <div className="mb-6 sm:mb-8">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Top Movers</p>
+        <p className="text-[11px] font-bold text-foreground uppercase tracking-widest mb-3">Top Movers</p>
         <TopMovers quotes={quotes} />
       </div>
 

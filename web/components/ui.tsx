@@ -50,10 +50,10 @@ export function EmptyState({ icon: Icon, title, body, action }: EmptyProps) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
       <div className="w-16 h-16 rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center mb-4 shadow-inner">
-        <Icon size={28} className="text-gray-400 dark:text-gray-500" strokeWidth={1.4} />
+        <Icon size={28} className="text-foreground/50" strokeWidth={1.4} />
       </div>
-      <p className="text-base font-bold text-gray-700 dark:text-gray-300 mb-1">{title}</p>
-      {body && <p className="text-sm text-gray-400 max-w-xs leading-relaxed">{body}</p>}
+      <p className="text-base font-bold text-foreground mb-1">{title}</p>
+      {body && <p className="text-sm text-foreground/70 max-w-xs leading-relaxed">{body}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -62,7 +62,7 @@ export function EmptyState({ icon: Icon, title, body, action }: EmptyProps) {
 // ── Section label ─────────────────────────────────────────────────────────────
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.12em] mb-3">
+    <h2 className="text-[10px] font-bold text-foreground uppercase tracking-[0.12em] mb-3">
       {children}
     </h2>
   );
@@ -98,7 +98,7 @@ export function StatCard({
       )}
     >
       <div className="flex items-start justify-between mb-3">
-        <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.1em]">{label}</p>
+        <p className="text-[10px] font-bold text-foreground/70 uppercase tracking-[0.1em]">{label}</p>
         <span className={clsx("p-2 rounded-xl", iconBg)}>
           <Icon size={14} className={iconColor} strokeWidth={2} />
         </span>
@@ -107,9 +107,9 @@ export function StatCard({
         "text-xl sm:text-2xl font-black leading-tight",
         trend === "up"   ? "text-emerald-500" :
         trend === "down" ? "text-red-500"      :
-        "text-gray-900 dark:text-white",
+        "text-foreground",
       )}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1.5">{sub}</p>}
+      {sub && <p className="text-xs text-foreground/70 mt-1.5">{sub}</p>}
     </Tag>
   );
 }
@@ -124,8 +124,8 @@ export function PageHeader({ title, sub, action }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between mb-6 gap-4">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-tight">{title}</h1>
-        {sub && <p className="text-sm text-gray-400 mt-0.5 leading-relaxed">{sub}</p>}
+        <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight leading-tight">{title}</h1>
+        {sub && <p className="text-sm text-foreground/70 mt-0.5 leading-relaxed">{sub}</p>}
       </div>
       {action && <div className="shrink-0 mt-0.5">{action}</div>}
     </div>
@@ -174,7 +174,7 @@ export function RefreshButton({ onRefresh, isRefreshing = false }: {
         size={15}
         strokeWidth={2.2}
         className={clsx(
-          "text-gray-400 transition-colors duration-200",
+          "text-foreground/70 transition-colors duration-200",
           active ? "text-blue-500 animate-[spin_0.7s_linear_infinite]" : "hover:text-blue-500",
         )}
       />
@@ -208,8 +208,8 @@ export function Tabs({ tabs, active, onChange, className }: TabsProps) {
           className={clsx(
             "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150",
             active === key
-              ? "bg-[var(--surface)] text-gray-900 dark:text-white shadow-sm border border-[var(--border)]"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200",
+              ? "bg-[var(--surface)] text-foreground shadow-sm border border-[var(--border)]"
+              : "text-foreground/70 hover:text-foreground dark:hover:text-foreground",
           )}
         >
           {label}
@@ -226,7 +226,7 @@ export function Badge({ children, variant = "default", className }: {
   className?: string;
 }) {
   const styles = {
-    default: "bg-[var(--surface-2)] text-gray-600 dark:text-gray-300",
+    default: "bg-[var(--surface-2)] text-foreground",
     success: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
     danger:  "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
     warning: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",

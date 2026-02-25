@@ -142,11 +142,11 @@ export const SECTORS: Record<SectorKey, { label: string; stocks: StockTile[] }> 
 // ── Color helpers ──────────────────────────────────────────────────────────────
 
 function pctColor(pct: number | null): string {
-  if (pct == null) return "bg-gray-800/60 text-gray-400";
+  if (pct == null) return "bg-gray-800/60 text-foreground/70";
   if (pct >  4)  return "bg-green-700 text-white";
   if (pct >  2)  return "bg-green-600 text-white";
   if (pct >  0.5)return "bg-green-500/80 text-white";
-  if (pct > -0.5)return "bg-gray-700/60 text-gray-300";
+  if (pct > -0.5)return "bg-gray-700/60 text-foreground";
   if (pct > -2)  return "bg-red-500/80 text-white";
   if (pct > -4)  return "bg-red-600 text-white";
   return              "bg-red-700 text-white";
@@ -246,7 +246,7 @@ export function SectorCard({ sector, quotes, loading }: Props) {
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-3 sm:p-4 flex flex-col gap-2">
       {/* Header */}
       <div className="flex items-center justify-between mb-1">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+        <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest">{label}</p>
         {avgChange != null && (
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${pctColor(avgChange)}`}>
             {avgChange >= 0 ? "+" : ""}{avgChange.toFixed(2)}%
@@ -333,10 +333,10 @@ export default function SectorHeatmaps() {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Sector Heatmaps</p>
+        <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest">Sector Heatmaps</p>
         <div className="flex items-center gap-2">
           {lastUpdated && (
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[10px] text-foreground/70">
               {lastUpdated.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
           )}

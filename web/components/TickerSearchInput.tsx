@@ -160,9 +160,9 @@ export default function TickerSearchInput({
         className="flex items-stretch rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)]"
         style={{ outline: `1.5px solid ${accentColor}33` }}
       >
-        <span className="flex items-center pl-3 pr-1.5 text-gray-400 shrink-0">
+        <span className="flex items-center pl-3 pr-1.5 text-foreground/70 shrink-0">
           {loading
-            ? <Loader2 size={13} className="animate-spin text-gray-400" />
+            ? <Loader2 size={13} className="animate-spin text-foreground/70" />
             : <Search size={13} />}
         </span>
         <input
@@ -174,7 +174,7 @@ export default function TickerSearchInput({
           placeholder={placeholder}
           autoComplete="off"
           spellCheck={false}
-          className="flex-1 min-w-0 py-2 text-sm font-bold bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none"
+          className="flex-1 min-w-0 py-2 text-sm font-bold bg-transparent text-foreground placeholder-gray-400 focus:outline-none"
         />
         <button
           type="submit"
@@ -192,7 +192,7 @@ export default function TickerSearchInput({
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.35)" }}
         >
           {suggestions.map((s, i) => {
-            const typeColor = TYPE_COLOR[s.type] ?? "text-gray-400";
+            const typeColor = TYPE_COLOR[s.type] ?? "text-foreground/70";
             const isActive = i === activeIdx;
             return (
               <button
@@ -206,10 +206,10 @@ export default function TickerSearchInput({
                     : "hover:bg-[var(--surface-2)]"
                 }`}
               >
-                <span className="w-16 shrink-0 font-bold text-sm text-gray-900 dark:text-white tabular-nums">
+                <span className="w-16 shrink-0 font-bold text-sm text-foreground tabular-nums">
                   {s.symbol}
                 </span>
-                <span className="flex-1 min-w-0 text-xs text-gray-400 truncate">
+                <span className="flex-1 min-w-0 text-xs text-foreground/70 truncate">
                   {s.name || "—"}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
@@ -219,7 +219,7 @@ export default function TickerSearchInput({
                     </span>
                   )}
                   {s.exchange && (
-                    <span className="text-[9px] text-gray-500 font-medium">
+                    <span className="text-[9px] text-foreground/70 font-medium">
                       · {s.exchange}
                     </span>
                   )}

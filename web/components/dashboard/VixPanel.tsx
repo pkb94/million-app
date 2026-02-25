@@ -53,8 +53,8 @@ function CustomTooltip({ active, payload, label, intraday }: any) {
   }
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs shadow-lg">
-      <p className="text-gray-400 mb-0.5">{display}</p>
-      <p className="font-bold text-gray-900 dark:text-white">{Number(payload[0].value).toFixed(2)}</p>
+      <p className="text-foreground/70 mb-0.5">{display}</p>
+      <p className="font-bold text-foreground">{Number(payload[0].value).toFixed(2)}</p>
     </div>
   );
 }
@@ -156,8 +156,8 @@ export default function VixPanel({
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{title}</p>
-          <p className="text-[10px] text-gray-400/70 mt-0.5">{sublabel}</p>
+          <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest">{title}</p>
+          <p className="text-[10px] text-foreground/70/70 mt-0.5">{sublabel}</p>
         </div>
         <div className="flex items-center gap-2">
           {days === 1 && !loading && !error && (
@@ -181,10 +181,10 @@ export default function VixPanel({
           <div className="skeleton h-4 w-16 rounded-lg" />
         </div>
       ) : error || current == null ? (
-        <p className="text-2xl font-black text-gray-400 mb-3">—</p>
+        <p className="text-2xl font-black text-foreground/70 mb-3">—</p>
       ) : (
         <div className="mb-3">
-          <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white leading-none tabular-nums">
+          <p className="text-2xl sm:text-3xl font-black text-foreground leading-none tabular-nums">
             {current.toFixed(2)}
           </p>
           {change != null && changePct != null && (
@@ -192,7 +192,7 @@ export default function VixPanel({
               {up ? "▲" : "▼"} {Math.abs(change).toFixed(2)} ({up ? "+" : ""}{changePct.toFixed(2)}%)
             </p>
           )}
-          <p className="text-[9px] text-gray-400 mt-0.5">{bars.length} bars · {cfg.interval} interval</p>
+          <p className="text-[9px] text-foreground/70 mt-0.5">{bars.length} bars · {cfg.interval} interval</p>
         </div>
       )}
 
@@ -258,7 +258,7 @@ export default function VixPanel({
               className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition ${
                 days === d
                   ? "bg-white/15 text-white"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-white/10"
+                  : "text-foreground/70 hover:text-foreground hover:bg-white/10"
               }`}
             >
               {d}D

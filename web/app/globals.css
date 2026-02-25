@@ -115,24 +115,6 @@ input[type="number"] { -moz-appearance: textfield; }
   100% { background-position: -200% 0; }
 }
 
-/* ── Grey text → near-black everywhere (light mode default) ──────────────── */
-/* These classes are washed-out on white backgrounds. Override them globally.  */
-/* The dark: variants are handled via the dark-mode media query below.         */
-.text-gray-300 { color: #1a1d27; }
-.text-gray-400 { color: #1a1d27; }
-.text-gray-500 { color: #1a1d27; }
-.text-gray-600 { color: #1a1d27; }
-.text-gray-700 { color: #1a1d27; }
-
-@media (prefers-color-scheme: dark) {
-  .text-gray-300 { color: #d1d5db; }
-  .text-gray-400 { color: #9ca3af; }
-  .text-gray-500 { color: #6b7280; }
-  .text-gray-600 { color: #4b5563; }
-  .text-gray-700 { color: #374151; }
-  /* dark: prefixed variants stay as Tailwind emits them — no override needed */
-}
-
 @keyframes refresh-pulse {
   0%   { box-shadow: 0 0 0 0   rgba(99, 130, 251, 0.55); }
   70%  { box-shadow: 0 0 0 8px rgba(99, 130, 251, 0);    }

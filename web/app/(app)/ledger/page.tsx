@@ -60,11 +60,11 @@ export default function LedgerPage() {
               const net = credit - debit;
               return (
                 <div key={acct} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 card-hover">
-                  <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-1 truncate">{acct}</div>
+                  <div className="text-[11px] text-foreground/70 font-semibold uppercase tracking-wide mb-1 truncate">{acct}</div>
                   <div className={`text-xl font-black ${net >= 0 ? "text-green-500" : "text-red-500"}`}>{fmt(net)}</div>
                   <div className="flex gap-2 mt-1.5 text-[10px]">
                     <span className="text-red-400">Dr {fmt(debit)}</span>
-                    <span className="text-gray-400">·</span>
+                    <span className="text-foreground/70">·</span>
                     <span className="text-green-400">Cr {fmt(credit)}</span>
                   </div>
                 </div>
@@ -92,15 +92,15 @@ export default function LedgerPage() {
                 <div key={i} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-gray-900 dark:text-white">{r.account_name ?? "—"}</span>
-                      <span className={`text-[10px] font-bold uppercase ${SIDE_CLS[side] ?? "text-gray-400"}`}>{side || "—"}</span>
+                      <span className="font-semibold text-sm text-foreground">{r.account_name ?? "—"}</span>
+                      <span className={`text-[10px] font-bold uppercase ${SIDE_CLS[side] ?? "text-foreground/70"}`}>{side || "—"}</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-xs text-foreground/70 mt-0.5">
                       {(r.effective_at ?? r.entry_effective_at ?? r.created_at ?? "").slice(0, 10)}
                       {(r.entry_description ?? r.description) ? ` · ${(r.entry_description ?? r.description)?.slice(0, 40)}` : ""}
                     </p>
                   </div>
-                  <span className={`font-bold text-sm ${SIDE_CLS[side] ?? "text-gray-500"}`}>
+                  <span className={`font-bold text-sm ${SIDE_CLS[side] ?? "text-foreground/70"}`}>
                     {r.amount != null ? fmt(r.amount) : "—"}
                   </span>
                 </div>
@@ -112,7 +112,7 @@ export default function LedgerPage() {
           <div className="hidden md:block bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide bg-[var(--surface-2)]">
+                <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide bg-[var(--surface-2)]">
                   {["Effective", "Account", "Side", "Amount", "Description"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                   ))}
@@ -123,13 +123,13 @@ export default function LedgerPage() {
                   const side = (r.side ?? "").toLowerCase();
                   return (
                     <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                      <td className="px-4 py-3 text-foreground/70 text-xs whitespace-nowrap">
                         {(r.effective_at ?? r.entry_effective_at ?? r.created_at ?? "").slice(0, 10)}
                       </td>
-                      <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white text-xs">{r.account_name ?? "—"}</td>
-                      <td className={`px-4 py-3 text-xs uppercase ${SIDE_CLS[side] ?? "text-gray-500"}`}>{side || "—"}</td>
+                      <td className="px-4 py-3 font-semibold text-foreground text-xs">{r.account_name ?? "—"}</td>
+                      <td className={`px-4 py-3 text-xs uppercase ${SIDE_CLS[side] ?? "text-foreground/70"}`}>{side || "—"}</td>
                       <td className={`px-4 py-3 text-xs font-bold ${SIDE_CLS[side] ?? ""}`}>{r.amount != null ? fmt(r.amount) : "—"}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs truncate max-w-[240px]">{r.entry_description ?? r.description ?? "—"}</td>
+                      <td className="px-4 py-3 text-foreground/70 text-xs truncate max-w-[240px]">{r.entry_description ?? r.description ?? "—"}</td>
                     </tr>
                   );
                 })}

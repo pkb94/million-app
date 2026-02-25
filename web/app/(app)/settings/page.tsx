@@ -7,14 +7,14 @@ import { PageHeader, Badge } from "@/components/ui";
 
 const EVENT_COLOR: Record<string, string> = {
   login:           "text-green-500",
-  logout:          "text-gray-400",
+  logout:          "text-foreground/70",
   refresh:         "text-blue-400",
   signup:          "text-purple-500",
   change_password: "text-yellow-500",
   failed_login:    "text-red-500",
 };
 
-const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function ChangePasswordSection() {
   const [current, setCurrent] = useState("");
@@ -37,7 +37,7 @@ function ChangePasswordSection() {
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
       <div className="flex items-center gap-3 mb-4">
         <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30"><Key size={16} className="text-blue-500" /></span>
-        <h2 className="font-bold text-gray-900 dark:text-white">Change Password</h2>
+        <h2 className="font-bold text-foreground">Change Password</h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         {[
@@ -46,7 +46,7 @@ function ChangePasswordSection() {
           { label: "Confirm Password", val: confirm, set: setConfirm },
         ].map(({ label, val, set }) => (
           <div key={label}>
-            <label className="text-xs text-gray-400 block mb-1">{label}</label>
+            <label className="text-xs text-foreground/70 block mb-1">{label}</label>
             <input type="password" value={val} onChange={(e) => set(e.target.value)} autoComplete="off" className={inp} />
           </div>
         ))}
@@ -74,8 +74,8 @@ function SessionsSection() {
       <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
         <span className="p-2 rounded-xl bg-purple-50 dark:bg-purple-900/30"><Monitor size={16} className="text-purple-500" /></span>
         <div>
-          <h2 className="font-bold text-gray-900 dark:text-white text-sm">Active Sessions</h2>
-          <p className="text-xs text-gray-400">Revoke a session to force sign-out on that device.</p>
+          <h2 className="font-bold text-foreground text-sm">Active Sessions</h2>
+          <p className="text-xs text-foreground/70">Revoke a session to force sign-out on that device.</p>
         </div>
       </div>
 
@@ -84,7 +84,7 @@ function SessionsSection() {
           {[1,2].map(i => <div key={i} className="skeleton h-12 rounded-xl" />)}
         </div>
       )}
-      {!isLoading && sessions.length === 0 && <p className="text-sm text-gray-400 p-5">No active sessions.</p>}
+      {!isLoading && sessions.length === 0 && <p className="text-sm text-foreground/70 p-5">No active sessions.</p>}
 
       {sessions.length > 0 && (
         <>
@@ -95,9 +95,9 @@ function SessionsSection() {
                 <div className="flex items-start justify-between">
                   <div>
                     {s.is_current && <Badge variant="info" className="mr-1">current</Badge>}
-                    <span className="text-xs font-mono text-gray-500">{s.ip_address ?? "—"}</span>
-                    <p className="text-xs text-gray-400 mt-1 truncate max-w-[240px]">{s.user_agent ? s.user_agent.slice(0, 50) : "—"}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Created {s.created_at.slice(0, 16).replace("T", " ")}</p>
+                    <span className="text-xs font-mono text-foreground/70">{s.ip_address ?? "—"}</span>
+                    <p className="text-xs text-foreground/70 mt-1 truncate max-w-[240px]">{s.user_agent ? s.user_agent.slice(0, 50) : "—"}</p>
+                    <p className="text-[10px] text-foreground/70 mt-0.5">Created {s.created_at.slice(0, 16).replace("T", " ")}</p>
                   </div>
                   {!s.is_current && (
                     <button onClick={() => revoke.mutate(s.id)} disabled={revoke.isPending}
@@ -114,7 +114,7 @@ function SessionsSection() {
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide bg-[var(--surface-2)]">
+                <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide bg-[var(--surface-2)]">
                   {["Created", "Last Used", "IP", "Device", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                   ))}
@@ -123,10 +123,10 @@ function SessionsSection() {
               <tbody>
                 {sessions.map((s) => (
                   <tr key={s.id} className={`border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors ${s.is_current ? "bg-blue-50/40 dark:bg-blue-900/10" : ""}`}>
-                    <td className="px-4 py-3 text-gray-400 text-xs">{s.created_at.slice(0, 16).replace("T", " ")}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">{s.last_used_at ? s.last_used_at.slice(0, 16).replace("T", " ") : "—"}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs font-mono">{s.ip_address ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs truncate max-w-[200px]">
+                    <td className="px-4 py-3 text-foreground/70 text-xs">{s.created_at.slice(0, 16).replace("T", " ")}</td>
+                    <td className="px-4 py-3 text-foreground/70 text-xs">{s.last_used_at ? s.last_used_at.slice(0, 16).replace("T", " ") : "—"}</td>
+                    <td className="px-4 py-3 text-foreground/70 text-xs font-mono">{s.ip_address ?? "—"}</td>
+                    <td className="px-4 py-3 text-foreground/70 text-xs truncate max-w-[200px]">
                       {s.is_current && <Badge variant="info" className="mr-1">current</Badge>}
                       {s.user_agent ? s.user_agent.slice(0, 60) : "—"}
                     </td>
@@ -157,8 +157,8 @@ function EventsSection() {
       <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
         <span className="p-2 rounded-xl bg-yellow-50 dark:bg-yellow-900/30"><Shield size={16} className="text-yellow-500" /></span>
         <div>
-          <h2 className="font-bold text-gray-900 dark:text-white text-sm">Auth Event Log</h2>
-          <p className="text-xs text-gray-400">Last 25 security events on your account.</p>
+          <h2 className="font-bold text-foreground text-sm">Auth Event Log</h2>
+          <p className="text-xs text-foreground/70">Last 25 security events on your account.</p>
         </div>
       </div>
 
@@ -167,7 +167,7 @@ function EventsSection() {
           {[1,2,3].map(i => <div key={i} className="skeleton h-10 rounded-xl" />)}
         </div>
       )}
-      {!isLoading && events.length === 0 && <p className="text-sm text-gray-400 p-5">No events recorded.</p>}
+      {!isLoading && events.length === 0 && <p className="text-sm text-foreground/70 p-5">No events recorded.</p>}
 
       {events.length > 0 && (
         <>
@@ -176,8 +176,8 @@ function EventsSection() {
             {events.map((e) => (
               <div key={e.id} className="flex items-center justify-between p-3">
                 <div>
-                  <span className={`text-xs font-mono font-bold ${EVENT_COLOR[e.event_type] ?? "text-gray-500"}`}>{e.event_type}</span>
-                  <p className="text-[10px] text-gray-400">{e.created_at.slice(0, 16).replace("T", " ")} · {e.ip_address ?? "—"}</p>
+                  <span className={`text-xs font-mono font-bold ${EVENT_COLOR[e.event_type] ?? "text-foreground/70"}`}>{e.event_type}</span>
+                  <p className="text-[10px] text-foreground/70">{e.created_at.slice(0, 16).replace("T", " ")} · {e.ip_address ?? "—"}</p>
                 </div>
                 {e.success ? <CheckCircle size={14} className="text-green-500 shrink-0" /> : <XCircle size={14} className="text-red-500 shrink-0" />}
               </div>
@@ -188,7 +188,7 @@ function EventsSection() {
           <div className="hidden md:block overflow-y-auto max-h-[320px]">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide sticky top-0 bg-[var(--surface)] bg-[var(--surface-2)]">
+                <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide sticky top-0 bg-[var(--surface)] bg-[var(--surface-2)]">
                   {["Time", "Event", "Result", "IP"].map((h) => (
                     <th key={h} className="px-4 py-2.5 text-left font-semibold">{h}</th>
                   ))}
@@ -197,12 +197,12 @@ function EventsSection() {
               <tbody>
                 {events.map((e) => (
                   <tr key={e.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                    <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{e.created_at.slice(0, 16).replace("T", " ")}</td>
-                    <td className={`px-4 py-2.5 font-mono text-xs font-semibold ${EVENT_COLOR[e.event_type] ?? "text-gray-500"}`}>{e.event_type}</td>
+                    <td className="px-4 py-2.5 text-foreground/70 text-xs whitespace-nowrap">{e.created_at.slice(0, 16).replace("T", " ")}</td>
+                    <td className={`px-4 py-2.5 font-mono text-xs font-semibold ${EVENT_COLOR[e.event_type] ?? "text-foreground/70"}`}>{e.event_type}</td>
                       <td className="px-4 py-2.5">
                         <Badge variant={e.success ? "success" : "danger"}>{e.success ? "OK" : "FAIL"}</Badge>
                       </td>
-                    <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{e.ip_address ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-foreground/70 font-mono text-xs">{e.ip_address ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -65,7 +65,7 @@ const FUTURES: Instrument[] = [
 const COMMODITIES: Instrument[] = [
   { symbol: "GC=F",  label: "Gold",        sublabel: "USD / oz",  accent: "bg-yellow-50 dark:bg-yellow-900/30",  iconColor: "text-yellow-500"  },
   { symbol: "SI=F",  label: "Silver",      sublabel: "USD / oz",  accent: "bg-slate-50 dark:bg-slate-800/40",    iconColor: "text-slate-400"   },
-  { symbol: "CL=F",  label: "Crude Oil",   sublabel: "WTI USD/bbl",accent: "bg-gray-50 dark:bg-gray-800/40",     iconColor: "text-gray-400"    },
+  { symbol: "CL=F",  label: "Crude Oil",   sublabel: "WTI USD/bbl",accent: "bg-gray-50 dark:bg-gray-800/40",     iconColor: "text-foreground/70"    },
   { symbol: "NG=F",  label: "Nat Gas",     sublabel: "USD / MMBtu",accent: "bg-sky-50 dark:bg-sky-900/30",       iconColor: "text-sky-500"     },
   { symbol: "HG=F",  label: "Copper",      sublabel: "USD / lb",  accent: "bg-orange-50 dark:bg-orange-900/30", iconColor: "text-orange-400"  },
 ];
@@ -143,7 +143,7 @@ function QuoteCard({ inst, quote }: { inst: Instrument; quote: Quote | undefined
 
   const ChangeIcon = zero ? Minus : up ? TrendingUp : TrendingDown;
   const colorCls   = zero
-    ? "text-gray-400"
+    ? "text-foreground/70"
     : up
     ? "text-green-500"
     : "text-red-500";
@@ -158,10 +158,10 @@ function QuoteCard({ inst, quote }: { inst: Instrument; quote: Quote | undefined
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide leading-none">
+          <p className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide leading-none">
             {inst.label}
           </p>
-          <p className="text-[10px] text-gray-400/70 mt-0.5">{inst.sublabel}</p>
+          <p className="text-[10px] text-foreground/70/70 mt-0.5">{inst.sublabel}</p>
         </div>
         <span className={`p-2 rounded-xl ${inst.accent}`}>
           <ChangeIcon size={15} className={inst.iconColor} />
@@ -175,10 +175,10 @@ function QuoteCard({ inst, quote }: { inst: Instrument; quote: Quote | undefined
           <div className="skeleton h-4 w-20 rounded-lg" />
         </div>
       ) : quote?.price == null ? (
-        <p className="text-xl font-black text-gray-400">—</p>
+        <p className="text-xl font-black text-foreground/70">—</p>
       ) : (
         <>
-          <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white leading-none">
+          <p className="text-xl sm:text-2xl font-black text-foreground leading-none">
             {fmtPrice(inst.symbol, quote.price)}
           </p>
           <div className={`inline-flex items-center gap-1.5 self-start px-2 py-1 rounded-lg ${bgCls}`}>
@@ -231,12 +231,12 @@ export default function MarketCards() {
     <div className="mb-6 sm:mb-8">
       {/* Row label + session badge */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Markets</p>
+        <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest">Markets</p>
         <div className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${sessionDot}`} />
           <span className={`text-[11px] font-semibold ${sessionColor}`}>{sessionLabel}</span>
           {lastUpdated && (
-            <span className="text-[10px] text-gray-400 hidden sm:inline">
+            <span className="text-[10px] text-foreground/70 hidden sm:inline">
               · {lastUpdated.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
           )}
@@ -255,7 +255,7 @@ export default function MarketCards() {
 
       {/* ── India markets row ─────────────────────────────────────────── */}
       <div className="mt-4">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">India Markets</p>
+        <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest mb-3">India Markets</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {INDIA.map((inst) => (
             <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />
@@ -265,7 +265,7 @@ export default function MarketCards() {
 
       {/* ── Commodities row ───────────────────────────────────────────── */}
       <div className="mt-4">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Commodities</p>
+        <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-widest mb-3">Commodities</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {COMMODITIES.map((inst) => (
             <QuoteCard key={inst.symbol} inst={inst} quote={quotes[inst.symbol]} />

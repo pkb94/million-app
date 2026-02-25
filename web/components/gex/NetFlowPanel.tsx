@@ -89,7 +89,7 @@ function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] shadow-2xl space-y-0.5 min-w-[180px]">
-      <p className="text-gray-400 font-semibold mb-1.5">{label}</p>
+      <p className="text-foreground/70 font-semibold mb-1.5">{label}</p>
       {payload.map((p: any) => {
         const val = p.value;
         let display: string;
@@ -99,7 +99,7 @@ function ChartTooltip({ active, payload, label }: any) {
         return (
           <div key={p.name} className="flex justify-between gap-4">
             <span style={{ color: p.stroke ?? p.fill }}>{p.name}</span>
-            <span className="text-gray-700 dark:text-gray-200 tabular-nums font-semibold">{display}</span>
+            <span className="text-foreground tabular-nums font-semibold">{display}</span>
           </div>
         );
       })}
@@ -247,8 +247,8 @@ export default function NetFlowPanel({ data }: Props) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-300 uppercase tracking-widest font-semibold">Net Flow</span>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[var(--border)] text-gray-500 uppercase tracking-wide">{symbol}</span>
+              <span className="text-[10px] text-foreground uppercase tracking-widest font-semibold">Net Flow</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[var(--border)] text-foreground/70 uppercase tracking-wide">{symbol}</span>
             </div>
             {spot > 0 && (
               <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -304,7 +304,7 @@ export default function NetFlowPanel({ data }: Props) {
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
               Calls {callPct.toFixed(1)}%
             </span>
-            <span className="text-gray-200 text-[8px] font-semibold tabular-nums">Total {fmt(call_premium + put_premium)}</span>
+            <span className="text-foreground text-[8px] font-semibold tabular-nums">Total {fmt(call_premium + put_premium)}</span>
             <span className="flex items-center gap-1.5 text-red-400">
               Puts {putPct.toFixed(1)}%
               <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
@@ -328,7 +328,7 @@ export default function NetFlowPanel({ data }: Props) {
                   <span className="text-yellow-400 font-black tabular-nums">${(stats.price ?? spot).toFixed(2)}</span>
                 </span>
               )}
-              <span className="text-gray-400">
+              <span className="text-foreground/70">
                 Prem <span className="text-white font-bold tabular-nums">{fmt(stats.total_prem ?? 0)}</span>
               </span>
               <span className={`font-black tabular-nums ${(stats.net_flow ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
@@ -341,7 +341,7 @@ export default function NetFlowPanel({ data }: Props) {
                   className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all ${
                     days === d
                       ? "bg-[var(--border)] text-white shadow-sm"
-                      : "text-gray-500 hover:text-gray-300"
+                      : "text-foreground/60 hover:text-foreground"
                   }`}>{d}D</button>
               ))}
             </div>
@@ -350,13 +350,13 @@ export default function NetFlowPanel({ data }: Props) {
           {!hasEnoughData ? (
             <div className="flex flex-col items-center justify-center h-[340px] gap-3">
               <div className="w-12 h-12 rounded-2xl bg-[var(--border)] flex items-center justify-center">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-foreground/50">
                   <path d="M3 17l4-8 4 5 3-4 4 6"/><path d="M21 21H3" strokeWidth="1" opacity="0.4"/>
                 </svg>
               </div>
               <div className="text-center">
-                <p className="text-[11px] font-bold text-gray-400">Building history…</p>
-                <p className="text-[9px] text-gray-500 mt-1">
+                <p className="text-[11px] font-bold text-foreground">Building history…</p>
+                <p className="text-[9px] text-foreground/70 mt-1">
                   {chartData.length} of 5 snapshots · updates every 15s
                 </p>
               </div>
@@ -406,7 +406,7 @@ export default function NetFlowPanel({ data }: Props) {
               {/* Divider with label */}
               <div className="mx-3 flex items-center gap-2 opacity-60">
                 <div className="flex-1 border-t border-dashed border-[var(--border)]" />
-                <span className="text-[8px] text-gray-500 font-semibold uppercase tracking-widest">Premium</span>
+                <span className="text-[8px] text-foreground/60 font-semibold uppercase tracking-widest">Premium</span>
                 <div className="flex-1 border-t border-dashed border-[var(--border)]" />
               </div>
 
@@ -419,7 +419,7 @@ export default function NetFlowPanel({ data }: Props) {
                   <span className="flex items-center gap-1.5 text-[9px] text-red-400/80 uppercase tracking-wide font-bold">
                     <span className="w-3 h-[2px] bg-red-400 rounded-full inline-block" />Put
                   </span>
-                  <span className="flex items-center gap-1.5 text-[9px] text-gray-500 uppercase tracking-wide font-semibold">
+                  <span className="flex items-center gap-1.5 text-[9px] text-foreground/60 uppercase tracking-wide font-semibold">
                     <span className="w-2.5 h-2 bg-gray-600/50 rounded-sm inline-block" />Vol
                   </span>
                 </div>
@@ -476,7 +476,7 @@ export default function NetFlowPanel({ data }: Props) {
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
                 <div className="flex items-center gap-1.5 mb-3">
                   <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
-                  <p className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Flow by Expiry</p>
+                  <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Flow by Expiry</p>
                 </div>
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={expiryData} barCategoryGap="28%" barGap={2} margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
@@ -504,7 +504,7 @@ export default function NetFlowPanel({ data }: Props) {
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
                 <div className="flex items-center gap-1.5 mb-3">
                   <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
-                  <p className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Net by Strike</p>
+                  <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Net by Strike</p>
                 </div>
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={strikeData} layout="vertical" margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
@@ -530,18 +530,18 @@ export default function NetFlowPanel({ data }: Props) {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden">
             <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
               <div className="w-1 h-3 rounded-full bg-gradient-to-b from-purple-400 to-blue-400" />
-              <p className="text-[9px] text-gray-200 uppercase tracking-widest font-bold">Top Flow Strikes</p>
+              <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Top Flow Strikes</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[11px] border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    <th className="text-left px-4 py-2 font-bold tracking-wide text-[9px] uppercase text-gray-300">Strike</th>
+                    <th className="text-left px-4 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Strike</th>
                     <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-emerald-300">Call $</th>
                     <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-red-300">Put $</th>
-                    <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-gray-300">Net</th>
-                    <th className="text-center px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-gray-300">Split</th>
-                    <th className="text-center px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-gray-300">Bias</th>
+                    <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Net</th>
+                    <th className="text-center px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Split</th>
+                    <th className="text-center px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Bias</th>
                   </tr>
                 </thead>
                 <tbody>

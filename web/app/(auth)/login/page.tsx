@@ -36,15 +36,15 @@ export default function LoginPage() {
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-xl shadow-blue-500/25 mb-3">
             <Zap size={22} className="text-white" strokeWidth={2.5} />
           </div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">OptionFlow</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Sign in to your account</p>
+          <h1 className="text-2xl font-black text-foreground tracking-tight">OptionFlow</h1>
+          <p className="text-sm text-foreground/70 mt-0.5">Sign in to your account</p>
         </div>
 
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-xl shadow-black/5 p-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Username */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground/70 mb-1.5">
                 Username
               </label>
               <input
@@ -54,13 +54,13 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 placeholder="your username"
-                className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface-2)] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition"
+                className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface-2)] text-foreground placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition"
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground/70 mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -71,12 +71,12 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 pr-10 text-sm bg-[var(--surface-2)] text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition"
+                  className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 pr-10 text-sm bg-[var(--surface-2)] text-foreground placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/70 hover:text-foreground transition"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}

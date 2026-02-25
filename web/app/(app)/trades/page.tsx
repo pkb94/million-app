@@ -25,7 +25,7 @@ function CloseModal({ trade, onDone }: { trade: Trade; onDone: () => void }) {
     onError: (e: Error) => setErr(e.message),
   });
 
-  const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
@@ -33,14 +33,14 @@ function CloseModal({ trade, onDone }: { trade: Trade; onDone: () => void }) {
         <div className="w-10 h-1 rounded-full bg-[var(--surface-2)] mx-auto mb-5 sm:hidden" />
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-bold text-gray-900 dark:text-white text-lg">Close {trade.symbol}</h3>
-            <p className="text-xs text-gray-400">{trade.qty} shares · entry ${trade.price?.toFixed(2)}</p>
+            <h3 className="font-bold text-foreground text-lg">Close {trade.symbol}</h3>
+            <p className="text-xs text-foreground/70">{trade.qty} shares · entry ${trade.price?.toFixed(2)}</p>
           </div>
-          <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+          <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
         </div>
-        <label className="block text-xs text-gray-500 mb-1">Exit Price ($)</label>
+        <label className="block text-xs text-foreground/70 mb-1">Exit Price ($)</label>
         <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className={`${inp} mb-3`} />
-        <label className="block text-xs text-gray-500 mb-1">Exit Date</label>
+        <label className="block text-xs text-foreground/70 mb-1">Exit Date</label>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={`${inp} mb-4`} />
         {err && <p className="text-xs text-red-500 mb-3">{err}</p>}
         <div className="flex gap-2">
@@ -49,7 +49,7 @@ function CloseModal({ trade, onDone }: { trade: Trade; onDone: () => void }) {
             {mut.isPending ? "Closing…" : "Confirm Close"}
           </button>
           <button onClick={onDone}
-            className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm text-gray-600 dark:text-gray-300 hover:bg-[var(--surface-2)] transition">
+            className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm text-foreground hover:bg-[var(--surface-2)] transition">
             Cancel
           </button>
         </div>
@@ -68,7 +68,7 @@ function useDeleteTrade() {
 
 // ── New trade form ────────────────────────────────────────────────────────────
 
-const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+const inp = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function NewTradeForm({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
@@ -93,42 +93,42 @@ function NewTradeForm({ onDone }: { onDone: () => void }) {
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 mb-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-gray-900 dark:text-white">Log Trade</h3>
-        <button onClick={onDone} className="p-1.5 rounded-xl text-gray-400 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
+        <h3 className="font-bold text-foreground">Log Trade</h3>
+        <button onClick={onDone} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={16} /></button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Symbol</label>
+          <label className="text-xs text-foreground/70 block mb-1">Symbol</label>
           <input value={sym} onChange={(e) => setSym(e.target.value.toUpperCase())} placeholder="SPY" className={inp} />
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Action</label>
+          <label className="text-xs text-foreground/70 block mb-1">Action</label>
           <select value={action} onChange={(e) => setAction(e.target.value)} className={inp}>
             <option>BUY</option><option>SELL</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Instrument</label>
+          <label className="text-xs text-foreground/70 block mb-1">Instrument</label>
           <select value={inst} onChange={(e) => setInst(e.target.value)} className={inp}>
             <option>STOCK</option><option>OPTION</option><option>FUTURE</option><option>ETF</option><option>CRYPTO</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Strategy</label>
+          <label className="text-xs text-foreground/70 block mb-1">Strategy</label>
           <select value={strat} onChange={(e) => setStrat(e.target.value)} className={inp}>
             <option>Day Trade</option><option>Swing Trade</option><option>Buy &amp; Hold</option><option>Scalp</option><option>Options</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Quantity</label>
+          <label className="text-xs text-foreground/70 block mb-1">Quantity</label>
           <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className={inp} />
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Entry Price ($)</label>
+          <label className="text-xs text-foreground/70 block mb-1">Entry Price ($)</label>
           <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className={inp} />
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Date</label>
+          <label className="text-xs text-foreground/70 block mb-1">Date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} />
         </div>
       </div>
@@ -162,7 +162,7 @@ function TradeStats({ trades }: { trades: Trade[] }) {
     { label: "Avg Win",    value: `+$${avgWin.toFixed(2)}`,                                    color: "text-green-500",   icon: TrendingUp   },
     { label: "Avg Loss",   value: `$${avgLoss.toFixed(2)}`,                                    color: "text-red-500",     icon: TrendingDown },
     { label: "Best Trade", value: `+$${best.toFixed(2)}`,                                      color: "text-blue-500",    icon: Target       },
-    { label: "# Closed",   value: `${closed.length}`,                                          color: "text-gray-400",    icon: BarChart2    },
+    { label: "# Closed",   value: `${closed.length}`,                                          color: "text-foreground/70",    icon: BarChart2    },
   ];
 
   return (
@@ -171,7 +171,7 @@ function TradeStats({ trades }: { trades: Trade[] }) {
         <div key={label} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <Icon size={11} className={color} />
-            <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide truncate">{label}</p>
+            <p className="text-[9px] font-semibold text-foreground/70 uppercase tracking-wide truncate">{label}</p>
           </div>
           <p className={`text-sm font-black leading-none ${color}`}>{value}</p>
         </div>
@@ -187,10 +187,10 @@ function TradeCard({ t, onClose, onDelete }: { t: Trade; onClose: () => void; on
       <div className="flex items-start justify-between mb-2">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-black text-gray-900 dark:text-white text-base">{t.symbol}</span>
+            <span className="font-black text-foreground text-base">{t.symbol}</span>
             <Badge variant={t.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{t.action}</Badge>
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">{t.strategy ?? "—"} · {String(t.date ?? "").slice(0, 10)}</p>
+          <p className="text-xs text-foreground/70 mt-0.5">{t.strategy ?? "—"} · {String(t.date ?? "").slice(0, 10)}</p>
         </div>
         <div className={`text-base font-black ${pnl == null ? "" : pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
           {pnl == null
@@ -198,7 +198,7 @@ function TradeCard({ t, onClose, onDelete }: { t: Trade; onClose: () => void; on
             : `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`}
         </div>
       </div>
-      <div className="flex gap-3 text-xs text-gray-400 mb-3">
+      <div className="flex gap-3 text-xs text-foreground/70 mb-3">
         <span>{t.qty} shares</span><span>·</span>
         <span>Entry ${t.price?.toFixed(2)}</span>
         {t.exit_price != null && <><span>·</span><span>Exit ${t.exit_price.toFixed(2)}</span></>}
@@ -259,7 +259,7 @@ export default function TradesPage() {
           onChange={(k) => setTab(k as "open" | "closed")}
           tabs={[
             { key: "open",   label: <span>Open <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300">{open.length}</span></span> },
-            { key: "closed", label: <span>Closed <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-2)] text-gray-500">{closed.length}</span></span> },
+            { key: "closed", label: <span>Closed <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-2)] text-foreground/70">{closed.length}</span></span> },
           ]}
         />
       </div>
@@ -287,7 +287,7 @@ export default function TradesPage() {
           <div className="hidden md:block bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-gray-400 uppercase tracking-wide bg-[var(--surface-2)]">
+                <tr className="border-b border-[var(--border)] text-[11px] text-foreground/70 uppercase tracking-wide bg-[var(--surface-2)]">
                   {["Date", "Symbol", "Action", "Strategy", "Qty", "Entry", "Exit", "P/L", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                   ))}
@@ -298,16 +298,16 @@ export default function TradesPage() {
                   const pnl = calcPnl(t);
                   return (
                     <tr key={t.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{String(t.date ?? "").slice(0, 10)}</td>
-                      <td className="px-4 py-3 font-bold text-gray-900 dark:text-white">{t.symbol}</td>
+                      <td className="px-4 py-3 text-foreground/70 text-xs whitespace-nowrap">{String(t.date ?? "").slice(0, 10)}</td>
+                      <td className="px-4 py-3 font-bold text-foreground">{t.symbol}</td>
                       <td className="px-4 py-3">
                         <Badge variant={t.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{t.action}</Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{t.strategy ?? "—"}</td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{t.qty}</td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">${t.price?.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-gray-400">{t.exit_price != null ? `$${t.exit_price.toFixed(2)}` : "—"}</td>
-                      <td className={`px-4 py-3 font-bold ${pnl == null ? "text-gray-400" : pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                      <td className="px-4 py-3 text-foreground/70 text-xs whitespace-nowrap">{t.strategy ?? "—"}</td>
+                      <td className="px-4 py-3 text-foreground">{t.qty}</td>
+                      <td className="px-4 py-3 text-foreground">${t.price?.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-foreground/70">{t.exit_price != null ? `$${t.exit_price.toFixed(2)}` : "—"}</td>
+                      <td className={`px-4 py-3 font-bold ${pnl == null ? "text-foreground/70" : pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
                         {pnl == null ? "—" : `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`}
                       </td>
                       <td className="px-4 py-3">
