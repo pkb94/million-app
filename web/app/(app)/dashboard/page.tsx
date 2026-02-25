@@ -44,7 +44,7 @@ export default function DashboardPage() {
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
     const t = lookupQuery.trim().toUpperCase();
-    if (t) router.push(`/search?q=${t}`);
+    if (t) router.push(`/stocks/${t}`);
   };
 
   const tradesQ = useQuery({ queryKey: ["trades"],       queryFn: fetchTrades,          staleTime: 30_000 });
@@ -94,7 +94,7 @@ export default function DashboardPage() {
           onChange={setLookupQuery}
           onSelect={(sym) => {
             setLookupQuery(sym);
-            router.push(`/options-flow?ticker=${encodeURIComponent(sym)}`);
+            router.push(`/stocks/${encodeURIComponent(sym.trim().toUpperCase())}`);
           }}
           placeholder="Search ticker or company — AAPL, Apple, Nifty…"
           actionLabel="View"
