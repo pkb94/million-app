@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchGex, watchSymbols, GexResult } from "@/lib/api";
 import GexStrikeTable from "@/components/gex/GexStrikeTable";
 import NetFlowPanel from "@/components/gex/NetFlowPanel";
+import TickerSearchInput from "@/components/TickerSearchInput";
 import { fmtGex as fmtGexUtil } from "@/lib/gex";
-import { Search, X, Plus, RefreshCw, TrendingUp, TrendingDown, Activity, BarChart2, Shield, ChevronDown, Zap, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { X, Plus, RefreshCw, TrendingUp, TrendingDown, Activity, BarChart2, Shield, ChevronDown, Zap, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { SkeletonStatGrid, ErrorBanner } from "@/components/ui";
 
 const STRIKE_OPTIONS = [10, 20, 30, 40, 50] as const;
@@ -50,15 +51,16 @@ function KeyLevelBadge({ label, value, color }: { label: string; value: string; 
 
 // ── Per-ticker panel ──────────────────────────────────────────────────────────
 function TickerPanel({
-  slot, accentColor, nStrikes,
-  onInputChange, onSearch, onToggleExpiry, onClearExpiry,
+  slot, accentColor, nStrikes, onSetNStrikes,
+  onInputChange, onSelect, onToggleExpiry, onClearExpiry,
   data, isLoading, isError, isFetching, onRefresh, dataUpdatedAt,
 }: {
   slot: Slot;
   accentColor: string;
   nStrikes: number;
+  onSetNStrikes: (n: number) => void;
   onInputChange: (v: string) => void;
-  onSearch: (e: React.FormEvent) => void;
+  onSelect: (symbol: string) => void;
   onToggleExpiry: (d: string) => void;
   onClearExpiry: () => void;
   data: GexResult | undefined;
@@ -94,28 +96,15 @@ function TickerPanel({
 
       {/* ── Header: search + status ──────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]">
-        <form
-          onSubmit={onSearch}
-          className="flex items-stretch flex-1 max-w-[260px] rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)]"
-          style={{ outline: `1.5px solid ${accentColor}33` }}
-        >
-          <span className="flex items-center pl-3 pr-1.5 text-gray-400 shrink-0">
-            <Search size={13} />
-          </span>
-          <input
-            value={slot.input}
-            onChange={(e) => onInputChange(e.target.value.toUpperCase())}
-            placeholder="Ticker…"
-            className="flex-1 min-w-0 py-2 text-sm font-bold bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="flex items-center justify-center px-4 text-[11px] font-bold tracking-wider shrink-0 transition-opacity hover:opacity-90"
-            style={{ background: accentColor, color: "#fff" }}
-          >
-            LOAD
-          </button>
-        </form>
+        <TickerSearchInput
+          value={slot.input}
+          onChange={onInputChange}
+          onSelect={onSelect}
+          accentColor={accentColor}
+          placeholder="Ticker or company…"
+          actionLabel="LOAD"
+          className="flex-1 max-w-[300px]"
+        />
 
         {/* Live status */}
         <div className="flex items-center gap-2 ml-auto text-gray-400">
@@ -334,11 +323,29 @@ function TickerPanel({
               <div className="flex items-center gap-2">
                 <BarChart2 size={12} className="text-gray-400" />
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-bold">GEX by Strike</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-1"
+                  style={{ background: `${accentColor}18`, color: accentColor }}>
+                  {slot.ticker}
+                </span>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: `${accentColor}18`, color: accentColor }}>
-                {slot.ticker}
-              </span>
+              {/* Strikes depth selector — lives here, not in the page header */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] text-gray-400 uppercase tracking-widest font-semibold hidden sm:block">Strikes</span>
+                <div className="flex items-center bg-[var(--surface)] rounded-lg p-0.5 gap-0.5 border border-[var(--border)]">
+                  {STRIKE_OPTIONS.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => onSetNStrikes(n)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition ${
+                        nStrikes === n
+                          ? "text-white"
+                          : "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      }`}
+                      style={nStrikes === n ? { background: accentColor } : undefined}
+                    >{n}</button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <GexStrikeTable
@@ -362,24 +369,24 @@ function TickerPanel({
 
 // ── Wrapper that owns its own query ───────────────────────────────────────────
 function TickerPanelWithQuery({
-  slot, accentColor, nStrikes, enabled,
-  onInputChange, onSearch, onToggleExpiry, onClearExpiry,
+  slot, accentColor, nStrikes, onSetNStrikes, enabled,
+  onInputChange, onSelect, onToggleExpiry, onClearExpiry,
 }: {
   slot: Slot;
   accentColor: string;
   nStrikes: number;
+  onSetNStrikes: (n: number) => void;
   enabled: boolean;
-  panelCount: number;
   onInputChange: (v: string) => void;
-  onSearch: (e: React.FormEvent) => void;
+  onSelect: (symbol: string) => void;
   onToggleExpiry: (d: string) => void;
   onClearExpiry: () => void;
 }) {
   const { data, isLoading, isError, isFetching, refetch, dataUpdatedAt } = useQuery<GexResult>({
     queryKey: ["gex", slot.ticker],
     queryFn:  () => fetchGex(slot.ticker),
-    staleTime: 15_000,
-    refetchInterval: 15_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchIntervalInBackground: false,
     enabled,
   });
@@ -389,8 +396,9 @@ function TickerPanelWithQuery({
       slot={slot}
       accentColor={accentColor}
       nStrikes={nStrikes}
+      onSetNStrikes={onSetNStrikes}
       onInputChange={onInputChange}
-      onSearch={onSearch}
+      onSelect={onSelect}
       onToggleExpiry={onToggleExpiry}
       onClearExpiry={onClearExpiry}
       data={data}
@@ -440,6 +448,20 @@ export default function OptionsFlowPage() {
   const [slots, setSlots] = useState<Slot[]>(() => loadLayout().slots);
   const [nStrikes, setNStrikes] = useState<number>(() => loadLayout().nStrikes);
 
+  // Handle ?ticker=XYZ deep-link from dashboard search
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const t = (params.get("ticker") ?? "").trim().toUpperCase();
+    if (t) {
+      setSlots([makeSlot(t)]);
+      // clean up URL without navigation
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ticker");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
   useEffect(() => { saveLayout(slots, nStrikes); }, [slots, nStrikes]);
 
   useEffect(() => {
@@ -462,7 +484,7 @@ export default function OptionsFlowPage() {
   }, []);
 
   const gridClass =
-    slots.length === 1 ? "grid-cols-1 max-w-4xl mx-auto" :
+    slots.length === 1 ? "grid-cols-1" :
     slots.length === 2 ? "grid-cols-1 lg:grid-cols-2" :
                          "grid-cols-1 lg:grid-cols-2 xl:grid-cols-3";
 
@@ -471,7 +493,7 @@ export default function OptionsFlowPage() {
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-4">
+        <div className="w-full px-4 sm:px-6 py-4">
           <div className="flex flex-wrap items-center gap-4">
 
             {/* Title */}
@@ -515,30 +537,14 @@ export default function OptionsFlowPage() {
               )}
             </div>
 
-            {/* Strikes selector */}
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold hidden sm:block">Strikes</span>
-              <div className="flex items-center bg-[var(--surface-2)] rounded-xl p-0.5 gap-0.5">
-                {STRIKE_OPTIONS.map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setNStrikes(n)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition ${
-                      nStrikes === n
-                        ? "bg-[var(--surface)] text-purple-600 dark:text-purple-400 shadow-sm border border-[var(--border)]"
-                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                    }`}
-                  >{n}</button>
-                ))}
-              </div>
-            </div>
+
 
           </div>
         </div>
       </div>
 
       {/* ── Panels ──────────────────────────────────────────────────────── */}
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
+      <div className="w-full px-4 sm:px-6 py-6">
         <div className={`grid gap-5 ${gridClass}`}>
           {slots.map((slot, i) => (
             <TickerPanelWithQuery
@@ -546,12 +552,11 @@ export default function OptionsFlowPage() {
               slot={slot}
               accentColor={ACCENTS[i]}
               nStrikes={nStrikes}
-              panelCount={slots.length}
+              onSetNStrikes={setNStrikes}
               enabled={true}
               onInputChange={(v) => updateSlot(i, { input: v })}
-              onSearch={(e) => {
-                e.preventDefault();
-                const t = slot.input.trim().toUpperCase();
+              onSelect={(sym) => {
+                const t = sym.trim().toUpperCase();
                 if (t) updateSlot(i, { ticker: t, input: t, expiryFilter: null });
               }}
               onToggleExpiry={(d) =>

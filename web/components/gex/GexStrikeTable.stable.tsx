@@ -82,14 +82,14 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
       {/* Hidden sizing row — always renders ALL expiry columns at fixed width to anchor table layout */}
       <table className="border-collapse" style={{ tableLayout: "fixed", width: "max-content", visibility: "hidden", height: 0, overflow: "hidden", position: "absolute" }} aria-hidden="true">
         <colgroup>
-          <col style={{ width: 110 }} />
+          <col style={{ width: 160 }} />
           {allCols.map(({ exp }) => <col key={exp} style={{ width: 110 }} />)}
         </colgroup>
         <tbody><tr><td />{allCols.map(({ exp }) => <td key={exp} />)}</tr></tbody>
       </table>
-      <table className="border-collapse" style={{ tableLayout: "fixed", width: `${110 + allCols.length * 110}px`, minWidth: "100%" }}>
+      <table className="border-collapse" style={{ tableLayout: "fixed", width: `${160 + allCols.length * 110}px`, minWidth: "100%" }}>
         <colgroup>
-          <col style={{ width: 110 }} />
+          <col style={{ width: 160 }} />
           {allCols.map(({ exp }) => <col key={exp} style={{ width: 110 }} />)}
         </colgroup>
         <thead>
@@ -168,16 +168,17 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
                 {/* Strike cell */}
                 <td
                   className={clsx(
-                    "px-2 py-[1px] text-left border-b border-[var(--border)] whitespace-nowrap",
+                    "px-2 py-[3px] text-left border-b border-[var(--border)]",
                     isSpot ? "font-extrabold text-gray-900" : "text-gray-500 dark:text-gray-400",
                   )}
                 >
                   {isSpot && (
-                    <span className="inline-block bg-yellow-400 text-black text-[8px] font-extrabold rounded px-1 mr-1 align-middle">
-                      ▶ SPOT ${spot.toFixed(2)}
-                    </span>
+                    <div className="inline-flex items-center gap-1 bg-yellow-400 text-black text-[8px] font-extrabold rounded px-1 mb-0.5 leading-tight">
+                      <span>▶ SPOT</span>
+                      <span>${spot.toFixed(2)}</span>
+                    </div>
                   )}
-                  {strike.toFixed(1)}
+                  <div className="tabular-nums">{strike.toFixed(1)}</div>
                 </td>
 
                 {/* GEX cells — always rendered for ALL expiry columns */}
