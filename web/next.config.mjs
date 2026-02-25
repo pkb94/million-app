@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["optflw.com", "*.optflw.com", "*.ngrok.io", "*.ngrok-free.app"],
   async rewrites() {
     return [
       {
