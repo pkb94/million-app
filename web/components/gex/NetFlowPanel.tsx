@@ -35,6 +35,15 @@ interface Snapshot {
 type DayRange = 1 | 2 | 3 | 7 | 14 | 30;
 const DAY_RANGES: DayRange[] = [1, 2, 3, 7, 14, 30];
 
+// Bucket size in minutes per range:
+// 1D/2D/3D → 60-min candles, 7D/14D/30D → 1-day (1440-min) candles
+const BUCKET_MINUTES: Record<DayRange, number> = {
+  1: 60, 2: 60, 3: 60,
+  7: 1440, 14: 1440, 30: 1440,
+};
+
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 function parseIso(isoUtc: string): Date {
   let s = isoUtc.replace(" ", "T");
   s = s.replace(/[+-]00:?00$/, "Z");
@@ -42,18 +51,35 @@ function parseIso(isoUtc: string): Date {
   return new Date(s);
 }
 
+/** Format a label from an ISO UTC string based on the selected range */
 function fmtSnapTime(isoUtc: string, days: DayRange): string {
   try {
     const d = parseIso(isoUtc);
     if (isNaN(d.getTime())) return "--";
-    const mo = d.getMonth() + 1;
-    const dy = d.getDate();
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
-    if (days === 1)  return `${hh}:${mm}`;
-    if (days <= 3)   return `${mo}/${dy} ${hh}:${mm}`;
-    return `${mo}/${dy}`;
+    // 1-3D → hourly: show "09:00"
+    if (days <= 3) return `${hh}:${mm}`;
+    // 7-30D → daily: show "Feb 19"
+    return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
   } catch { return "--"; }
+}
+
+/** Generate explicit tick ISO strings at clean hour or day boundaries */
+function generateTicks(data: { ts: string }[], days: DayRange): string[] {
+  if (!data.length) return [];
+  const bucketMs = days <= 3 ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const start = parseIso(data[0].ts).getTime();
+  const end   = parseIso(data[data.length - 1].ts).getTime();
+  // Align start to the next clean boundary
+  const firstBoundary = Math.ceil(start / bucketMs) * bucketMs;
+  const ticks: string[] = [];
+  for (let t = firstBoundary; t <= end + bucketMs / 2; t += bucketMs) {
+    // Find the data point whose ts is closest to this boundary
+    const iso = new Date(t).toISOString();
+    ticks.push(iso);
+  }
+  return ticks;
 }
 
 function fmt(n: number): string {
@@ -83,6 +109,36 @@ const NET_CALL    = "#22c55e";
 const NET_PUT     = "#ef4444";
 const VOL_CALL    = "#22c55e99";
 const VOL_PUT     = "#ef444499";
+
+// ── Custom tick components (Recharts 3.x requires React elements, not style objects) ──
+function PriceTick({ x, y, payload }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="start" fill="#fde68a" fontSize={10} fontWeight={800}>
+      {`$${Number(payload.value).toFixed(2)}`}
+    </text>
+  );
+}
+function AxisTick({ x, y, payload, color = "#9ca3af", size = 9 }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="middle" fill={color} fontSize={size} fontWeight={600}>
+      {payload.value}
+    </text>
+  );
+}
+function AxisTickRight({ x, y, payload, color = "#d1d5db", size = 9 }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="start" fill={color} fontSize={size} fontWeight={600}>
+      {payload.value}
+    </text>
+  );
+}
+function StrikeTick({ x, y, payload }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fill="#f9fafb" fontSize={9} fontWeight={700}>
+      {payload.value}
+    </text>
+  );
+}
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: any) {
@@ -159,7 +215,7 @@ export default function NetFlowPanel({ data }: Props) {
 
   const fetchHistory = useCallback(async (d: DayRange) => {
     try {
-      const snaps = await api.get<Snapshot[]>(`/options/net-flow-history/${symbol}?days=${d}`);
+      const snaps = await api.get<Snapshot[]>(`/options/net-flow-history/${symbol}?days=${d}&bucket=${BUCKET_MINUTES[d]}`);
       if (snaps?.length) setHistory(snaps);
     } catch { /* ignore */ }
   }, [symbol]);
@@ -174,13 +230,38 @@ export default function NetFlowPanel({ data }: Props) {
 
   const chartData = useMemo(() => {
     if (history.length > 0) {
-      return history.map(s => ({ ...s, t: fmtSnapTime(s.ts, days) }));
+      return history.map(s => ({ ...s, t: s.ts })); // keep raw ISO as key; format in tick component
     }
     if (!spot) return [];
-    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-    return [{ ts: new Date().toISOString(), t: now, price: spot, call_prem: call_premium,
+    return [{ ts: new Date().toISOString(), t: new Date().toISOString(), price: spot, call_prem: call_premium,
               put_prem: put_premium, net_flow, total_prem: total, volume: total_volume }];
   }, [history, days, spot, call_premium, put_premium, net_flow, total, total_volume]);
+
+  // ── Explicit tick values at clean interval boundaries ────────────────────
+  // For 1D/2D/3D: every full hour. For 7D/14D/30D: every midnight (1 day).
+  const xTicks = useMemo(() => {
+    if (!chartData.length) return [];
+    const bucketMs = BUCKET_MINUTES[days] * 60 * 1000;
+    const first = parseIso(chartData[0].ts).getTime();
+    const last  = parseIso(chartData[chartData.length - 1].ts).getTime();
+    const ticks: string[] = [];
+    // Start at the next clean boundary at or after `first`
+    let t = Math.ceil(first / bucketMs) * bucketMs;
+    while (t <= last) {
+      const iso = new Date(t).toISOString();
+      // Only include if a data point exists at (or close to) this boundary
+      const match = chartData.find(d => Math.abs(parseIso(d.ts).getTime() - t) < bucketMs / 2);
+      if (match) ticks.push(match.ts);
+      t += bucketMs;
+    }
+    // Always include first and last
+    if (!ticks.includes(chartData[0].ts)) ticks.unshift(chartData[0].ts);
+    if (!ticks.includes(chartData[chartData.length - 1].ts)) ticks.push(chartData[chartData.length - 1].ts);
+    return ticks;
+  }, [chartData, days]);
+
+  // Format a raw ISO ts for the X-axis label
+  const fmtTick = (iso: string) => fmtSnapTime(iso, days);
 
   // ── Price domain — tight around actual range ──────────────────────────────
   const [priceMin, priceMax] = useMemo(() => {
@@ -189,9 +270,9 @@ export default function NetFlowPanel({ data }: Props) {
     if (!p.length) return [0, 1];
     const mn = Math.min(...p), mx = Math.max(...p);
     const range = mx - mn;
-    // Pad by 50% of actual range each side — line fills middle ~50% of chart.
-    // Tiny absolute fallback (0.03% of price) for single-snapshot flat case.
-    const pad = range > 0 ? range * 0.5 : mx * 0.0003;
+    // Pad by 2% of actual range each side — maximises visible movement.
+    // Tiny absolute fallback (0.05% of price) for single-snapshot flat case.
+    const pad = range > 0 ? range * 0.02 : mx * 0.0005;
     return [parseFloat((mn - pad).toFixed(2)), parseFloat((mx + pad).toFixed(2))];
   }, [chartData]);
 
@@ -387,7 +468,7 @@ export default function NetFlowPanel({ data }: Props) {
                       orientation="right"
                       domain={[priceMin, priceMax]}
                       tickFormatter={v => `$${Number(v).toFixed(2)}`}
-                      tick={{ fill: "#fde68a", fontSize: 10, fontWeight: 800 }}
+                      tick={<PriceTick />}
                       axisLine={false} tickLine={false} width={58}
                       tickCount={5}
                     />
@@ -424,12 +505,12 @@ export default function NetFlowPanel({ data }: Props) {
                   </span>
                 </div>
                 <ResponsiveContainer width="100%" height={160}>
-                  <ComposedChart data={chartData} margin={{ top: 4, right: 54, left: 0, bottom: 0 }}
+                  <ComposedChart data={chartData} margin={{ top: 4, right: 54, left: 0, bottom: 16 }}
                     onMouseMove={(e: any) => { const pt = e?.activePayload?.[0]?.payload as Snapshot | undefined; if (pt) setHovered(pt); }}
                     onMouseLeave={() => setHovered(null)}>
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="t"
-                      tick={{ fill: "#9ca3af", fontSize: 9, fontWeight: 600 }}
+                      tick={<AxisTick />}
                       axisLine={false} tickLine={false}
                       interval="preserveStartEnd"
                     />
@@ -438,7 +519,7 @@ export default function NetFlowPanel({ data }: Props) {
                       orientation="right"
                       domain={[0, premMax]}
                       tickFormatter={fmtAxis}
-                      tick={{ fill: "#d1d5db", fontSize: 9, fontWeight: 600 }}
+                      tick={<AxisTickRight />}
                       axisLine={false} tickLine={false} width={52}
                       tickCount={4}
                     />
@@ -481,8 +562,8 @@ export default function NetFlowPanel({ data }: Props) {
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={expiryData} barCategoryGap="28%" barGap={2} margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
                     <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
-                    <XAxis dataKey="expiry" tick={{ fill: "#d1d5db", fontSize: 8, fontWeight: 600 }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={fmtAxis} tick={{ fill: "#d1d5db", fontSize: 8, fontWeight: 600 }} axisLine={false} tickLine={false} width={36} />
+                    <XAxis dataKey="expiry" tick={<AxisTick color="#d1d5db" size={8} />} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={fmtAxis} tick={<AxisTickRight color="#d1d5db" size={8} />} axisLine={false} tickLine={false} width={36} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                     <Bar dataKey="Calls" fill={CALL_COLOR} radius={[3, 3, 0, 0]} maxBarSize={14} />
                     <Bar dataKey="Puts"  fill={PUT_COLOR}  radius={[3, 3, 0, 0]} maxBarSize={14} />
@@ -509,8 +590,8 @@ export default function NetFlowPanel({ data }: Props) {
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={strikeData} layout="vertical" margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
                     <CartesianGrid horizontal={false} stroke="rgba(255,255,255,0.07)" />
-                    <XAxis type="number" tickFormatter={fmtAxis} tick={{ fill: "#d1d5db", fontSize: 8, fontWeight: 600 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="strike" tick={{ fill: "#f9fafb", fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} width={52} />
+                    <XAxis type="number" tickFormatter={fmtAxis} tick={<AxisTick color="#d1d5db" size={8} />} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="strike" tick={<StrikeTick />} axisLine={false} tickLine={false} width={52} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                     <ReferenceLine x={0} stroke="rgba(128,128,128,0.25)" strokeDasharray="3 3" />
                     <Bar dataKey="Net" radius={[0, 3, 3, 0]} maxBarSize={12}>

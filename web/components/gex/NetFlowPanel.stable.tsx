@@ -4,7 +4,6 @@ import React, { useMemo, useEffect, useState, useRef, useCallback } from "react"
 import {
   ComposedChart,
   Area,
-  Line,
   Bar,
   XAxis,
   YAxis,
@@ -23,8 +22,8 @@ interface Props {
 }
 
 interface Snapshot {
-  ts: string;   // raw ISO-8601 UTC from backend
-  t?: string;   // formatted label (computed on frontend)
+  ts: string;
+  t?: string;
   price: number;
   call_prem: number;
   put_prem: number;
@@ -36,36 +35,53 @@ interface Snapshot {
 type DayRange = 1 | 2 | 3 | 7 | 14 | 30;
 const DAY_RANGES: DayRange[] = [1, 2, 3, 7, 14, 30];
 
-// Parse an ISO-8601 UTC string robustly across all browsers.
-// Handles: "2026-02-24T14:30:00Z", "2026-02-24T14:30:00+00:00",
-//          "2026-02-24 14:30:00+00:00" (pandas space format), bare no-tz strings.
+// Bucket size in minutes per range:
+// 1D/2D/3D → 60-min candles, 7D/14D/30D → 1-day (1440-min) candles
+const BUCKET_MINUTES: Record<DayRange, number> = {
+  1: 60, 2: 60, 3: 60,
+  7: 1440, 14: 1440, 30: 1440,
+};
+
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 function parseIso(isoUtc: string): Date {
-  // Normalise: space → T, +00:00 or +0000 → Z
   let s = isoUtc.replace(" ", "T");
   s = s.replace(/[+-]00:?00$/, "Z");
-  // If still no tz indicator, treat as UTC
   if (!s.endsWith("Z") && !/[+-]\d{2}:?\d{2}$/.test(s)) s += "Z";
   return new Date(s);
 }
 
-// Format a raw ISO-8601 UTC string into a human label in the browser's local timezone
+/** Format a label from an ISO UTC string based on the selected range */
 function fmtSnapTime(isoUtc: string, days: DayRange): string {
   try {
     const d = parseIso(isoUtc);
     if (isNaN(d.getTime())) return "--";
-    const mo = d.getMonth() + 1;
-    const dy = d.getDate();
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
-    if (days === 1)  return `${hh}:${mm}`;
-    if (days <= 3)   return `${mo}/${dy} ${hh}:${mm}`;
-    return `${mo}/${dy}`;
-  } catch {
-    return "--";
-  }
+    // 1-3D → hourly: show "09:00"
+    if (days <= 3) return `${hh}:${mm}`;
+    // 7-30D → daily: show "Feb 19"
+    return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+  } catch { return "--"; }
 }
 
-// ── Formatters ────────────────────────────────────────────────────────────────
+/** Generate explicit tick ISO strings at clean hour or day boundaries */
+function generateTicks(data: { ts: string }[], days: DayRange): string[] {
+  if (!data.length) return [];
+  const bucketMs = days <= 3 ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const start = parseIso(data[0].ts).getTime();
+  const end   = parseIso(data[data.length - 1].ts).getTime();
+  // Align start to the next clean boundary
+  const firstBoundary = Math.ceil(start / bucketMs) * bucketMs;
+  const ticks: string[] = [];
+  for (let t = firstBoundary; t <= end + bucketMs / 2; t += bucketMs) {
+    // Find the data point whose ts is closest to this boundary
+    const iso = new Date(t).toISOString();
+    ticks.push(iso);
+  }
+  return ticks;
+}
+
 function fmt(n: number): string {
   const abs = Math.abs(n);
   if (abs >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
@@ -94,6 +110,36 @@ const NET_PUT     = "#ef4444";
 const VOL_CALL    = "#22c55e99";
 const VOL_PUT     = "#ef444499";
 
+// ── Custom tick components (Recharts 3.x requires React elements, not style objects) ──
+function PriceTick({ x, y, payload }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="start" fill="#fde68a" fontSize={10} fontWeight={800}>
+      {`$${Number(payload.value).toFixed(2)}`}
+    </text>
+  );
+}
+function AxisTick({ x, y, payload, color = "#9ca3af", size = 9 }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="middle" fill={color} fontSize={size} fontWeight={600}>
+      {payload.value}
+    </text>
+  );
+}
+function AxisTickRight({ x, y, payload, color = "#d1d5db", size = 9 }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="start" fill={color} fontSize={size} fontWeight={600}>
+      {payload.value}
+    </text>
+  );
+}
+function StrikeTick({ x, y, payload }: any) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fill="#f9fafb" fontSize={9} fontWeight={700}>
+      {payload.value}
+    </text>
+  );
+}
+
 // ── Tooltip ────────────────────────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -117,18 +163,30 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-// ── SVG gradient defs ─────────────────────────────────────────────────────────
+// ── SVG gradient defs (used in both sub-charts) ───────────────────────────────
 function FlowGradients() {
   return (
     <defs>
       <linearGradient id="gCall" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%"  stopColor={NET_CALL} stopOpacity={0.5} />
+        <stop offset="5%"  stopColor={NET_CALL} stopOpacity={0.45} />
         <stop offset="95%" stopColor={NET_CALL} stopOpacity={0.04} />
       </linearGradient>
       <linearGradient id="gPut" x1="0" y1="0" x2="0" y2="1">
         <stop offset="5%"  stopColor={NET_PUT} stopOpacity={0.04} />
-        <stop offset="95%" stopColor={NET_PUT} stopOpacity={0.5} />
+        <stop offset="95%" stopColor={NET_PUT} stopOpacity={0.45} />
       </linearGradient>
+      <linearGradient id="gPrice" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%"  stopColor={PRICE_COLOR} stopOpacity={0.22} />
+        <stop offset="95%" stopColor={PRICE_COLOR} stopOpacity={0.02} />
+      </linearGradient>
+      {/* glow filter for price line */}
+      <filter id="priceGlow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="2.5" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
     </defs>
   );
 }
@@ -136,7 +194,7 @@ function FlowGradients() {
 export default function NetFlowPanel({ data }: Props) {
   const {
     symbol,
-    spot        = 0,
+    spot             = 0,
     call_premium     = 0,
     put_premium      = 0,
     net_flow         = 0,
@@ -150,19 +208,14 @@ export default function NetFlowPanel({ data }: Props) {
   const putPct     = 100 - callPct;
   const isCallBias = net_flow >= 0;
 
-  // ── Day-range selector ────────────────────────────────────────────────────
   const [days, setDays] = useState<DayRange>(1);
-
-  // ── Hover crosshair state for stats bar ──────────────────────────────────
   const [hovered, setHovered] = useState<Snapshot | null>(null);
-
-  // ── History fetch ─────────────────────────────────────────────────────────
   const [history, setHistory] = useState<Snapshot[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchHistory = useCallback(async (d: DayRange) => {
     try {
-      const snaps = await api.get<Snapshot[]>(`/options/net-flow-history/${symbol}?days=${d}`);
+      const snaps = await api.get<Snapshot[]>(`/options/net-flow-history/${symbol}?days=${d}&bucket=${BUCKET_MINUTES[d]}`);
       if (snaps?.length) setHistory(snaps);
     } catch { /* ignore */ }
   }, [symbol]);
@@ -175,43 +228,69 @@ export default function NetFlowPanel({ data }: Props) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [symbol, days, fetchHistory]);
 
-  // Seed with current snapshot while history loads
   const chartData = useMemo(() => {
     if (history.length > 0) {
-      return history.map(s => ({ ...s, t: fmtSnapTime(s.ts, days) }));
+      return history.map(s => ({ ...s, t: s.ts })); // keep raw ISO as key; format in tick component
     }
     if (!spot) return [];
-    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-    return [{ ts: new Date().toISOString(), t: now, price: spot, call_prem: call_premium,
+    return [{ ts: new Date().toISOString(), t: new Date().toISOString(), price: spot, call_prem: call_premium,
               put_prem: put_premium, net_flow, total_prem: total, volume: total_volume }];
   }, [history, days, spot, call_premium, put_premium, net_flow, total, total_volume]);
 
-  // Domains
+  // ── Explicit tick values at clean interval boundaries ────────────────────
+  // For 1D/2D/3D: every full hour. For 7D/14D/30D: every midnight (1 day).
+  const xTicks = useMemo(() => {
+    if (!chartData.length) return [];
+    const bucketMs = BUCKET_MINUTES[days] * 60 * 1000;
+    const first = parseIso(chartData[0].ts).getTime();
+    const last  = parseIso(chartData[chartData.length - 1].ts).getTime();
+    const ticks: string[] = [];
+    // Start at the next clean boundary at or after `first`
+    let t = Math.ceil(first / bucketMs) * bucketMs;
+    while (t <= last) {
+      const iso = new Date(t).toISOString();
+      // Only include if a data point exists at (or close to) this boundary
+      const match = chartData.find(d => Math.abs(parseIso(d.ts).getTime() - t) < bucketMs / 2);
+      if (match) ticks.push(match.ts);
+      t += bucketMs;
+    }
+    // Always include first and last
+    if (!ticks.includes(chartData[0].ts)) ticks.unshift(chartData[0].ts);
+    if (!ticks.includes(chartData[chartData.length - 1].ts)) ticks.push(chartData[chartData.length - 1].ts);
+    return ticks;
+  }, [chartData, days]);
+
+  // Format a raw ISO ts for the X-axis label
+  const fmtTick = (iso: string) => fmtSnapTime(iso, days);
+
+  // ── Price domain — tight around actual range ──────────────────────────────
   const [priceMin, priceMax] = useMemo(() => {
     if (!chartData.length) return [0, 1];
-    const p = chartData.map(d => d.price);
+    const p = chartData.map(d => d.price).filter(v => v > 0);
+    if (!p.length) return [0, 1];
     const mn = Math.min(...p), mx = Math.max(...p);
-    const pad = (mx - mn) * 0.15 || mx * 0.005;
-    return [mn - pad, mx + pad];
+    const range = mx - mn;
+    // Pad by 2% of actual range each side — maximises visible movement.
+    // Tiny absolute fallback (0.05% of price) for single-snapshot flat case.
+    const pad = range > 0 ? range * 0.02 : mx * 0.0005;
+    return [parseFloat((mn - pad).toFixed(2)), parseFloat((mx + pad).toFixed(2))];
   }, [chartData]);
 
+  // ── Premium domain — symmetric so call/put areas are visually comparable ─
   const premMax = useMemo(() => {
     if (!chartData.length) return 1;
-    return Math.max(...chartData.flatMap(d => [d.call_prem, d.put_prem])) * 1.25;
+    const mx = Math.max(...chartData.flatMap(d => [d.call_prem, d.put_prem]));
+    return mx * 1.15;
   }, [chartData]);
 
   const volMax = useMemo(() => {
     if (!chartData.length) return 1;
-    return Math.max(...chartData.map(d => d.volume)) * 4; // push vol bars to bottom quarter
+    return Math.max(...chartData.map(d => d.volume)) * 4;
   }, [chartData]);
 
-  // Stats to show in the header — live or hovered
   const stats = hovered ?? {
-    price:      spot,
-    volume:     total_volume,
-    total_prem: total,
-    net_flow,
-    call_prem:  call_premium,
+    price: spot, volume: total_volume,
+    total_prem: total, net_flow, call_prem: call_premium,
   };
 
   // ── Expiry bar data ───────────────────────────────────────────────────────
@@ -222,79 +301,99 @@ export default function NetFlowPanel({ data }: Props) {
       .map(r => ({ expiry: r.expiry, Calls: r.call_prem, Puts: r.put_prem })),
   [flow_by_expiry]);
 
-  // ── Strike diverging bar data ─────────────────────────────────────────────
   const strikeData = useMemo(() =>
     [...top_flow_strikes]
       .sort((a, b) => a.strike - b.strike)
       .map(s => ({ strike: s.strike.toLocaleString(), Net: s.net, bias: s.bias })),
   [top_flow_strikes]);
 
-  // ── Table ─────────────────────────────────────────────────────────────────
   const tableStrikes: TopFlowStrike[] = useMemo(() =>
     [...top_flow_strikes].sort((a, b) => b.call_prem + b.put_prem - (a.call_prem + a.put_prem)),
   [top_flow_strikes]);
 
+  const hasEnoughData = chartData.length >= 5;
+
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-xl">
 
       {/* ══ HEADER BAND ══════════════════════════════════════════════════════ */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)] bg-[var(--surface-2)]">
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col">
-            <span className="text-[11px] text-foreground/70 uppercase tracking-widest font-medium leading-none mb-0.5">Net Flow</span>
-            <span className="text-lg font-bold text-foreground tracking-tight leading-none">{symbol}</span>
+      <div className="relative flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-gradient-to-r from-[var(--surface-2)] to-[var(--surface)]">
+        {/* Ambient glow behind bias badge */}
+        <div className={`absolute right-0 top-0 w-32 h-full opacity-10 pointer-events-none ${isCallBias ? "bg-emerald-500" : "bg-red-500"}`}
+          style={{ maskImage: "linear-gradient(to left, black, transparent)" }} />
+        <div className="flex items-center gap-3 z-10">
+          <div className="flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
+            style={{ background: isCallBias ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)", border: `1px solid ${isCallBias ? "rgba(52,211,153,0.25)" : "rgba(248,113,113,0.25)"}` }}>
+            <span className="text-base leading-none">{isCallBias ? "▲" : "▼"}</span>
           </div>
-          {spot > 0 && (
-            <span className="text-[13px] font-semibold text-yellow-500 dark:text-yellow-400 tabular-nums ml-1">
-              ${spot.toFixed(2)}
-            </span>
-          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-foreground uppercase tracking-widest font-semibold">Net Flow</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[var(--border)] text-foreground/70 uppercase tracking-wide">{symbol}</span>
+            </div>
+            {spot > 0 && (
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-2xl font-black text-yellow-400 tabular-nums leading-none">${spot.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide ${
+        <div className="flex items-center gap-2 z-10">
+          <span className={`text-[11px] font-black px-3 py-1.5 rounded-full tracking-wider shadow-sm ${
             isCallBias
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-              : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/10"
+              : "bg-red-500/15 text-red-400 border border-red-500/30 shadow-red-500/10"
           }`}>
             {isCallBias ? "▲ CALLS" : "▼ PUTS"}
           </span>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-3.5">
 
         {/* ══ KPI ROW ══════════════════════════════════════════════════════ */}
         <div className="grid grid-cols-3 gap-2">
           {/* Call Premium */}
-          <div className="rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 px-3 py-2.5">
-            <p className="text-[9px] text-emerald-600 dark:text-emerald-400 opacity-70 uppercase tracking-widest font-semibold mb-1">Call Prem</p>
-            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums leading-none">{fmt(call_premium)}</p>
+          <div className="relative rounded-xl overflow-hidden bg-emerald-500/10 border border-emerald-500/30 px-3 py-3">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/15 to-transparent pointer-events-none" />
+            <p className="text-[9px] text-emerald-300 uppercase tracking-widest font-bold mb-1.5">Call Prem</p>
+            <p className="text-[16px] font-black text-emerald-300 tabular-nums leading-none">{fmt(call_premium)}</p>
+            <p className="text-[8px] text-emerald-400/70 mt-1 font-semibold">{callPct.toFixed(1)}% of total</p>
           </div>
           {/* Net Flow */}
-          <div className={`rounded-xl border px-3 py-2.5 ${
-            isCallBias
-              ? "bg-emerald-500/[0.08] border-emerald-500/20"
-              : "bg-red-500/[0.08] border-red-500/20"
+          <div className={`relative rounded-xl overflow-hidden border px-3 py-3 ${
+            isCallBias ? "bg-emerald-500/10 border-emerald-500/30" : "bg-red-500/10 border-red-500/30"
           }`}>
-            <p className={`text-[9px] uppercase tracking-widest font-semibold mb-1 opacity-70 ${isCallBias ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>Net Flow</p>
-            <p className={`text-sm font-bold tabular-nums leading-none ${isCallBias ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{fmt(net_flow)}</p>
+            <div className={`absolute inset-0 bg-gradient-to-br pointer-events-none ${isCallBias ? "from-emerald-500/15 to-transparent" : "from-red-500/15 to-transparent"}`} />
+            <p className={`text-[9px] uppercase tracking-widest font-bold mb-1.5 ${isCallBias ? "text-emerald-300" : "text-red-300"}`}>Net Flow</p>
+            <p className={`text-[16px] font-black tabular-nums leading-none ${isCallBias ? "text-emerald-300" : "text-red-300"}`}>{fmt(net_flow)}</p>
+            <p className={`text-[8px] mt-1 font-semibold ${isCallBias ? "text-emerald-400/70" : "text-red-400/70"}`}>{isCallBias ? "call dominant" : "put dominant"}</p>
           </div>
           {/* Put Premium */}
-          <div className="rounded-xl bg-red-500/[0.08] border border-red-500/20 px-3 py-2.5">
-            <p className="text-[9px] text-red-600 dark:text-red-400 opacity-70 uppercase tracking-widest font-semibold mb-1">Put Prem</p>
-            <p className="text-sm font-bold text-red-600 dark:text-red-400 tabular-nums leading-none">{fmt(put_premium)}</p>
+          <div className="relative rounded-xl overflow-hidden bg-red-500/10 border border-red-500/30 px-3 py-3">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/15 to-transparent pointer-events-none" />
+            <p className="text-[9px] text-red-300 uppercase tracking-widest font-bold mb-1.5">Put Prem</p>
+            <p className="text-[16px] font-black text-red-300 tabular-nums leading-none">{fmt(put_premium)}</p>
+            <p className="text-[8px] text-red-400/70 mt-1 font-semibold">{putPct.toFixed(1)}% of total</p>
           </div>
         </div>
 
         {/* ══ CALL / PUT SPLIT BAR ═════════════════════════════════════════ */}
-        <div>
-          <div className="flex justify-between text-[9px] font-semibold uppercase tracking-widest mb-1.5">
-            <span className="text-emerald-600 dark:text-emerald-400 opacity-80">Calls {callPct.toFixed(1)}%</span>
-            <span className="text-red-600 dark:text-red-400 opacity-80">Puts {putPct.toFixed(1)}%</span>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+          <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest mb-2">
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+              Calls {callPct.toFixed(1)}%
+            </span>
+            <span className="text-foreground text-[8px] font-semibold tabular-nums">Total {fmt(call_premium + put_premium)}</span>
+            <span className="flex items-center gap-1.5 text-red-400">
+              Puts {putPct.toFixed(1)}%
+              <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+            </span>
           </div>
-          <div className="h-1.5 rounded-full overflow-hidden flex bg-[var(--surface-2)]">
-            <div className="bg-emerald-500 rounded-l-full transition-all duration-700" style={{ width: `${callPct}%` }} />
-            <div className="bg-red-500 rounded-r-full transition-all duration-700" style={{ width: `${putPct}%` }} />
+          <div className="h-2 rounded-full overflow-hidden flex bg-[var(--border)] gap-px">
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-l-full transition-all duration-700 shadow-sm" style={{ width: `${callPct}%` }} />
+            <div className="bg-gradient-to-l from-red-600 to-red-400 rounded-r-full transition-all duration-700 shadow-sm" style={{ width: `${putPct}%` }} />
           </div>
         </div>
 
@@ -302,143 +401,150 @@ export default function NetFlowPanel({ data }: Props) {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden">
 
           {/* Chart controls row */}
-          <div className="flex items-center justify-between px-3 pt-3 pb-2">
-
-            {/* Live stats */}
+          <div className="flex items-center justify-between px-3 pt-2.5 pb-2 border-b border-[var(--border)]/50">
             <div className="flex items-center gap-3 text-[10px]">
               {spot > 0 && (
-                <span className="text-foreground/70">
-                  <span className="text-yellow-500 dark:text-yellow-400 font-bold tabular-nums">${(stats.price ?? spot).toFixed(2)}</span>
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" />
+                  <span className="text-yellow-400 font-black tabular-nums">${(stats.price ?? spot).toFixed(2)}</span>
                 </span>
               )}
               <span className="text-foreground/70">
-                Prem <span className="text-foreground font-semibold tabular-nums">{fmt(stats.total_prem ?? 0)}</span>
+                Prem <span className="text-white font-bold tabular-nums">{fmt(stats.total_prem ?? 0)}</span>
               </span>
-              <span className="text-foreground/70">
-                Net <span className={`font-bold tabular-nums ${(stats.net_flow ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                  {fmt(stats.net_flow ?? 0)}
-                </span>
-              </span>
-              <span className="text-foreground/70">
-                Vol <span className="text-foreground font-semibold tabular-nums">{fmtVol(stats.volume ?? 0)}</span>
+              <span className={`font-black tabular-nums ${(stats.net_flow ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {(stats.net_flow ?? 0) >= 0 ? "▲" : "▼"} {fmt(Math.abs(stats.net_flow ?? 0))}
               </span>
             </div>
-
-            {/* Range pills */}
-            <div className="flex gap-0.5">
+            <div className="flex items-center bg-[var(--surface)] rounded-lg p-0.5 gap-0.5 border border-[var(--border)]">
               {DAY_RANGES.map(d => (
-                <button
-                  key={d}
-                  onClick={() => setDays(d)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all ${
+                <button key={d} onClick={() => setDays(d)}
+                  className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all ${
                     days === d
-                      ? "bg-[var(--surface)] text-foreground shadow-sm border border-[var(--border)]"
-                      : "text-foreground/70 hover:text-foreground dark:hover:text-foreground"
-                  }`}
-                >
-                  {d}D
-                </button>
+                      ? "bg-[var(--border)] text-white shadow-sm"
+                      : "text-foreground/60 hover:text-foreground"
+                  }`}>{d}D</button>
               ))}
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-4 px-3 pb-2">
-            <span className="flex items-center gap-1.5 text-[9px] text-foreground/70 uppercase tracking-wide font-semibold">
-              <span className="inline-block w-4 h-0.5 bg-yellow-400 rounded-full" />{symbol}
-            </span>
-            <span className="flex items-center gap-1.5 text-[9px] text-foreground/70 uppercase tracking-wide font-semibold">
-              <span className="inline-block w-4 h-0.5 bg-emerald-500 rounded-full" />Call Prem
-            </span>
-            <span className="flex items-center gap-1.5 text-[9px] text-foreground/70 uppercase tracking-wide font-semibold">
-              <span className="inline-block w-4 h-0.5 bg-red-500 rounded-full" />Put Prem
-            </span>
-          </div>
-
-          {/* Chart */}
-          {chartData.length < 5 ? (
-          <div className="flex flex-col items-center justify-center h-[260px] gap-2.5 text-foreground/40">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 17l4-8 4 5 3-4 4 6"/>
-              <path d="M21 21H3" strokeWidth="1" opacity="0.4"/>
-            </svg>
-            <p className="text-[11px] font-semibold text-foreground/70">Building history…</p>
-            <p className="text-[9px] text-foreground/70 text-center max-w-[180px] leading-relaxed">
-                {chartData.length} snapshot{chartData.length !== 1 ? "s" : ""} collected.
-                Updates every 15s.
-              </p>
+          {!hasEnoughData ? (
+            <div className="flex flex-col items-center justify-center h-[340px] gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--border)] flex items-center justify-center">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-foreground/50">
+                  <path d="M3 17l4-8 4 5 3-4 4 6"/><path d="M21 21H3" strokeWidth="1" opacity="0.4"/>
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-[11px] font-bold text-foreground">Building history…</p>
+                <p className="text-[9px] text-foreground/70 mt-1">
+                  {chartData.length} of 5 snapshots · updates every 15s
+                </p>
+              </div>
+              {/* Mini progress dots */}
+              <div className="flex gap-1">
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i < chartData.length ? "bg-purple-500" : "bg-[var(--border)]"}`} />
+                ))}
+              </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart
-                data={chartData}
-                margin={{ top: 4, right: 52, left: 0, bottom: 0 }}
-                onMouseMove={(e: any) => {
-                  const pt = e?.activePayload?.[0]?.payload as Snapshot | undefined;
-                  if (pt) setHovered(pt);
-                }}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <FlowGradients />
-                <CartesianGrid stroke="rgba(128,128,128,0.12)" strokeDasharray="4 4" vertical={false} />
+            <>
+              {/* ── TOP PANEL: Price (gold line) — own dedicated chart ──── */}
+              <div className="px-1 pt-2">
+                <div className="flex items-center gap-2 px-2 pb-1">
+                  <span className="w-4 h-[2px] rounded-full bg-yellow-400 inline-block shadow-[0_0_6px_rgba(250,204,21,0.6)]" />
+                  <span className="text-[9px] text-yellow-400/80 font-bold uppercase tracking-widest">{symbol} Price</span>
+                </div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <ComposedChart data={chartData} margin={{ top: 6, right: 54, left: 0, bottom: 0 }}
+                    onMouseMove={(e: any) => { const pt = e?.activePayload?.[0]?.payload as Snapshot | undefined; if (pt) setHovered(pt); }}
+                    onMouseLeave={() => setHovered(null)}>
+                    <FlowGradients />
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="t" hide />
+                    <YAxis
+                      yAxisId="price"
+                      orientation="right"
+                      domain={[priceMin, priceMax]}
+                      tickFormatter={v => `$${Number(v).toFixed(2)}`}
+                      tick={<PriceTick />}
+                      axisLine={false} tickLine={false} width={58}
+                      tickCount={5}
+                    />
+                    <Tooltip content={<ChartTooltip />}
+                      cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, strokeDasharray: "3 3" }} />
+                    <Area yAxisId="price" type="monotone" dataKey="price" name="Price"
+                      stroke={PRICE_COLOR} strokeWidth={2.5}
+                      fill="url(#gPrice)"
+                      dot={false} activeDot={{ r: 5, fill: PRICE_COLOR, stroke: "#000", strokeWidth: 1.5 }}
+                      isAnimationActive={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
 
-                {/* No XAxis — timestamps removed */}
-                <XAxis dataKey="t" hide />
+              {/* Divider with label */}
+              <div className="mx-3 flex items-center gap-2 opacity-60">
+                <div className="flex-1 border-t border-dashed border-[var(--border)]" />
+                <span className="text-[8px] text-foreground/60 font-semibold uppercase tracking-widest">Premium</span>
+                <div className="flex-1 border-t border-dashed border-[var(--border)]" />
+              </div>
 
-                {/* Left: price */}
-                <YAxis
-                  yAxisId="price"
-                  orientation="left"
-                  domain={[priceMin, priceMax]}
-                  tickFormatter={v => `$${Number(v).toFixed(0)}`}
-                  tick={{ fill: "#9ca3af", fontSize: 9 }}
-                  axisLine={false} tickLine={false} width={50}
-                />
-
-                {/* Right: premium */}
-                <YAxis
-                  yAxisId="prem"
-                  orientation="right"
-                  domain={[0, premMax]}
-                  tickFormatter={fmtAxis}
-                  tick={{ fill: "#9ca3af", fontSize: 9 }}
-                  axisLine={false} tickLine={false} width={42}
-                />
-
-                {/* Hidden axis for volume bars (bottom quarter) */}
-                <YAxis yAxisId="vol" orientation="right" domain={[0, volMax]} hide />
-
-                <Tooltip
-                  content={<ChartTooltip />}
-                  cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1 }}
-                />
-
-                {/* Volume bars */}
-                <Bar yAxisId="vol" dataKey="volume" name="Vol" maxBarSize={6} isAnimationActive={false}>
-                  {chartData.map((d, i) => (
-                    <Cell key={`vc-${i}`} fill={d.net_flow >= 0 ? VOL_CALL : VOL_PUT} />
-                  ))}
-                </Bar>
-
-                {/* Call premium area */}
-                <Area yAxisId="prem" type="linear" dataKey="call_prem" name="Net Call Prem"
-                  stroke={NET_CALL} strokeWidth={1.5} fill="url(#gCall)"
-                  dot={false} activeDot={{ r: 3, fill: NET_CALL }} isAnimationActive={false}
-                />
-
-                {/* Put premium area */}
-                <Area yAxisId="prem" type="linear" dataKey="put_prem" name="Net Put Prem"
-                  stroke={NET_PUT} strokeWidth={1.5} fill="url(#gPut)"
-                  dot={false} activeDot={{ r: 3, fill: NET_PUT }} isAnimationActive={false}
-                />
-
-                {/* Price line */}
-                <Line yAxisId="price" type="linear" dataKey="price" name="Price"
-                  stroke={PRICE_COLOR} strokeWidth={2}
-                  dot={false} activeDot={{ r: 3, fill: PRICE_COLOR }} isAnimationActive={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+              {/* ── BOTTOM PANEL: Call + Put premium + volume bars ──────── */}
+              <div className="px-1 pb-2">
+                <div className="flex items-center gap-4 px-2 py-1">
+                  <span className="flex items-center gap-1.5 text-[9px] text-emerald-400/80 uppercase tracking-wide font-bold">
+                    <span className="w-3 h-[2px] bg-emerald-400 rounded-full inline-block" />Call
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[9px] text-red-400/80 uppercase tracking-wide font-bold">
+                    <span className="w-3 h-[2px] bg-red-400 rounded-full inline-block" />Put
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[9px] text-foreground/60 uppercase tracking-wide font-semibold">
+                    <span className="w-2.5 h-2 bg-gray-600/50 rounded-sm inline-block" />Vol
+                  </span>
+                </div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <ComposedChart data={chartData} margin={{ top: 4, right: 54, left: 0, bottom: 16 }}
+                    onMouseMove={(e: any) => { const pt = e?.activePayload?.[0]?.payload as Snapshot | undefined; if (pt) setHovered(pt); }}
+                    onMouseLeave={() => setHovered(null)}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="t"
+                      tick={<AxisTick />}
+                      axisLine={false} tickLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      yAxisId="prem"
+                      orientation="right"
+                      domain={[0, premMax]}
+                      tickFormatter={fmtAxis}
+                      tick={<AxisTickRight />}
+                      axisLine={false} tickLine={false} width={52}
+                      tickCount={4}
+                    />
+                    <YAxis yAxisId="vol" orientation="left" domain={[0, volMax]} hide />
+                    <Tooltip content={<ChartTooltip />}
+                      cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, strokeDasharray: "3 3" }} />
+                    <Bar yAxisId="vol" dataKey="volume" name="Vol" maxBarSize={5} isAnimationActive={false}>
+                      {chartData.map((d, i) => (
+                        <Cell key={`vc-${i}`} fill={d.net_flow >= 0 ? VOL_CALL : VOL_PUT} />
+                      ))}
+                    </Bar>
+                    <Area yAxisId="prem" type="monotone" dataKey="put_prem" name="Put Prem"
+                      stroke={NET_PUT} strokeWidth={2}
+                      fill="url(#gPut)"
+                      dot={false} activeDot={{ r: 4, fill: NET_PUT, stroke: "#000", strokeWidth: 1 }} isAnimationActive={false}
+                    />
+                    <Area yAxisId="prem" type="monotone" dataKey="call_prem" name="Call Prem"
+                      stroke={NET_CALL} strokeWidth={2}
+                      fill="url(#gCall)"
+                      dot={false} activeDot={{ r: 4, fill: NET_CALL, stroke: "#000", strokeWidth: 1 }} isAnimationActive={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </>
           )}
         </div>
 
@@ -449,23 +555,26 @@ export default function NetFlowPanel({ data }: Props) {
             {/* Flow by Expiry */}
             {expiryData.length > 0 && (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
-                <p className="text-[9px] text-foreground/70 uppercase tracking-widest font-bold mb-3">Flow by Expiry</p>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
+                  <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Flow by Expiry</p>
+                </div>
                 <ResponsiveContainer width="100%" height={140}>
-                  <BarChart data={expiryData} barCategoryGap="30%" barGap={2} margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
-                    <CartesianGrid vertical={false} stroke="rgba(128,128,128,0.12)" />
-                    <XAxis dataKey="expiry" tick={{ fill: "#9ca3af", fontSize: 8 }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={fmtAxis} tick={{ fill: "#9ca3af", fontSize: 8 }} axisLine={false} tickLine={false} width={36} />
+                  <BarChart data={expiryData} barCategoryGap="28%" barGap={2} margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
+                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
+                    <XAxis dataKey="expiry" tick={<AxisTick color="#d1d5db" size={8} />} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={fmtAxis} tick={<AxisTickRight color="#d1d5db" size={8} />} axisLine={false} tickLine={false} width={36} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-                    <Bar dataKey="Calls" fill={CALL_COLOR} radius={[3, 3, 0, 0]} maxBarSize={16} />
-                    <Bar dataKey="Puts"  fill={PUT_COLOR}  radius={[3, 3, 0, 0]} maxBarSize={16} />
+                    <Bar dataKey="Calls" fill={CALL_COLOR} radius={[3, 3, 0, 0]} maxBarSize={14} />
+                    <Bar dataKey="Puts"  fill={PUT_COLOR}  radius={[3, 3, 0, 0]} maxBarSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="flex items-center gap-3 mt-2">
-                  <span className="flex items-center gap-1 text-[8px] text-foreground/70 uppercase tracking-wide font-semibold">
-                    <span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block" />Calls
+                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-white/10">
+                  <span className="flex items-center gap-1 text-[8px] text-emerald-300 uppercase tracking-wide font-semibold">
+                    <span className="w-2 h-2 rounded-sm bg-emerald-400 inline-block" />Calls
                   </span>
-                  <span className="flex items-center gap-1 text-[8px] text-foreground/70 uppercase tracking-wide font-semibold">
-                    <span className="w-2 h-2 rounded-sm bg-red-500 inline-block" />Puts
+                  <span className="flex items-center gap-1 text-[8px] text-red-300 uppercase tracking-wide font-semibold">
+                    <span className="w-2 h-2 rounded-sm bg-red-400 inline-block" />Puts
                   </span>
                 </div>
               </div>
@@ -474,15 +583,18 @@ export default function NetFlowPanel({ data }: Props) {
             {/* Net Flow by Strike */}
             {strikeData.length > 0 && (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
-                <p className="text-[9px] text-foreground/70 uppercase tracking-widest font-bold mb-3">Net Flow by Strike</p>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <div className="w-1 h-3 rounded-full bg-gradient-to-b from-emerald-400 to-red-400" />
+                  <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Net by Strike</p>
+                </div>
                 <ResponsiveContainer width="100%" height={140}>
                   <BarChart data={strikeData} layout="vertical" margin={{ top: 2, right: 2, left: 0, bottom: 2 }}>
-                    <CartesianGrid horizontal={false} stroke="rgba(128,128,128,0.12)" />
-                    <XAxis type="number" tickFormatter={fmtAxis} tick={{ fill: "#9ca3af", fontSize: 8 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="strike" tick={{ fill: "#6b7280", fontSize: 8 }} axisLine={false} tickLine={false} width={46} />
+                    <CartesianGrid horizontal={false} stroke="rgba(255,255,255,0.07)" />
+                    <XAxis type="number" tickFormatter={fmtAxis} tick={<AxisTick color="#d1d5db" size={8} />} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="strike" tick={<StrikeTick />} axisLine={false} tickLine={false} width={52} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-                    <ReferenceLine x={0} stroke="rgba(128,128,128,0.3)" strokeDasharray="3 3" />
-                    <Bar dataKey="Net" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                    <ReferenceLine x={0} stroke="rgba(128,128,128,0.25)" strokeDasharray="3 3" />
+                    <Bar dataKey="Net" radius={[0, 3, 3, 0]} maxBarSize={12}>
                       {strikeData.map((e, i) => (
                         <Cell key={`sc-${i}`} fill={e.Net >= 0 ? CALL_COLOR : PUT_COLOR} />
                       ))}
@@ -497,36 +609,48 @@ export default function NetFlowPanel({ data }: Props) {
         {/* ══ TOP FLOW STRIKES TABLE ════════════════════════════════════════ */}
         {tableStrikes.length > 0 && (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-[var(--border)] bg-[var(--surface)]">
-              <p className="text-[9px] text-foreground/70 uppercase tracking-widest font-bold">Top Flow Strikes</p>
+            <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center gap-2">
+              <div className="w-1 h-3 rounded-full bg-gradient-to-b from-purple-400 to-blue-400" />
+              <p className="text-[9px] text-foreground uppercase tracking-widest font-bold">Top Flow Strikes</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[11px] border-collapse">
                 <thead>
-                  <tr className="text-foreground/70 border-b border-[var(--border)]">
-                    <th className="text-left   px-4 py-2 font-semibold tracking-wide text-[9px] uppercase">Strike</th>
-                    <th className="text-right  px-4 py-2 font-semibold tracking-wide text-[9px] uppercase text-emerald-500/70">Call $</th>
-                    <th className="text-right  px-4 py-2 font-semibold tracking-wide text-[9px] uppercase text-red-500/70">Put $</th>
-                    <th className="text-right  px-4 py-2 font-semibold tracking-wide text-[9px] uppercase">Net</th>
-                    <th className="text-center px-4 py-2 font-semibold tracking-wide text-[9px] uppercase">Bias</th>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-left px-4 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Strike</th>
+                    <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-emerald-300">Call $</th>
+                    <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-red-300">Put $</th>
+                    <th className="text-right px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Net</th>
+                    <th className="text-center px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Split</th>
+                    <th className="text-center px-3 py-2 font-bold tracking-wide text-[9px] uppercase text-foreground">Bias</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tableStrikes.map((s, i) => (
-                    <tr key={s.strike} className={`border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors ${i % 2 === 0 ? "" : "bg-[var(--surface)]/40"}`}>
-                      <td className="px-4 py-2 font-bold text-foreground tabular-nums">{s.strike.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right text-emerald-600 dark:text-emerald-400 tabular-nums font-medium">{fmt(s.call_prem)}</td>
-                      <td className="px-4 py-2 text-right text-red-600 dark:text-red-400 tabular-nums font-medium">{fmt(s.put_prem)}</td>
-                      <td className={`px-4 py-2 text-right tabular-nums font-bold ${s.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{fmt(s.net)}</td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-block text-[8px] font-bold px-2 py-0.5 rounded-full tracking-wider ${
+                  {tableStrikes.map((s, i) => {
+                    const total = s.call_prem + s.put_prem;
+                    const cPct  = total > 0 ? (s.call_prem / total) * 100 : 50;
+                    return (
+                    <tr key={s.strike} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${i % 2 === 0 ? "" : "bg-white/[0.03]"}`}>
+                      <td className="px-4 py-2 font-black text-white tabular-nums">${s.strike.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right text-emerald-300 tabular-nums font-semibold">{fmt(s.call_prem)}</td>
+                      <td className="px-3 py-2 text-right text-red-300 tabular-nums font-semibold">{fmt(s.put_prem)}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums font-black ${s.net >= 0 ? "text-emerald-300" : "text-red-300"}`}>{fmt(s.net)}</td>
+                      <td className="px-3 py-2">
+                        <div className="w-full h-1.5 rounded-full overflow-hidden flex bg-[var(--border)] min-w-[48px]">
+                          <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-l-full" style={{ width: `${cPct}%` }} />
+                          <div className="bg-gradient-to-l from-red-600 to-red-400 h-full rounded-r-full" style={{ width: `${100-cPct}%` }} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full tracking-wider ${
                           s.bias === "call"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                            : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-                        }`}>{s.bias.toUpperCase()}</span>
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+                            : "bg-red-500/15 text-red-400 border border-red-500/25"
+                        }`}>{s.bias === "call" ? "▲ CALL" : "▼ PUT"}</span>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -537,3 +661,4 @@ export default function NetFlowPanel({ data }: Props) {
     </div>
   );
 }
+

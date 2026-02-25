@@ -25,6 +25,16 @@
   }
 }
 
+.dark {
+  --background: #0c0e14;
+  --foreground: #e8eaf2;
+  --surface:    #13151e;
+  --surface-2:  #1a1d29;
+  --border:     #252836;
+  --brand:      #6b82f8;
+  --brand-2:    #9461fb;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;

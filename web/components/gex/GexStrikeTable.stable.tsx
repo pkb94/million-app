@@ -127,7 +127,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
           </tr>
           {/* ── Row B: column labels — always renders ALL expiry columns ── */}
           <tr>
-            <th className="sticky top-[37px] z-10 bg-[var(--surface-2)] text-left px-2 py-1 text-[9px] font-bold text-foreground/70 uppercase tracking-wide border-b border-t border-[var(--border)]">
+            <th className="sticky top-[37px] z-10 bg-[var(--surface-2)] text-left px-2 py-1 text-[9px] font-bold text-foreground uppercase tracking-wide border-b border-t border-[var(--border)]">
               STRIKE
             </th>
             {allCols.map(({ exp, short }) => {
@@ -141,7 +141,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
                   style={isVisible ? undefined : { opacity: 0.18 }}
                 >
                   <div className="flex flex-col items-end gap-0.5">
-                    <span className={isVisible ? "text-foreground/70" : "text-foreground/40"}>{short}</span>
+                    <span className={isVisible ? "text-foreground" : "text-foreground/30"}>{short}</span>
                     {isVisible && colData && (
                       <span className="text-[8px] font-extrabold tracking-tight" style={{ color: gexColor }}>
                         {colData.netGex >= 0 ? "+" : ""}{fmtGex(colData.netGex)}
@@ -169,7 +169,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
                 <td
                   className={clsx(
                     "px-2 py-[3px] text-left border-b border-[var(--border)]",
-                    isSpot ? "font-extrabold text-foreground" : "text-foreground/70",
+                    isSpot ? "font-extrabold text-foreground" : "text-foreground",
                   )}
                 >
                   {isSpot && (

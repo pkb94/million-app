@@ -26,7 +26,7 @@ export function TopFlowStrikes({ data }: Props) {
 
           return (
             <div key={tf.strike} className="flex items-center gap-2 text-[10px]">
-              <span className="w-[52px] font-black tabular-nums text-white shrink-0">
+              <span className="w-[52px] font-black tabular-nums text-foreground shrink-0">
                 ${tf.strike.toFixed(0)}
               </span>
               <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-[var(--border)] min-w-0">

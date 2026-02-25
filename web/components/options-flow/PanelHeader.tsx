@@ -33,7 +33,7 @@ export function PanelHeader({
         accentColor={accentColor}
         placeholder="Ticker or company…"
         actionLabel="LOAD"
-        className="flex-1 max-w-[280px]"
+        className="flex-1 min-w-0 max-w-[600px]"
       />
 
       {/* Live status */}

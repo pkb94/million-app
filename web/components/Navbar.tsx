@@ -8,8 +8,9 @@ import { clsx } from "clsx";
 import {
   LayoutDashboard, Zap, BarChart2, ClipboardList,
   Wallet, PiggyBank, BookOpen, Settings, LogOut, Menu, X,
-  ChevronRight, PanelLeftClose, PanelLeftOpen, Globe,
+  ChevronRight, PanelLeftClose, PanelLeftOpen, Globe, Sun, Moon,
 } from "lucide-react";
+import { useTheme } from "@/lib/theme";
 
 const NAV = [
   { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
@@ -26,8 +27,9 @@ const NAV = [
 export default function Navbar() {
   const pathname             = usePathname();
   const router               = useRouter();
-  const { user, logout }     = useAuth();
-  const { collapsed, toggle } = useSidebar();
+  const { user, logout }          = useAuth();
+  const { collapsed, toggle }      = useSidebar();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -180,6 +182,19 @@ export default function Navbar() {
             </div>
           )}
           <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className={clsx(
+              "w-full flex items-center gap-3 rounded-xl text-sm font-medium text-foreground/70 hover:bg-[var(--surface-2)] hover:text-foreground transition-all",
+              collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
+            )}
+          >
+            {theme === "dark"
+              ? <Sun size={16} strokeWidth={1.8} className="shrink-0" />
+              : <Moon size={16} strokeWidth={1.8} className="shrink-0" />}
+            {!collapsed && (theme === "dark" ? "Light mode" : "Dark mode")}
+          </button>
+          <button
             onClick={handleLogout}
             title={collapsed ? "Sign out" : undefined}
             className={clsx(
@@ -243,7 +258,16 @@ export default function Navbar() {
                 />
               ))}
             </nav>
-            <div className="px-3 pb-6 pt-2 border-t border-[var(--border)]">
+            <div className="px-3 pb-6 pt-2 border-t border-[var(--border)] space-y-1">
+              <button
+                onClick={toggleTheme}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground/70 hover:bg-[var(--surface-2)] hover:text-foreground transition-all"
+              >
+                {theme === "dark"
+                  ? <Sun size={16} strokeWidth={1.8} />
+                  : <Moon size={16} strokeWidth={1.8} />}
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground/70 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all"

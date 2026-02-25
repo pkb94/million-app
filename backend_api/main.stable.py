@@ -7,6 +7,25 @@ import threading
 from typing import Any, Dict, List, Optional, Set
 from datetime import datetime, timezone, timedelta as _td
 
+# ── Load .env if present (before anything else reads env vars) ────────────────
+def _load_dotenv() -> None:
+    """Minimal .env loader — no extra dependencies required."""
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    env_path = os.path.normpath(env_path)
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:   # don't override existing env
+                os.environ[key] = val
+_load_dotenv()
+
 # ── GEX response cache ────────────────────────────────────────────────────────
 # yfinance refreshes options data roughly every 15s; caching here prevents
 # hammering yfinance on rapid polls and keeps response times fast.
@@ -436,15 +455,16 @@ _DAYS_LABEL = {1: "%H:%M", 2: "%m/%d %H:%M", 3: "%m/%d %H:%M",
                7: "%m/%d", 14: "%m/%d", 30: "%m/%d"}
 
 @app.get("/options/net-flow-history/{symbol}", response_model=List[Dict[str, Any]])
-def net_flow_history(symbol: str, days: int = 1, _user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+def net_flow_history(symbol: str, days: int = 1, bucket: int = 0, _user=Depends(get_current_user)) -> List[Dict[str, Any]]:
     """Return net-flow snapshot history for a symbol.
-    ?days= controls how many calendar days of history to return (1‥30).
+    ?days=   controls how many calendar days of history to return (1‥30).
+    ?bucket= bucket size in minutes (0 = no bucketing, return raw rows).
+             Typical usage: bucket=60 for 1-hr candles, bucket=1440 for 1-day candles.
     Returns raw ISO-8601 UTC timestamps so the frontend can render in local time.
     """
     days = max(1, min(days, 30))
     sym = symbol.upper()
     cutoff_dt = datetime.now(_tz.utc) - _td(days=days)
-    # Store both formats as since values — old rows used +00:00, new ones use Z
     since_z   = cutoff_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     since_off = cutoff_dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
     with _flow_db() as con:
@@ -453,10 +473,46 @@ def net_flow_history(symbol: str, days: int = 1, _user=Depends(get_current_user)
             "FROM net_flow_snapshots WHERE symbol=? AND (ts>=? OR ts>=?) ORDER BY ts",
             (sym, since_z, since_off),
         ).fetchall()
+
+    if not rows:
+        return []
+
+    # ── Optional bucketing ────────────────────────────────────────────────────
+    if bucket and bucket > 0:
+        from collections import defaultdict
+        import math
+        bucket_secs = bucket * 60
+        buckets: dict = defaultdict(list)
+        for ts, price, cp, pp, nf, tp, vol in rows:
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                epoch = int(dt.timestamp())
+                key = (epoch // bucket_secs) * bucket_secs
+                buckets[key].append((ts, price, cp, pp, nf, tp, vol))
+            except Exception:
+                continue
+        result = []
+        for key in sorted(buckets):
+            group = buckets[key]
+            # Use last snapshot in bucket for price/flow (most recent value)
+            last = group[-1]
+            bucket_ts = datetime.fromtimestamp(key, tz=_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            result.append({
+                "ts":         bucket_ts,
+                "price":      last[1],
+                "call_prem":  last[2],
+                "put_prem":   last[3],
+                "net_flow":   last[4],
+                "total_prem": last[5],
+                "volume":     sum(r[6] for r in group),
+            })
+        return result
+
+    # ── Raw rows ──────────────────────────────────────────────────────────────
     result = []
     for ts, price, cp, pp, nf, tp, vol in rows:
         result.append({
-            "ts":         ts,          # raw ISO-8601 UTC — frontend formats in local tz
+            "ts":         ts,
             "price":      price,
             "call_prem":  cp,
             "put_prem":   pp,
@@ -1213,6 +1269,7 @@ def gamma_exposure(symbol: str, _user=Depends(get_current_user)) -> Dict[str, An
         "total_volume": result.total_volume,
         "flow_by_expiry": result.flow_by_expiry,
         "top_flow_strikes": result.top_flow_strikes,
+        "data_source": getattr(result, "data_source", "yfinance"),
         "error": result.error,
     }
 

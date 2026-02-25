@@ -3,9 +3,10 @@
  * TickerPanel — assembles all GEX sub-sections for a single ticker.
  * TickerPanelWithQuery — wraps TickerPanel with its own react-query data fetch.
  */
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchGex, GexResult } from "@/lib/api";
-import { BarChart2 } from "lucide-react";
+import { BarChart2, Zap, TrendingUp } from "lucide-react";
 import { SkeletonStatGrid, ErrorBanner } from "@/components/ui";
 import GexStrikeTable from "@/components/gex/GexStrikeTable";
 import NetFlowPanel from "@/components/gex/NetFlowPanel";
@@ -31,6 +32,13 @@ export function makeSlot(ticker: string): Slot {
 
 // ── Available strike-depth options ───────────────────────────────────────────
 export const STRIKE_OPTIONS = [10, 20, 30, 40, 50] as const;
+
+// ── Panel tabs ────────────────────────────────────────────────────────────────
+type PanelTab = "gex" | "flow";
+const TABS: { id: PanelTab; label: string; icon: typeof Zap }[] = [
+  { id: "gex",  label: "GEX",      icon: Zap       },
+  { id: "flow", label: "Net Flow", icon: TrendingUp },
+];
 
 // ── Strikes depth selector (reusable inside panel header area) ────────────────
 function StrikesSelector({
@@ -116,6 +124,8 @@ export function TickerPanel({
   // Derive single selected expiry from the slot's filter array
   const selectedExpiry = slot.expiryFilter?.[0] ?? null;
 
+  const [activeTab, setActiveTab] = useState<PanelTab>("gex");
+
   return (
     <div
       className="flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xl"
@@ -130,6 +140,28 @@ export function TickerPanel({
           background: `linear-gradient(90deg, ${accentColor}, ${accentColor}55, transparent)`,
         }}
       />
+
+      {/* ── Tab selector ──────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 px-4 pt-2.5 pb-0 border-b border-[var(--border)] bg-[var(--surface-2)]">
+        {TABS.map(({ id, label, icon: Icon }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold tracking-wide rounded-t-lg border-b-2 transition-all ${
+                active
+                  ? "border-b-[var(--border)] text-foreground bg-[var(--surface)]"
+                  : "border-transparent text-foreground/50 hover:text-foreground/80 hover:bg-[var(--surface)]/50"
+              }`}
+              style={active ? { borderBottomColor: accentColor, color: accentColor } : undefined}
+            >
+              <Icon size={11} strokeWidth={active ? 2.5 : 1.8} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Search header */}
       <PanelHeader
@@ -156,69 +188,76 @@ export function TickerPanel({
 
       {data && (
         <>
-          {/* Key level cards */}
-          <GexKeyLevels data={data} ticker={slot.ticker} />
+          {/* ── GEX Tab ─────────────────────────────────────────────── */}
+          {activeTab === "gex" && (
+            <>
+              {/* Key level cards */}
+              <GexKeyLevels data={data} ticker={slot.ticker} />
 
-          {/* Dealer insight text */}
-          <InsightBar data={data} />
+              {/* Dealer insight text */}
+              <InsightBar data={data} />
 
-          {/* Expiry picker */}
-          <ExpiryFilter
-            expiryDates={expiryDates}
-            selectedExpiry={selectedExpiry}
-            accentColor={accentColor}
-            onSelect={(d) => onToggleExpiry(d)}
-            onClear={onClearExpiry}
-          />
+              {/* Expiry picker */}
+              <ExpiryFilter
+                expiryDates={expiryDates}
+                selectedExpiry={selectedExpiry}
+                accentColor={accentColor}
+                onSelect={(d) => onToggleExpiry(d)}
+                onClear={onClearExpiry}
+              />
 
-          {/* Premium flow P/C */}
-          <PremiumFlow data={data} />
+              {/* Premium flow P/C */}
+              <PremiumFlow data={data} />
 
-          {/* Top flow strikes */}
-          <TopFlowStrikes data={data} />
+              {/* Top flow strikes */}
+              <TopFlowStrikes data={data} />
 
-          {/* Flow by expiry */}
-          <FlowByExpiry data={data} />
+              {/* Flow by expiry */}
+              <FlowByExpiry data={data} />
 
-          {/* GEX Strike Table */}
-          <div className="border-b border-[var(--border)]">
-            <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--surface-2)]">
-              <div className="flex items-center gap-2">
-                <BarChart2 size={11} className="text-foreground/60" />
-                <span className="text-[9px] text-foreground uppercase tracking-widest font-black">
-                  GEX by Strike
-                </span>
-                <span
-                  className="text-[9px] font-black px-2 py-0.5 rounded-md ml-1"
-                  style={{
-                    background: `${accentColor}18`,
-                    color: accentColor,
-                    border: `1px solid ${accentColor}30`,
-                  }}
-                >
-                  {slot.ticker}
-                </span>
+              {/* GEX Strike Table */}
+              <div className="border-b border-[var(--border)]">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--surface-2)]">
+                  <div className="flex items-center gap-2">
+                    <BarChart2 size={11} className="text-foreground/60" />
+                    <span className="text-[9px] text-foreground uppercase tracking-widest font-black">
+                      GEX by Strike
+                    </span>
+                    <span
+                      className="text-[9px] font-black px-2 py-0.5 rounded-md ml-1"
+                      style={{
+                        background: `${accentColor}18`,
+                        color: accentColor,
+                        border: `1px solid ${accentColor}30`,
+                      }}
+                    >
+                      {slot.ticker}
+                    </span>
+                  </div>
+                  <StrikesSelector
+                    nStrikes={nStrikes}
+                    accentColor={accentColor}
+                    onSetNStrikes={onSetNStrikes}
+                  />
+                </div>
+                <div className="overflow-x-auto">
+                  <GexStrikeTable
+                    data={data}
+                    nStrikes={nStrikes}
+                    expiryFilter={slot.expiryFilter}
+                    accentColor={accentColor}
+                  />
+                </div>
               </div>
-              <StrikesSelector
-                nStrikes={nStrikes}
-                accentColor={accentColor}
-                onSetNStrikes={onSetNStrikes}
-              />
-            </div>
-            <div className="overflow-x-auto">
-              <GexStrikeTable
-                data={data}
-                nStrikes={nStrikes}
-                expiryFilter={slot.expiryFilter}
-                accentColor={accentColor}
-              />
-            </div>
-          </div>
+            </>
+          )}
 
-          {/* Net Flow Chart */}
-          <div className="p-4">
-            <NetFlowPanel data={data} accentColor={accentColor} />
-          </div>
+          {/* ── Net Flow Tab ─────────────────────────────────────────── */}
+          {activeTab === "flow" && (
+            <div className="p-4">
+              <NetFlowPanel data={data} accentColor={accentColor} />
+            </div>
+          )}
         </>
       )}
     </div>

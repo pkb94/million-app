@@ -218,12 +218,8 @@ function Nav() {
         {/* CTA */}
         <div className="flex items-center gap-3">
           <Link href="/login"
-            className="text-sm text-foreground/70 hover:text-white transition font-medium">
-            Sign in
-          </Link>
-          <Link href="/signup"
             className="text-sm px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white font-semibold hover:opacity-90 transition shadow-lg shadow-blue-900/30">
-            Get started
+            Sign in
           </Link>
         </div>
       </div>
@@ -280,7 +276,7 @@ function Hero() {
 
         {/* Sub */}
         <motion.p
-          className="text-base sm:text-xl text-foreground/70 max-w-2xl mx-auto mb-10 leading-relaxed"
+          className="text-base sm:text-xl text-white/60 max-w-2xl mx-auto mb-10 leading-relaxed"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}>
@@ -294,20 +290,16 @@ function Hero() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.55, ease: [0.22, 1, 0.36, 1] }}>
-          <Link href="/signup"
-            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 hover:scale-[1.03] active:scale-[0.97] transition-all shadow-xl shadow-blue-900/40">
-            Start for free →
-          </Link>
           <Link href="/login"
-            className="w-full sm:w-auto px-8 py-3.5 rounded-xl border border-white/10 text-foreground font-semibold text-base hover:bg-white/5 hover:scale-[1.03] active:scale-[0.97] transition-all">
-            Sign in
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 hover:scale-[1.03] active:scale-[0.97] transition-all shadow-xl shadow-blue-900/40">
+            Sign in →
           </Link>
         </motion.div>
       </div>
 
       {/* Scroll hint */}
       <motion.div
-        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-foreground"
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/50"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2, duration: 0.6 }}
         style={{ animationName: "bounce" }}>
         <motion.div animate={{ y: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}>
@@ -325,7 +317,7 @@ function Stats() {
         {STATS.map(({ value, label }, i) => (
           <FadeUp key={label} delay={i * 0.1}>
             <p className="text-3xl sm:text-4xl font-black text-white mb-1">{value}</p>
-            <p className="text-xs text-foreground/70 uppercase tracking-widest font-semibold">{label}</p>
+            <p className="text-xs text-white/50 uppercase tracking-widest font-semibold">{label}</p>
           </FadeUp>
         ))}
       </div>
@@ -343,7 +335,7 @@ function Features() {
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
             Built for serious traders
           </h2>
-          <p className="text-foreground/70 max-w-xl mx-auto text-base">
+          <p className="text-white/60 max-w-xl mx-auto text-base">
             From options flow to double-entry accounting — every feature you need to trade with conviction.
           </p>
         </FadeUp>
@@ -362,7 +354,7 @@ function Features() {
                     <h3 className="font-bold text-white text-sm">{f.title}</h3>
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${f.tagColor}`}>{f.tag}</span>
                   </div>
-                  <p className="text-xs text-foreground/70 leading-relaxed">{f.desc}</p>
+                  <p className="text-xs text-white/60 leading-relaxed">{f.desc}</p>
                 </div>
               </motion.div>
             </FadeUp>
@@ -388,7 +380,7 @@ function Highlight() {
           <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-5">
             Options Flow is the edge<br />most traders don&apos;t have
           </h2>
-          <p className="text-foreground/70 text-base leading-relaxed mb-8">
+          <p className="text-white/60 text-base leading-relaxed mb-8">
             Gamma exposure tells you where dealers are hedged and where they&apos;re not.
             OptionFlow surfaces GEX across any ticker — so you can see the magnetic levels,
             flip points, and vol regime before you size in.
@@ -400,7 +392,7 @@ function Highlight() {
               "Multi-ticker panels — compare any symbols side by side",
               "Call / put wall identification at a glance",
             ].map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-sm text-foreground">
+              <li key={item} className="flex items-start gap-2.5 text-sm text-white/80">
                 <span className="mt-0.5 text-amber-400 shrink-0">✓</span>
                 {item}
               </li>
@@ -422,7 +414,7 @@ function Highlight() {
                 <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
                 <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
               </div>
-              <span className="text-[10px] text-foreground/70 ml-1 font-mono">optionflow · GEX · SPY</span>
+              <span className="text-[10px] text-white/50 ml-1 font-mono">optionflow · GEX · SPY</span>
             </div>
             <span className="text-[9px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold tracking-wide">● LIVE</span>
           </div>
@@ -436,7 +428,7 @@ function Highlight() {
               { label: "Flip",       value: "565",      color: "text-amber-400",  bg: "bg-amber-500/10"  },
             ].map(({ label, value, color, bg }) => (
               <div key={label} className={`${bg} rounded-lg p-2 text-center`}>
-                <p className="text-[8px] text-foreground/70 uppercase tracking-wide mb-0.5">{label}</p>
+                <p className="text-[8px] text-white/50 uppercase tracking-wide mb-0.5">{label}</p>
                 <p className={`text-xs font-black ${color}`}>{value}</p>
               </div>
             ))}
@@ -445,14 +437,14 @@ function Highlight() {
           {/* GEX heatmap grid — strikes × expiry */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[8px] text-foreground uppercase tracking-widest">Strike →</span>
-              <span className="text-[8px] text-foreground uppercase tracking-widest">← Expiry</span>
+              <span className="text-[8px] text-white/50 uppercase tracking-widest mb-1.5">Strike →</span>
+              <span className="text-[8px] text-white/50 uppercase tracking-widest">← Expiry</span>
             </div>
             {/* Header row */}
             <div className="grid mb-1" style={{ gridTemplateColumns: "40px repeat(10, 1fr)" }}>
               <span />
               {[545,550,555,560,565,570,575,580,585,590].map(s => (
-                <span key={s} className="text-[7px] text-foreground text-center">{s}</span>
+                <span key={s} className="text-[7px] text-white/50 text-center">{s}</span>
               ))}
             </div>
             {/* Heatmap rows */}
@@ -464,7 +456,7 @@ function Highlight() {
               { exp: "2M",    vals: [4,10,20,30,38,30,20,10,5,3]    },
             ].map(({ exp, vals }) => (
               <div key={exp} className="grid mb-0.5 items-center" style={{ gridTemplateColumns: "40px repeat(10, 1fr)" }}>
-                <span className="text-[8px] text-foreground/70 font-mono">{exp}</span>
+                <span className="text-[8px] text-white/50 font-mono">{exp}</span>
                 {vals.map((v, i) => {
                   const isCall = i >= 5;
                   const intensity = v / 100;
@@ -489,7 +481,7 @@ function Highlight() {
 
           {/* Bottom bar chart — net GEX by strike */}
           <div className="border-t border-white/5 pt-3">
-            <p className="text-[8px] text-foreground uppercase tracking-widest mb-2">Net GEX by Strike ($M)</p>
+            <p className="text-[8px] text-white/50 uppercase tracking-widest mb-2">Net GEX by Strike ($M)</p>
             <div className="flex items-end gap-0.5 h-12">
               {[-20,-45,-80,-120,-60,40,90,150,110,70].map((v, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center justify-end">
@@ -500,7 +492,7 @@ function Highlight() {
                 </div>
               ))}
             </div>
-            <div className="flex justify-between text-[7px] text-foreground mt-1">
+            <div className="flex justify-between text-[7px] text-white/50 mt-1">
               {[545,550,555,560,565,570,575,580,585,590].map(s => <span key={s}>{s}</span>)}
             </div>
           </div>
@@ -522,7 +514,7 @@ function HeatmapHighlight() {
           initial={{ opacity: 0, x: -40 }}
           animate={inView ? { opacity: 1, x: 0 } : {}}
           transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
-          <p className="text-xs font-bold text-foreground/70 uppercase tracking-widest mb-4">Technology Sector</p>
+          <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">Technology Sector</p>
           <div className="space-y-2">
             {[
               [{ label: "AAPL", pct: 38, color: "#22c55e" }, { label: "MSFT", pct: 32, color: "#22c55e" }, { label: "NVDA", pct: 30, color: "#ef4444" }],
@@ -539,7 +531,7 @@ function HeatmapHighlight() {
               </div>
             ))}
           </div>
-          <div className="mt-4 flex items-center gap-4 text-[9px] text-foreground/70">
+          <div className="mt-4 flex items-center gap-4 text-[9px] text-white/50">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-500/60 inline-block" /> Gaining</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500/60 inline-block" /> Declining</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-500/60 inline-block" /> Flat</span>
@@ -557,7 +549,7 @@ function HeatmapHighlight() {
           <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-5">
             The whole market,<br />at a glance
           </h2>
-          <p className="text-foreground/70 text-base leading-relaxed mb-8">
+          <p className="text-white/60 text-base leading-relaxed mb-8">
             Sector heatmaps sized by real market cap weights, live VIX and India VIX charts,
             market breadth, fear & greed, top movers, and SPDR ETF performance — all on one page.
           </p>
@@ -568,7 +560,7 @@ function HeatmapHighlight() {
               "VIX + India VIX with X/Y axes and regime badges",
               "Top gainers and losers updated in real time",
             ].map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-sm text-foreground">
+              <li key={item} className="flex items-start gap-2.5 text-sm text-white/80">
                 <span className="mt-0.5 text-blue-400 shrink-0">✓</span>
                 {item}
               </li>
@@ -595,17 +587,13 @@ function CTA() {
             <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tight">
               Ready to trade with edge?
             </h2>
-            <p className="text-foreground/70 mb-8 text-base">
+            <p className="text-white/60 mb-8 text-base">
               Sign up free. No credit card required. Start tracking your trades and options flow in minutes.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link href="/signup"
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 transition shadow-xl shadow-blue-900/40">
-                Create free account →
-              </Link>
               <Link href="/login"
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl border border-white/10 text-foreground font-semibold text-base hover:bg-white/5 transition">
-                Sign in
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-base hover:opacity-90 transition shadow-xl shadow-blue-900/40">
+                Sign in →
               </Link>
             </div>
           </div>
@@ -623,9 +611,9 @@ function Footer() {
         <div className="flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#F59E0B"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
           <span className="font-black text-white text-sm">Option<span className="text-amber-400">Flow</span></span>
-          <span className="text-foreground text-xs ml-2">© 2026</span>
+          <span className="text-white/50 text-xs ml-2">© 2026</span>
         </div>
-        <p className="text-xs text-foreground">Options Flow · Trade Journal · Market Intelligence · Portfolio Tracking</p>
+        <p className="text-xs text-white/50">Options Flow · Trade Journal · Market Intelligence · Portfolio Tracking</p>
       </div>
     </footer>
   );

@@ -86,9 +86,11 @@ export default function TickerSearchInput({
       if (closedRef.current) return; // picked while debounce was pending
       setLoading(true);
       try {
-        const res = await searchTickers(q, 8);
+        const res = await searchTickers(q, 12);
         if (closedRef.current) return; // picked while request was in-flight
-        setSuggestions(res);
+        // Filter out raw option contracts (OCC symbols) — not useful for ticker search
+        const filtered = res.filter((r) => r.type !== "Option").slice(0, 8);
+        setSuggestions(filtered);
         setOpen(res.length > 0);
         setActiveIdx(-1);
       } catch {
@@ -114,10 +116,12 @@ export default function TickerSearchInput({
   }, []);
 
   const pick = useCallback((sym: string) => {
-    closeDropdown();
+    closeDropdown();          // sets closedRef.current = true, clears suggestions, closes open
     onChange(sym);
     inputRef.current?.blur();
-    onSelect(sym);
+    // Defer onSelect by one tick so React flushes the closed state before the
+    // parent potentially re-renders and passes a new `value` back down
+    setTimeout(() => onSelect(sym), 0);
   }, [closeDropdown, onChange, onSelect]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -133,7 +137,7 @@ export default function TickerSearchInput({
         pick(suggestions[activeIdx].symbol);
       } else {
         const s = value.trim().toUpperCase();
-        if (s) { closeDropdown(); onChange(s); inputRef.current?.blur(); onSelect(s); }
+        if (s) { closeDropdown(); onChange(s); inputRef.current?.blur(); setTimeout(() => onSelect(s), 0); }
       }
     } else if (e.key === "Escape") {
       setOpen(false);
@@ -145,11 +149,26 @@ export default function TickerSearchInput({
 
   const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Recalculate dropdown position whenever it opens
+  // Recalculate dropdown position whenever it opens or the window is resized/scrolled
   useLayoutEffect(() => {
     if (!open || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setDropPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX, width: rect.width });
+    const update = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const minW = 320;
+      const desiredW = Math.max(rect.width, minW);
+      const vw = window.innerWidth;
+      // Clamp left so the dropdown never overflows the right edge of the viewport
+      const left = Math.min(rect.left, vw - desiredW - 8);
+      setDropPos({ top: rect.bottom + 4, left: Math.max(left, 8), width: desiredW });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
   }, [open, suggestions]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,7 +179,7 @@ export default function TickerSearchInput({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const s = value.trim().toUpperCase();
-    if (s) { closeDropdown(); onChange(s); inputRef.current?.blur(); onSelect(s); }
+    if (s) { closeDropdown(); onChange(s); inputRef.current?.blur(); setTimeout(() => onSelect(s), 0); }
   };
 
   return (
@@ -227,7 +246,7 @@ export default function TickerSearchInput({
                 <span className="flex-1 min-w-0 text-xs text-foreground/70 truncate">
                   {s.name || "—"}
                 </span>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 shrink-0 ml-auto">
                   {s.type && (
                     <span className={`text-[9px] font-bold uppercase ${typeColor}`}>{s.type}</span>
                   )}
