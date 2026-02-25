@@ -41,6 +41,13 @@ Verify it's running:
 curl -s http://localhost:8000/health
 # should return: {"status":"ok"}
 ```
+> ⚠️ **After any backend code change** (e.g. new endpoint, schema change), the backend must be restarted — it does NOT hot-reload unless started with `--reload`.
+> Frontend (Next.js) hot-reloads automatically; backend does not.
+>
+> Restart command:
+> ```bash
+> kill -9 $(lsof -ti :8000) && cd ~/Desktop/OptionFlow_V1/OptionFlow_V1 && source ~/Desktop/OptionFlow_V1/.venv/bin/activate && python -m uvicorn backend_api.main:app --host 127.0.0.1 --port 8000 &
+> ```
 
 ### ✅ 4 — Start the main server (port 3000 — production reference)
 ```bash
@@ -82,6 +89,12 @@ git log --oneline origin/main..develop
 | No uncommitted mess | `git status` | clean or intentional WIP |
 | Port 3000 alive | open browser | last released version loads |
 | Port 3002 alive | open browser | develop version loads |
+
+> 💡 **Backend not responding / changes not taking effect?**
+> The backend does not hot-reload. Run:
+> ```bash
+> kill -9 $(lsof -ti :8000) && cd ~/Desktop/OptionFlow_V1/OptionFlow_V1 && source ~/Desktop/OptionFlow_V1/.venv/bin/activate && python -m uvicorn backend_api.main:app --host 127.0.0.1 --port 8000 &
+> ```
 
 ---
 
