@@ -4,10 +4,9 @@ Gamma Exposure (GEX) calculations.
 Dealer GEX model:
   - For calls:  dealer is SHORT gamma  → GEX contribution = -Gamma × OI × lot_size × Spot
   - For puts:   dealer is LONG gamma   → GEX contribution = +Gamma × OI × lot_size × Spot
-  Net GEX > 0  →  dealers long gamma  → they sell rallies / buy dips  → mean-reverting market
-  Net GEX < 0  →  dealers short gamma → they buy rallies / sell dips  → trending / volatile market
-
-Data sources (in priority order):
+    Net GEX > 0  →  dealers net long gamma  → they sell rallies / buy dips  → mean-reverting / low vol
+  Net GEX < 0  →  dealers net short gamma → they buy rallies / sell dips  → trending / volatile
+  Formula: GEX = gamma × OI × contract_size × spot² × 0.01  ($ per 1% spot move, canonical standard)Data sources (in priority order):
   1. Tradier  — real-time OPRA feed, greeks included (set TRADIER_TOKEN env var)
   2. yfinance — 15-min delayed fallback (always available, no key needed)
 
@@ -330,7 +329,8 @@ def _fetch_chain_tradier(symbol: str) -> tuple[float, pd.DataFrame]:
             return []
 
         T_days = (pd.to_datetime(exp) - today).days
-        T = max(T_days, 1) / 365.0
+        # 0-DTE: use 1 trading day / 252 (canonical standard for intraday gamma)
+        T = max(T_days, 1) / 252.0
 
         rows = []
         for opt in options:
@@ -422,7 +422,8 @@ def _fetch_chain_yfinance(symbol: str) -> tuple[float, pd.DataFrame]:
     for exp in expiries:
         T_days = (pd.to_datetime(exp) - today).days
         if T_days >= 0:
-            T = max(T_days, 1) / 365.0   # floor at 1 day to avoid T=0 div errors
+            # 0-DTE: use 1 trading day / 252 (canonical standard for intraday gamma)
+            T = max(T_days, 1) / 252.0
             valid.append((exp, T))
 
     if not valid:
@@ -451,15 +452,22 @@ def _fetch_chain_yfinance(symbol: str) -> tuple[float, pd.DataFrame]:
 
 def _compute_gex(df: pd.DataFrame, spot: float, lot_size: int = 100) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Compute dealer GEX per row.
-    Calls: dealer short gamma → negative GEX.
-    Puts:  dealer long gamma  → positive GEX.
-    GEX notional = ±gamma × oi × lot_size × spot
+    Compute dealer GEX per row using the canonical Perfiliev/SpotGamma formula:
+      GEX = gamma × OI × contract_size × spot² × 0.01
+    This gives "dollars of delta-hedging required per 1% move in spot".
+
+    Sign convention (matches SpotGamma / Unusual Whales):
+      Calls: dealers are assumed LONG calls → LONG gamma → positive GEX (stabilising)
+      Puts:  dealers are assumed SHORT puts → LONG gamma... but net put GEX is NEGATIVE
+             because put buyers are long downside convexity dealers must hedge against.
+    In practice: CallGEX positive, PutGEX negative — Net GEX > 0 = long gamma regime.
     """
     df = df.copy()
-    df["gex_raw"] = df["gamma"] * df["oi"] * lot_size * spot
+    # Canonical formula: gamma × OI × lot_size × spot² × 0.01
+    df["gex_raw"] = df["gamma"] * df["oi"] * lot_size * spot * spot * 0.01
+    # Calls = positive, Puts = negative
     df["gex"] = df.apply(
-        lambda r: -r["gex_raw"] if r["otype"] == "call" else r["gex_raw"], axis=1
+        lambda r: r["gex_raw"] if r["otype"] == "call" else -r["gex_raw"], axis=1
     )
 
     # per-strike aggregate (all expiries combined)

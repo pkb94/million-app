@@ -241,7 +241,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
             <div className="flex-1 h-full" style={{ background: "linear-gradient(to right, #ff2200, #ff6644, #1a1a2e)" }} />
             <div className="flex-1 h-full" style={{ background: "linear-gradient(to right, #1a1a2e, #44dd88, #00cc44)" }} />
           </div>
-          <span className="text-[9px] text-foreground/50 font-semibold">Put GEX ← 0 → Call GEX</span>
+          <span className="text-[9px] text-foreground/50 font-semibold">Call GEX (+) ← 0 → Put GEX (−) · $/1% move</span>
         </div>
 
         {/* Black row = spot */}
