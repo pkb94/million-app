@@ -100,13 +100,10 @@ export default function OptionsFlowPage() {
             {/* Title */}
             <div className="flex items-center gap-3">
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
-                style={{
-                  background: "linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #3b82f6 100%)",
-                  boxShadow: "0 4px 14px rgba(168,85,247,0.3)",
-                }}
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
               >
-                <Activity size={16} className="text-white" />
+                <Activity size={16} className="text-foreground/70" />
               </div>
               <div>
                 <h1 className="text-[15px] font-black text-white leading-none tracking-tight">
@@ -150,7 +147,7 @@ export default function OptionsFlowPage() {
               {slots.length < MAX_TICKERS && (
                 <button
                   onClick={addSlot}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-foreground/70 border border-dashed border-[var(--border)] hover:border-purple-400 hover:text-purple-500 transition"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-foreground/70 border border-dashed border-[var(--border)] hover:border-[var(--foreground)]/40 hover:text-foreground transition"
                 >
                   <Plus size={11} /> Add
                 </button>

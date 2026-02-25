@@ -35,7 +35,7 @@ export default function Navbar() {
   const handleLogout = async () => {
     setMobileOpen(false);
     await logout();
-    router.push("/login");
+    router.push("/");
   };
 
   const isActive = (href: string) =>
@@ -176,7 +176,7 @@ export default function Navbar() {
           )}
           {collapsed && user?.username && (
             <div className="flex justify-center py-2 mb-1" title={user.username}>
-              <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">nter">
+              <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
                 <span className="text-[10px] font-black text-foreground uppercase">{user.username[0]}</span>
               </div>
             </div>
@@ -235,7 +235,7 @@ export default function Navbar() {
           <div className="relative w-72 h-full bg-[var(--surface)] border-r border-[var(--border)] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between px-4 h-14 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">nter">
+                <div className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
                   <span className="text-[10px] font-black text-foreground uppercase">{user?.username?.[0] ?? "U"}</span>
                 </div>
                 <span className="text-sm font-bold text-foreground">{user?.username ?? "Menu"}</span>

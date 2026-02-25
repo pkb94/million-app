@@ -30,12 +30,12 @@ export default function BottomNav() {
                 className={clsx(
                   "flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[9px] font-bold uppercase tracking-wide transition-all relative",
                   active
-                    ? "text-blue-600 dark:text-blue-400"
-                    : "text-foreground/70 hover:text-foreground dark:hover:text-foreground",
+                    ? "text-foreground"
+                    : "text-foreground/50 hover:text-foreground",
                 )}
               >
                 {active && (
-                  <span className="absolute inset-0 bg-gradient-to-b from-blue-500/8 to-transparent rounded-2xl" />
+                  <span className="absolute inset-0 bg-[var(--foreground)]/5 rounded-2xl" />
                 )}
                 {Icon === Zap ? (
                   <svg

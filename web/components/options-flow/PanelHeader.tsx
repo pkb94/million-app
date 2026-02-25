@@ -25,7 +25,7 @@ export function PanelHeader({
   onRefresh,
 }: Props) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--border)] bg-[var(--surface-2)] overflow-visible relative z-10">
+    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border)] bg-[var(--surface-2)] overflow-visible relative z-10">
       <TickerSearchInput
         value={inputValue}
         onChange={onInputChange}

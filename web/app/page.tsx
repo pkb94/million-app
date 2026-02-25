@@ -330,7 +330,7 @@ function Features() {
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
         <FadeUp className="text-center mb-16">
-          <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3">Everything you need</p>
+          <p className="text-xs font-bold text-foreground/50 uppercase tracking-widest mb-3">Everything you need</p>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
             Built for serious traders
           </h2>
@@ -422,7 +422,7 @@ function Highlight() {
           <div className="grid grid-cols-4 gap-2 mb-4">
             {[
               { label: "Net GEX",    value: "+$2.4B",  color: "text-green-400",  bg: "bg-green-500/10"  },
-              { label: "Call Wall",  value: "580",      color: "text-blue-400",   bg: "bg-blue-500/10"   },
+              { label: "Call Wall",  value: "580",      color: "text-green-400",  bg: "bg-green-500/10"  },
               { label: "Put Wall",   value: "550",      color: "text-red-400",    bg: "bg-red-500/10"    },
               { label: "Flip",       value: "565",      color: "text-amber-400",  bg: "bg-amber-500/10"  },
             ].map(({ label, value, color, bg }) => (

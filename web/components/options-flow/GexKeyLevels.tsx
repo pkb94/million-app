@@ -12,10 +12,21 @@ export function GexKeyLevels({ data, ticker }: Props) {
   const netGex = data.net_gex ?? 0;
   const isCallBias = netGex >= 0;
 
+  // Zero γ above spot → bearish resistance (red), below → bullish support (green)
+  const zeroAboveSpot =
+    data.zero_gamma != null && data.spot != null
+      ? data.zero_gamma > data.spot
+      : true;
+
   const impliedMove =
     data.spot && data.zero_gamma
       ? Math.abs(((data.zero_gamma - data.spot) / data.spot) * 100)
       : null;
+
+  const G = "bg-emerald-500/8 border-emerald-500/25";
+  const R = "bg-red-500/8 border-red-500/25";
+  const GT = "text-emerald-400";
+  const RT = "text-red-400";
 
   return (
     <div className="px-4 pt-4 pb-3 border-b border-[var(--border)]">
@@ -38,63 +49,53 @@ export function GexKeyLevels({ data, ticker }: Props) {
       </div>
 
       {/* Key level cards */}
-      <div className="grid grid-cols-5 gap-2">
-        {/* Net GEX */}
-        <div
-          className={`rounded-xl border px-2.5 py-2 ${
-            isCallBias
-              ? "bg-emerald-500/5 border-emerald-500/20"
-              : "bg-red-500/5 border-red-500/20"
-          }`}
-        >
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        {/* Net GEX — green if call bias, red if put bias */}
+        <div className={`rounded-xl border px-2.5 py-2 ${isCallBias ? G : R}`}>
           <p className="text-[8px] text-foreground/70 uppercase tracking-widest font-bold mb-1">
             Net GEX
           </p>
-          <p
-            className={`text-[13px] font-black tabular-nums leading-none ${
-              isCallBias ? "text-emerald-400" : "text-red-400"
-            }`}
-          >
+          <p className={`text-[13px] font-black tabular-nums leading-none ${isCallBias ? GT : RT}`}>
             {fmtGex(netGex)}
           </p>
         </div>
 
-        {/* Zero Gamma */}
-        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-2">
+        {/* Zero Gamma — red if above spot (resistance), green if below (support) */}
+        <div className={`rounded-xl border px-2.5 py-2 ${zeroAboveSpot ? R : G}`}>
           <p className="text-[8px] text-foreground/70 uppercase tracking-widest font-bold mb-1">
             Zero γ
           </p>
-          <p className="text-[13px] font-black tabular-nums text-yellow-400 leading-none">
+          <p className={`text-[13px] font-black tabular-nums leading-none ${zeroAboveSpot ? RT : GT}`}>
             {data.zero_gamma != null ? `$${data.zero_gamma.toFixed(0)}` : "—"}
           </p>
         </div>
 
-        {/* Call Wall */}
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-2">
+        {/* Call Wall — always green (upside resistance/target) */}
+        <div className={`rounded-xl border px-2.5 py-2 ${G}`}>
           <p className="text-[8px] text-foreground/70 uppercase tracking-widest font-bold mb-1">
             Call Wall
           </p>
-          <p className="text-[13px] font-black tabular-nums text-emerald-400 leading-none">
+          <p className={`text-[13px] font-black tabular-nums leading-none ${GT}`}>
             {data.max_call_wall != null ? `$${data.max_call_wall.toFixed(0)}` : "—"}
           </p>
         </div>
 
-        {/* Put Wall */}
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-2.5 py-2">
+        {/* Put Wall — always red (downside support/floor) */}
+        <div className={`rounded-xl border px-2.5 py-2 ${R}`}>
           <p className="text-[8px] text-foreground/70 uppercase tracking-widest font-bold mb-1">
             Put Wall
           </p>
-          <p className="text-[13px] font-black tabular-nums text-red-400 leading-none">
+          <p className={`text-[13px] font-black tabular-nums leading-none ${RT}`}>
             {data.max_put_wall != null ? `$${data.max_put_wall.toFixed(0)}` : "—"}
           </p>
         </div>
 
-        {/* Max GEX */}
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
+        {/* Max GEX — green if call bias, red if put bias */}
+        <div className={`rounded-xl border px-2.5 py-2 ${isCallBias ? G : R}`}>
           <p className="text-[8px] text-foreground/70 uppercase tracking-widest font-bold mb-1">
             Max GEX
           </p>
-          <p className="text-[13px] font-black tabular-nums text-foreground leading-none">
+          <p className={`text-[13px] font-black tabular-nums leading-none ${isCallBias ? GT : RT}`}>
             {data.max_gex_strike != null ? `$${data.max_gex_strike.toFixed(0)}` : "—"}
           </p>
         </div>

@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
-import { Zap, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -33,11 +33,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-xl shadow-blue-500/25 mb-3">
-            <Zap size={22} className="text-white" strokeWidth={2.5} />
+          <div className="w-12 h-12 rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center mb-3">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="#F59E0B" className="drop-shadow-[0_0_6px_rgba(245,158,11,0.7)]">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
           </div>
           <h1 className="text-2xl font-black text-foreground tracking-tight">OptionFlow</h1>
-          <p className="text-sm text-foreground/70 mt-0.5">Sign in to your account</p>
+          <p className="text-sm text-foreground/50 mt-0.5">Sign in to your account</p>
         </div>
 
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-xl shadow-black/5 p-6">
@@ -54,7 +56,7 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 placeholder="your username"
-                className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface-2)] text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition"
+                className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface-2)] text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-[var(--foreground)]/20 focus:border-[var(--foreground)]/30 transition"
               />
             </div>
 
@@ -71,7 +73,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 pr-10 text-sm bg-[var(--surface-2)] text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition"
+                  className="w-full border border-[var(--border)] rounded-xl px-3 py-2.5 pr-10 text-sm bg-[var(--surface-2)] text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-[var(--foreground)]/20 focus:border-[var(--foreground)]/30 transition"
                 />
                 <button
                   type="button"
@@ -93,7 +95,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-sm hover:from-blue-700 hover:to-violet-700 disabled:opacity-50 transition shadow-md shadow-blue-500/20 mt-1"
+              className="w-full py-2.5 rounded-xl bg-[var(--foreground)] text-[var(--background)] font-bold text-sm hover:opacity-90 disabled:opacity-40 transition mt-1"
             >
               {loading ? "Signing in…" : "Sign in"}
             </button>

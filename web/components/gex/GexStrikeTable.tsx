@@ -76,7 +76,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
 
   return (
     <div
-      className="overflow-x-auto overflow-y-auto max-h-[640px] rounded-md border border-[var(--border)] bg-[var(--surface)] font-mono text-[11px]"
+      className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)] font-mono text-[11px]"
       style={accentColor ? { borderTopColor: accentColor, borderTopWidth: 3 } : undefined}
     >
       {/* Hidden sizing row — always renders ALL expiry columns at fixed width to anchor table layout */}
@@ -97,7 +97,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
           <tr>
             <th
               colSpan={1 + allCols.length}
-              className="sticky top-0 z-10 bg-[var(--surface-2)] text-left px-3 py-2 border-b-2 border-[var(--border)] whitespace-nowrap"
+              className="bg-[var(--surface-2)] text-left px-3 py-2 border-b-2 border-[var(--border)]"
             >
               {accentColor && (
                 <span
@@ -105,29 +105,29 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
                   style={{ background: accentColor }}
                 />
               )}
-              <span className="text-[17px] font-black text-foreground mr-2">
+              <span className="text-[15px] sm:text-[17px] font-black text-foreground mr-2">
                 {data.symbol}
               </span>
-              <span className="text-[15px] font-bold text-foreground mr-4">
+              <span className="text-[13px] sm:text-[15px] font-bold text-foreground mr-3">
                 ${spot.toFixed(2)}
               </span>
-              <span className="text-xs font-semibold text-foreground/70 mr-1">Net GEX</span>
-              <span className="text-[13px] font-extrabold mr-4" style={{ color: netC }}>
+              <span className="text-[10px] font-semibold text-foreground/70 mr-1">Net GEX</span>
+              <span className="text-[11px] font-extrabold mr-3" style={{ color: netC }}>
                 {fmtGex(net_gex)}
               </span>
-              <span className="text-xs font-semibold text-foreground/70 mr-1">Regime</span>
-              <span className="text-[13px] font-extrabold mr-4" style={{ color: regimeColor }}>
+              <span className="text-[10px] font-semibold text-foreground/70 mr-1 hidden sm:inline">Regime</span>
+              <span className="text-[11px] font-extrabold mr-3 hidden sm:inline" style={{ color: regimeColor }}>
                 {regimeLabel}
               </span>
-              <span className="text-xs font-semibold text-foreground/70 mr-1">Zero γ</span>
-              <span className="text-[13px] font-extrabold text-foreground">
+              <span className="text-[10px] font-semibold text-foreground/70 mr-1 hidden sm:inline">Zero γ</span>
+              <span className="text-[11px] font-extrabold text-foreground hidden sm:inline">
                 {zgStr}
               </span>
             </th>
           </tr>
           {/* ── Row B: column labels — always renders ALL expiry columns ── */}
           <tr>
-            <th className="sticky top-[37px] z-10 bg-[var(--surface-2)] text-left px-2 py-1 text-[9px] font-bold text-foreground uppercase tracking-wide border-b border-t border-[var(--border)]">
+            <th className="bg-[var(--surface-2)] text-left px-2 py-1 text-[9px] font-bold text-foreground uppercase tracking-wide border-b border-t border-[var(--border)]">
               STRIKE
             </th>
             {allCols.map(({ exp, short }) => {
@@ -137,7 +137,7 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
               return (
                 <th
                   key={exp}
-                  className="sticky top-[37px] z-10 bg-[var(--surface-2)] text-right px-2 py-1 text-[9px] font-bold uppercase border-b border-t border-l border-[var(--border)]"
+                  className="bg-[var(--surface-2)] text-right px-2 py-1 text-[9px] font-bold uppercase border-b border-t border-l border-[var(--border)]"
                   style={isVisible ? undefined : { opacity: 0.18 }}
                 >
                   <div className="flex flex-col items-end gap-0.5">
@@ -159,21 +159,18 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
             return (
               <tr
                 key={strike}
-                className={clsx(
-                  "hover:brightness-95",
-                  isSpot && "border-t-2 border-b-2 border-l-4 border-yellow-400",
-                )}
-                style={isSpot ? { background: "#fffbe6" } : undefined}
+                className="hover:brightness-95"
+                style={isSpot ? { background: "#111111" } : undefined}
               >
                 {/* Strike cell */}
                 <td
                   className={clsx(
                     "px-2 py-[3px] text-left border-b border-[var(--border)]",
-                    isSpot ? "font-extrabold text-foreground" : "text-foreground",
+                    isSpot ? "font-extrabold text-white" : "text-foreground",
                   )}
                 >
                   {isSpot && (
-                    <div className="inline-flex items-center gap-1 bg-yellow-400 text-black text-[8px] font-extrabold rounded px-1 mb-0.5 leading-tight">
+                    <div className="inline-flex items-center gap-1 bg-white text-black text-[8px] font-extrabold rounded px-1 mb-0.5 leading-tight">
                       <span>▶ SPOT</span>
                       <span>${spot.toFixed(2)}</span>
                     </div>
@@ -235,6 +232,43 @@ export default function GexStrikeTable({ data, nStrikes, expiryFilter, accentCol
           })}
         </tbody>
       </table>
+
+      {/* ── Legend ──────────────────────────────────────────────────────── */}
+      <div className="px-3 py-2.5 border-t border-[var(--border)] bg-[var(--surface-2)] flex flex-wrap items-center gap-x-5 gap-y-2">
+        {/* Heatmap gradient */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded overflow-hidden h-3 w-20 shrink-0">
+            <div className="flex-1 h-full" style={{ background: "linear-gradient(to right, #ff2200, #ff6644, #1a1a2e)" }} />
+            <div className="flex-1 h-full" style={{ background: "linear-gradient(to right, #1a1a2e, #44dd88, #00cc44)" }} />
+          </div>
+          <span className="text-[9px] text-foreground/50 font-semibold">Put GEX ← 0 → Call GEX</span>
+        </div>
+
+        {/* Black row = spot */}
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-[#111111] border border-white/20 shrink-0" />
+          <span className="text-[9px] text-foreground/50 font-semibold">Black row = current spot price</span>
+        </div>
+
+        {/* +% badge */}
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block text-[7px] font-bold rounded px-[3px] text-black bg-[#00cc44]">+82%</span>
+          <span className="text-[9px] text-foreground/50 font-semibold">% of max GEX at that strike/expiry</span>
+        </div>
+
+        {/* Star = king node */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13px] leading-none" style={{ color: "#00cc44" }}>★</span>
+          <span className="text-[9px] text-foreground/50 font-semibold">King node — highest GEX in that expiry</span>
+        </div>
+
+        {/* Column net GEX */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[8px] font-extrabold text-green-400">+$1.2B</span>
+          <span className="text-[8px] font-extrabold text-red-400">-$0.8B</span>
+          <span className="text-[9px] text-foreground/50 font-semibold">Net GEX per expiry column</span>
+        </div>
+      </div>
     </div>
   );
 }
