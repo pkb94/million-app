@@ -66,13 +66,16 @@ export default function AdminUsersPage() {
   };
 
   const handleDelete = async (user_id: number) => {
-    setPatchingId(user_id);
+    // Optimistically remove immediately so the row disappears without waiting
+    setUsers((prev) => prev.filter((x) => x.user_id !== user_id));
+    setConfirmDeleteId(null);
     try {
       await adminDeleteUser(user_id);
-      setUsers((prev) => prev.filter((x) => x.user_id !== user_id));
+    } catch {
+      // Rollback: re-fetch the list if the delete failed
+      adminListUsers().then(setUsers);
     } finally {
       setPatchingId(null);
-      setConfirmDeleteId(null);
     }
   };
 
