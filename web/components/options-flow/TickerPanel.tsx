@@ -202,36 +202,7 @@ export function TickerPanel({
               {/* Dealer insight text */}
               <InsightBar data={data} />
 
-              {/* Expiry picker */}
-              <ExpiryFilter
-                expiryDates={expiryDates}
-                selectedExpiry={selectedExpiry}
-                accentColor={accentColor}
-                onSelect={(d) => onToggleExpiry(d)}
-                onClear={onClearExpiry}
-              />
-
-              {/* Premium flow P/C */}
-              <PremiumFlow data={data} />
-
-              {/* Top flow strikes */}
-              <TopFlowStrikes data={data} />
-
-              {/* Flow by expiry */}
-              <FlowByExpiry data={data} />
-
-              {/* Key levels ruler */}
-              <KeyLevelsRuler data={data} />
-
-              {/* GEX profile chart */}
-              <GexProfileChart data={data} accentColor={accentColor} />
-
-              {/* Gamma concentration */}
-              <GammaConcentration data={data} />
-
-              {/* Dealer narrative */}
-              <DealerNarrative data={data} />
-
+              {/* ★ GEX Strike Heatmap — main money component, first */}
               {/* GEX Strike Table */}
               <div className="border-b border-[var(--border)]">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-[var(--surface-2)]">
@@ -266,6 +237,36 @@ export function TickerPanel({
                   />
                 </div>
               </div>
+
+              {/* Expiry picker */}
+              <ExpiryFilter
+                expiryDates={expiryDates}
+                selectedExpiry={selectedExpiry}
+                accentColor={accentColor}
+                onSelect={(d) => onToggleExpiry(d)}
+                onClear={onClearExpiry}
+              />
+
+              {/* Key levels ruler */}
+              <KeyLevelsRuler data={data} />
+
+              {/* GEX profile chart */}
+              <GexProfileChart data={data} accentColor={accentColor} />
+
+              {/* Gamma concentration */}
+              <GammaConcentration data={data} />
+
+              {/* Premium flow P/C */}
+              <PremiumFlow data={data} />
+
+              {/* Top flow strikes */}
+              <TopFlowStrikes data={data} />
+
+              {/* Flow by expiry */}
+              <FlowByExpiry data={data} />
+
+              {/* Dealer narrative */}
+              <DealerNarrative data={data} />
             </>
           )}
 
