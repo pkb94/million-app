@@ -13,7 +13,8 @@
  *   />
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { Search, Loader2 } from "lucide-react";
 import { searchTickers, TickerSuggestion } from "@/lib/api";
 
@@ -142,6 +143,15 @@ export default function TickerSearchInput({
     }
   };
 
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Recalculate dropdown position whenever it opens
+  useLayoutEffect(() => {
+    if (!open || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setDropPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX, width: rect.width });
+  }, [open, suggestions]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     closedRef.current = false; // user typed → re-enable suggestions
     onChange(e.target.value.toUpperCase());
@@ -185,11 +195,18 @@ export default function TickerSearchInput({
         </button>
       </form>
 
-      {/* Dropdown */}
-      {open && suggestions.length > 0 && (
+      {/* Dropdown — rendered in a portal at fixed position to escape any overflow/z-index parent */}
+      {open && suggestions.length > 0 && dropPos && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute z-[200] top-full left-0 right-0 mt-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden"
-          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.35)" }}
+          style={{
+            position: "fixed",
+            top: dropPos.top,
+            left: dropPos.left,
+            width: dropPos.width,
+            zIndex: 9999,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+          }}
+          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
         >
           {suggestions.map((s, i) => {
             const typeColor = TYPE_COLOR[s.type] ?? "text-foreground/70";
@@ -201,9 +218,7 @@ export default function TickerSearchInput({
                 onMouseEnter={() => setActiveIdx(i)}
                 onMouseDown={(e) => { e.preventDefault(); pick(s.symbol); }}
                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition ${
-                  isActive
-                    ? "bg-[var(--surface-2)]"
-                    : "hover:bg-[var(--surface-2)]"
+                  isActive ? "bg-[var(--surface-2)]" : "hover:bg-[var(--surface-2)]"
                 }`}
               >
                 <span className="w-16 shrink-0 font-bold text-sm text-foreground tabular-nums">
@@ -214,20 +229,17 @@ export default function TickerSearchInput({
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
                   {s.type && (
-                    <span className={`text-[9px] font-bold uppercase ${typeColor}`}>
-                      {s.type}
-                    </span>
+                    <span className={`text-[9px] font-bold uppercase ${typeColor}`}>{s.type}</span>
                   )}
                   {s.exchange && (
-                    <span className="text-[9px] text-foreground/70 font-medium">
-                      · {s.exchange}
-                    </span>
+                    <span className="text-[9px] text-foreground/70 font-medium">· {s.exchange}</span>
                   )}
                 </div>
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -53,7 +53,7 @@ export default function Navbar() {
           collapsed ? "px-0 py-2.5 justify-center" : "px-3 py-2.5",
           active
             ? "nav-active font-semibold"
-            : "text-foreground/70 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-foreground dark:hover:text-white",
+            : "text-foreground/70 hover:bg-[var(--surface-2)] dark:hover:bg-white/5 hover:text-foreground dark:hover:text-white",
         )}
       >
         {active && !collapsed && (
@@ -203,7 +203,7 @@ export default function Navbar() {
         </Link>
         <button
           onClick={() => setMobileOpen((v) => !v)}
-          className="p-2 rounded-xl text-foreground/70 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+          className="p-2 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] dark:hover:bg-white/5 transition"
           aria-label="Toggle menu"
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -227,7 +227,7 @@ export default function Navbar() {
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="p-1.5 rounded-lg text-foreground/70 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                className="p-1.5 rounded-lg text-foreground/70 hover:bg-[var(--surface-2)] dark:hover:bg-white/5 transition"
               >
                 <X size={18} />
               </button>

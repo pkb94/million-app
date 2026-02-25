@@ -15,7 +15,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const s = status?.toUpperCase() ?? "";
-  return <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase", STATUS_COLOR[s] ?? "bg-gray-100 text-foreground/70")}>{s}</span>;
+  return <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase", STATUS_COLOR[s] ?? "bg-[var(--surface-2)] text-foreground/70")}>{s}</span>;
 }
 
 const inputCls = "w-full border border-[var(--border)] rounded-xl px-3 py-2.5 text-sm bg-[var(--surface)] text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500";

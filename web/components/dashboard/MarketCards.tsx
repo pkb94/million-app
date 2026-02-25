@@ -65,7 +65,7 @@ const FUTURES: Instrument[] = [
 const COMMODITIES: Instrument[] = [
   { symbol: "GC=F",  label: "Gold",        sublabel: "USD / oz",  accent: "bg-yellow-50 dark:bg-yellow-900/30",  iconColor: "text-yellow-500"  },
   { symbol: "SI=F",  label: "Silver",      sublabel: "USD / oz",  accent: "bg-slate-50 dark:bg-slate-800/40",    iconColor: "text-slate-400"   },
-  { symbol: "CL=F",  label: "Crude Oil",   sublabel: "WTI USD/bbl",accent: "bg-gray-50 dark:bg-gray-800/40",     iconColor: "text-foreground/70"    },
+  { symbol: "CL=F",  label: "Crude Oil",   sublabel: "WTI USD/bbl",accent: "bg-[var(--surface-2)]",     iconColor: "text-foreground/70"    },
   { symbol: "NG=F",  label: "Nat Gas",     sublabel: "USD / MMBtu",accent: "bg-sky-50 dark:bg-sky-900/30",       iconColor: "text-sky-500"     },
   { symbol: "HG=F",  label: "Copper",      sublabel: "USD / lb",  accent: "bg-orange-50 dark:bg-orange-900/30", iconColor: "text-orange-400"  },
 ];
@@ -148,7 +148,7 @@ function QuoteCard({ inst, quote }: { inst: Instrument; quote: Quote | undefined
     ? "text-green-500"
     : "text-red-500";
   const bgCls = zero
-    ? "bg-gray-50 dark:bg-gray-800/30"
+    ? "bg-[var(--surface-2)]"
     : up
     ? "bg-green-50 dark:bg-green-900/20"
     : "bg-red-50 dark:bg-red-900/20";
@@ -161,7 +161,7 @@ function QuoteCard({ inst, quote }: { inst: Instrument; quote: Quote | undefined
           <p className="text-[11px] font-semibold text-foreground/70 uppercase tracking-wide leading-none">
             {inst.label}
           </p>
-          <p className="text-[10px] text-foreground/70/70 mt-0.5">{inst.sublabel}</p>
+          <p className="text-[10px] text-foreground/50 mt-0.5">{inst.sublabel}</p>
         </div>
         <span className={`p-2 rounded-xl ${inst.accent}`}>
           <ChangeIcon size={15} className={inst.iconColor} />
