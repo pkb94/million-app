@@ -52,23 +52,41 @@ export default function TickerSearchInput({
   const [open, setOpen]               = useState(false);
   const [activeIdx, setActiveIdx]     = useState(-1);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef     = useRef<HTMLInputElement>(null);
+  const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef   = useRef<HTMLDivElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
+  // Set to true the moment user picks something; cleared when they type a new char
+  const closedRef      = useRef(false);
+
+  const closeDropdown = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    closedRef.current = true;
+    setOpen(false);
+    setSuggestions([]);
+    setLoading(false);
+    setActiveIdx(-1);
+  }, []);
 
   // Fetch suggestions with 200 ms debounce
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = value.trim();
+
     if (q.length < 1) {
-      setSuggestions([]);
-      setOpen(false);
+      closeDropdown();
+      closedRef.current = false; // empty input → allow fresh suggestions
       return;
     }
+
+    // If the user already picked a result and the value hasn't changed, stay closed
+    if (closedRef.current) return;
+
     debounceRef.current = setTimeout(async () => {
+      if (closedRef.current) return; // picked while debounce was pending
       setLoading(true);
       try {
         const res = await searchTickers(q, 8);
+        if (closedRef.current) return; // picked while request was in-flight
         setSuggestions(res);
         setOpen(res.length > 0);
         setActiveIdx(-1);
@@ -78,7 +96,9 @@ export default function TickerSearchInput({
         setLoading(false);
       }
     }, 200);
+
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   // Close dropdown on outside click
@@ -93,39 +113,44 @@ export default function TickerSearchInput({
   }, []);
 
   const pick = useCallback((sym: string) => {
+    closeDropdown();
     onChange(sym);
-    setOpen(false);
-    setSuggestions([]);
-    setActiveIdx(-1);
+    inputRef.current?.blur();
     onSelect(sym);
-  }, [onChange, onSelect]);
+  }, [closeDropdown, onChange, onSelect]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!open || !suggestions.length) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1));
+      if (open) setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIdx((i) => Math.max(i - 1, 0));
+      if (open) setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (activeIdx >= 0 && suggestions[activeIdx]) {
+      if (open && activeIdx >= 0 && suggestions[activeIdx]) {
         pick(suggestions[activeIdx].symbol);
       } else {
-        // submit whatever is typed
         const s = value.trim().toUpperCase();
-        if (s) { setOpen(false); onSelect(s); }
+        if (s) { closeDropdown(); onChange(s); inputRef.current?.blur(); onSelect(s); }
       }
     } else if (e.key === "Escape") {
       setOpen(false);
+    } else {
+      // Any other key means the user is typing something new → allow suggestions again
+      closedRef.current = false;
     }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    closedRef.current = false; // user typed → re-enable suggestions
+    onChange(e.target.value.toUpperCase());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const s = value.trim().toUpperCase();
-    if (s) { setOpen(false); onSelect(s); }
+    if (s) { closeDropdown(); onChange(s); inputRef.current?.blur(); onSelect(s); }
   };
 
   return (
@@ -143,9 +168,9 @@ export default function TickerSearchInput({
         <input
           ref={inputRef}
           value={value}
-          onChange={(e) => onChange(e.target.value.toUpperCase())}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => { if (suggestions.length) setOpen(true); }}
+          onFocus={() => { if (!closedRef.current && suggestions.length) setOpen(true); }}
           placeholder={placeholder}
           autoComplete="off"
           spellCheck={false}
@@ -181,17 +206,12 @@ export default function TickerSearchInput({
                     : "hover:bg-[var(--surface-2)]"
                 }`}
               >
-                {/* Symbol */}
                 <span className="w-16 shrink-0 font-bold text-sm text-gray-900 dark:text-white tabular-nums">
                   {s.symbol}
                 </span>
-
-                {/* Name */}
                 <span className="flex-1 min-w-0 text-xs text-gray-400 truncate">
                   {s.name || "—"}
                 </span>
-
-                {/* Type + Exchange badges */}
                 <div className="flex items-center gap-1 shrink-0">
                   {s.type && (
                     <span className={`text-[9px] font-bold uppercase ${typeColor}`}>
@@ -212,3 +232,4 @@ export default function TickerSearchInput({
     </div>
   );
 }
+
