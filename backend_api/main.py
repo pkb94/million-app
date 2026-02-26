@@ -76,6 +76,9 @@ from .schemas import (
     TradeCreateRequest,
     TradeOut,
     TradeUpdateRequest,
+    AdminUserOut,
+    AdminCreateUserRequest,
+    AdminPatchUserRequest,
 )
 from .security import create_access_token, decode_token
 
@@ -293,12 +296,9 @@ def get_current_user(
         payload = decode_token(creds.credentials)
         if "sub" not in payload:
             raise ValueError("missing sub")
-        # Optional but recommended: check revocation list.
         jti = str(payload.get("jti") or "").strip()
         if jti and services.is_token_revoked(jti=jti):
             raise HTTPException(status_code=401, detail="Token has been revoked")
-
-        # Invalidate tokens issued before the user's cutoff (logout-everywhere / password change).
         token_iat = int(payload.get("iat") or 0)
         if not services.is_token_time_valid(user_id=int(payload["sub"]), token_iat=token_iat):
             raise HTTPException(status_code=401, detail="Token is no longer valid. Please sign in again.")
@@ -307,6 +307,12 @@ def get_current_user(
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def require_admin(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+    if str(user.get("role") or "user") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 @app.get("/health")
@@ -564,7 +570,6 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
     ip = getattr(getattr(request, "client", None), "host", None)
     ua = request.headers.get("user-agent")
 
-    # Throttle repeated failed logins per (username, ip).
     try:
         if services.is_login_rate_limited(username=username, ip=str(ip) if ip else None):
             services.log_auth_event(event_type="login_throttled", success=False, username=username, ip=str(ip) if ip else None, user_agent=ua)
@@ -572,11 +577,10 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
     except HTTPException:
         raise
     except Exception:
-        # Best-effort; never block login if limiter fails.
         pass
 
-    user_id = services.authenticate_user(username, req.password)
-    if not user_id:
+    auth_result = services.authenticate_user(username, req.password)
+    if not auth_result:
         services.log_auth_event(
             event_type="login",
             success=False,
@@ -586,10 +590,12 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
             detail="invalid credentials",
         )
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = create_access_token(subject=str(user_id), extra={"username": username})
+    user_id = auth_result["user_id"]
+    role = auth_result.get("role", "user")
+    token = create_access_token(subject=str(user_id), extra={"username": username, "role": role})
     refresh_token = services.create_refresh_token(user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
     services.log_auth_event(event_type="login", success=True, username=username, user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
-    return AuthResponse(access_token=token, refresh_token=refresh_token, user_id=int(user_id), username=username)
+    return AuthResponse(access_token=token, refresh_token=refresh_token, user_id=int(user_id), username=username, role=role)
 
 
 @app.post("/auth/refresh", response_model=AuthResponse)
@@ -612,13 +618,15 @@ def refresh(req: AuthRefreshRequest, request: Request) -> AuthResponse:
     user_id, new_refresh_token = rotated
     u = services.get_user(int(user_id))
     username = str(getattr(u, "username", "") or "") if u is not None else ""
-    token = create_access_token(subject=str(user_id), extra={"username": username})
+    role = str(getattr(u, "role", None) or "user") if u is not None else "user"
+    token = create_access_token(subject=str(user_id), extra={"username": username, "role": role})
     services.log_auth_event(event_type="refresh", success=True, username=username, user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
     return AuthResponse(
         access_token=token,
         refresh_token=new_refresh_token,
         user_id=int(user_id),
         username=username,
+        role=role,
     )
 
 
@@ -643,11 +651,12 @@ def auth_events(user=Depends(get_current_user)) -> List[AuthEventOut]:
 def me(user=Depends(get_current_user)) -> AuthMeResponse:
     user_id = int(user["sub"])
     username = str(user.get("username") or "")
-    # Prefer DB value if present.
+    role = str(user.get("role") or "user")
     u = services.get_user(user_id)
     if u is not None:
         username = str(getattr(u, "username", username) or username)
-    return AuthMeResponse(user_id=user_id, username=username)
+        role = str(getattr(u, "role", None) or role)
+    return AuthMeResponse(user_id=user_id, username=username, role=role)
 
 
 @app.post("/auth/logout")
@@ -1287,3 +1296,77 @@ def ledger_entries(user=Depends(get_current_user), limit: int = 100) -> List[Dic
                 rec[k] = pd.to_datetime(v).to_pydatetime().isoformat()
         cleaned.append(rec)
     return cleaned
+
+
+# ── Admin endpoints ───────────────────────────────────────────────────────────
+
+@app.get("/admin/users", response_model=List[AdminUserOut])
+def admin_list_users(_admin=Depends(require_admin)) -> List[AdminUserOut]:
+    users = services.list_all_users()
+    return [
+        AdminUserOut(
+            user_id=int(u.id),
+            username=str(u.username or ""),
+            role=str(getattr(u, "role", None) or "user"),
+            is_active=bool(getattr(u, "is_active", True)),
+            created_at=getattr(u, "created_at", None),
+        )
+        for u in users
+    ]
+
+
+@app.post("/admin/users", response_model=AdminUserOut, status_code=201)
+def admin_create_user(req: AdminCreateUserRequest, _admin=Depends(require_admin)) -> AdminUserOut:
+    try:
+        user_id = services.create_user(req.username, req.password, role=req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    u = services.get_user(int(user_id))
+    return AdminUserOut(
+        user_id=int(user_id),
+        username=str(req.username).strip().lower(),
+        role=req.role,
+        is_active=True,
+        created_at=getattr(u, "created_at", None),
+    )
+
+
+@app.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: int, admin=Depends(require_admin)) -> None:
+    if int(admin["sub"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        services.delete_user_admin(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: int, admin=Depends(require_admin)) -> None:
+    if int(admin["sub"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        services.delete_user_admin(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.patch("/admin/users/{user_id}", response_model=AdminUserOut)
+def admin_patch_user(user_id: int, req: AdminPatchUserRequest, admin=Depends(require_admin)) -> AdminUserOut:
+    # Prevent admin from demoting themselves
+    if int(admin["sub"]) == user_id and req.role == "user":
+        raise HTTPException(status_code=400, detail="Cannot remove your own admin role")
+    try:
+        services.patch_user_admin(user_id, role=req.role, is_active=req.is_active)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    u = services.get_user(user_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return AdminUserOut(
+        user_id=int(u.id),
+        username=str(u.username or ""),
+        role=str(getattr(u, "role", None) or "user"),
+        is_active=bool(getattr(u, "is_active", True)),
+        created_at=getattr(u, "created_at", None),
+    )

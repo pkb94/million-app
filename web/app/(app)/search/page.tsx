@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -973,6 +973,7 @@ function TickerDetail({ symbol }: { symbol: string }) {
 
 function SearchContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [symbol, setSymbol] = useState<string | null>(
     searchParams.get("q")?.trim().toUpperCase() || null
   );
@@ -986,8 +987,7 @@ function SearchContent() {
 
   const handleSelect = (sym: string) => {
     const s = sym.trim().toUpperCase();
-    setSymbol(s);
-    setInputVal(s);
+    router.push(`/stocks/${s}`);
   };
 
   return (
@@ -1039,7 +1039,7 @@ function SearchContent() {
               {["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "META", "AMZN", "MSFT"].map((s) => (
                 <button
                   key={s}
-                  onClick={() => { setSymbol(s); setInputVal(s); }}
+                  onClick={() => router.push(`/stocks/${s}`)}
                   className="px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-sm font-bold text-foreground hover:border-[var(--foreground)]/40 hover:text-foreground transition"
                 >{s}</button>
               ))}

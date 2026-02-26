@@ -5,7 +5,9 @@
  * - Auto-refreshes the token on 401 responses
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Use the Next.js /api rewrite proxy so requests stay same-origin (HTTPS on tunnel, HTTP locally).
+// Set NEXT_PUBLIC_API_URL to override (e.g. for production deployment).
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 // ── token storage (client-side only) ────────────────────────────────────────
 
@@ -88,6 +90,8 @@ export const api = {
     apiFetch<T>(path, { method: "POST", body: JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  patch: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
 };
 
@@ -391,3 +395,26 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
 
 export const addCash = (amount: number, direction: "deposit" | "withdrawal", note?: string) =>
   api.post("/cash", { amount, direction, note });
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  user_id: number;
+  username: string;
+  role: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export const adminListUsers = () => api.get<AdminUser[]>("/admin/users");
+
+export const adminCreateUser = (username: string, password: string, role: "admin" | "user") =>
+  api.post<AdminUser>("/admin/users", { username, password, role });
+
+export const adminPatchUser = (user_id: number, patch: { role?: string; is_active?: boolean }) =>
+  api.patch<AdminUser>(`/admin/users/${user_id}`, patch);
+
+export const adminDeleteUser = async (user_id: number): Promise<void> => {
+  await apiFetch<void>(`/admin/users/${user_id}`, { method: "DELETE" });
+};
+

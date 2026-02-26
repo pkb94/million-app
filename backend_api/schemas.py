@@ -20,11 +20,53 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
     user_id: int
     username: str
+    role: str = "user"
+    role: str = "user"
 
 
 class AuthMeResponse(BaseModel):
     user_id: int
     username: str
+    role: str = "user"
+
+
+class AdminUserOut(BaseModel):
+    user_id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+
+class AdminCreateUserRequest(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=6)
+    role: str = Field(default="user", pattern="^(admin|user)$")
+
+
+class AdminPatchUserRequest(BaseModel):
+    role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
+    is_active: Optional[bool] = None
+    role: str = "user"
+
+
+class AdminUserOut(BaseModel):
+    user_id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+
+class AdminCreateUserRequest(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=6)
+    role: str = Field(default="user", pattern="^(admin|user)$")
+
+
+class AdminPatchUserRequest(BaseModel):
+    role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
+    is_active: Optional[bool] = None
 
 
 class AuthChangePasswordRequest(BaseModel):
