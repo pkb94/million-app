@@ -5,7 +5,7 @@ import {
   fetchWeeks, getOrCreateWeek, completeWeek, reopenWeek,
   fetchPositions, createPosition, updatePosition, deletePosition,
   createAssignment, fetchAssignment, updateAssignment,
-  fetchPortfolioSummary, fetchSymbolSummary,
+  fetchPortfolioSummary, fetchSymbolSummary, fetchStockHistory,
   fetchHoldings, createHolding, updateHolding, deleteHolding, fetchHoldingEvents,
   WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus, WeekBreakdown,
   StockHolding, HoldingEvent,
@@ -15,6 +15,8 @@ import {
   TrendingUp, DollarSign, Activity, AlertCircle, Search, Trophy, Calendar, Wallet, TrendingDown, Edit2, Trash2,
 } from "lucide-react";
 import { PageHeader, EmptyState, SkeletonCard, Tabs, RefreshButton } from "@/components/ui";
+import TickerSearchInput from "@/components/TickerSearchInput";
+import { fetchStockHistory } from "@/lib/api";
 
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -287,13 +289,21 @@ function PositionForm({
           f.option_type === "CALL" ? "Link to Holding (CC)" : "Link to Holding (CSP — optional)",
           <select
             value={f.holding_id}
-            onChange={(e) => set("holding_id", e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              set("holding_id", val);
+              // Auto-fill symbol from the selected holding so they stay in sync
+              if (val) {
+                const chosen = allHoldings.find(h => String(h.id) === val);
+                if (chosen) set("symbol", chosen.symbol);
+              }
+            }}
             className={inp}
           >
             <option value="">— No holding linked —</option>
             {relevantHoldings.map((h) => (
               <option key={h.id} value={String(h.id)}>
-                {h.symbol} · {h.shares} shares · adj basis ${h.adjusted_cost_basis.toFixed(2)}
+                {h.symbol}{h.company_name ? ` · ${h.company_name.slice(0, 25)}` : ""} · {h.shares.toLocaleString()} shares · adj basis ${h.adjusted_cost_basis.toFixed(2)}
               </option>
             ))}
             {f.option_type === "CALL" && relevantHoldings.length === 0 && (
@@ -910,34 +920,33 @@ function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => vo
     staleTime: 30_000,
   });
 
-  const unrealizedPct = h.adjusted_cost_basis > 0
-    ? ((h.adjusted_cost_basis - h.cost_basis) / h.cost_basis * -100)
-    : 0;
-
   return (
     <>
       <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-        <td className="px-3 py-2.5 font-bold text-foreground">
+        {/* Company / Symbol */}
+        <td className="px-3 py-2.5">
           <div className="flex items-center gap-1.5">
-            {h.symbol}
+            <span className="font-bold text-foreground">{h.symbol}</span>
             {h.status === "CLOSED" && (
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 font-semibold">CLOSED</span>
             )}
           </div>
+          {h.company_name && <div className="text-[10px] text-foreground/50 truncate max-w-[140px]">{h.company_name}</div>}
         </td>
-        <td className="px-3 py-2.5 text-foreground font-semibold">{h.shares.toFixed(0)}</td>
+        {/* Shares */}
+        <td className="px-3 py-2.5 text-foreground font-semibold">{h.shares.toLocaleString()}</td>
+        {/* Avg cost */}
         <td className="px-3 py-2.5 text-foreground/70 text-sm">${h.cost_basis.toFixed(2)}</td>
+        {/* Adj basis */}
         <td className="px-3 py-2.5 text-sm">
-          <div>
-            <span className="font-semibold text-blue-500">${h.adjusted_cost_basis.toFixed(2)}</span>
-            {h.basis_reduction > 0 && (
-              <span className="ml-1 text-[9px] text-green-500">(-${h.basis_reduction.toFixed(2)} saved)</span>
-            )}
-          </div>
+          <span className="font-semibold text-blue-500">${h.adjusted_cost_basis.toFixed(2)}</span>
+          {h.basis_reduction > 0 && (
+            <div className="text-[9px] text-green-500 font-semibold">↓ ${h.basis_reduction.toFixed(2)} saved</div>
+          )}
         </td>
-        <td className="px-3 py-2.5 text-sm text-foreground/70">
-          {h.acquired_date ? h.acquired_date.slice(0, 10) : "—"}
-        </td>
+        {/* Live price + unrealized P&L */}
+        <HoldingLivePrice symbol={h.symbol} adjBasis={h.adjusted_cost_basis} shares={h.shares} />
+        {/* Actions */}
         <td className="px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             <button
@@ -965,15 +974,15 @@ function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => vo
               <div className="space-y-1.5">
                 {events.map((ev: HoldingEvent) => (
                   <div key={ev.id} className={`flex items-start gap-3 text-xs px-3 py-2 rounded-xl border ${
-                    ev.event_type === "CC_ASSIGNED" ? "bg-green-50/50 dark:bg-green-900/10 border-green-200 dark:border-green-800" :
-                    ev.event_type === "CC_EXPIRED"  ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800" :
-                    ev.event_type === "CSP_ASSIGNED"? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800" :
+                    ev.event_type === "CC_ASSIGNED"  ? "bg-green-50/50 dark:bg-green-900/10 border-green-200 dark:border-green-800" :
+                    ev.event_type === "CC_EXPIRED"   ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800" :
+                    ev.event_type === "CSP_ASSIGNED" ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800" :
                     "bg-[var(--surface)] border-[var(--border)]"
                   }`}>
                     <span className={`font-bold shrink-0 ${
-                      ev.event_type === "CC_ASSIGNED" ? "text-green-600" :
-                      ev.event_type === "CC_EXPIRED"  ? "text-blue-500" :
-                      ev.event_type === "CSP_ASSIGNED"? "text-yellow-600" : "text-foreground/60"
+                      ev.event_type === "CC_ASSIGNED"  ? "text-green-600" :
+                      ev.event_type === "CC_EXPIRED"   ? "text-blue-500" :
+                      ev.event_type === "CSP_ASSIGNED" ? "text-yellow-600" : "text-foreground/60"
                     }`}>{ev.event_type.replace("_", " ")}</span>
                     <span className="text-foreground/70 flex-1">{ev.description}</span>
                     {ev.realized_gain != null && (
@@ -981,7 +990,7 @@ function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => vo
                         {ev.realized_gain >= 0 ? "+" : ""}{ev.realized_gain.toFixed(2)}
                       </span>
                     )}
-                    <span className="text-foreground/40 shrink-0">{ev.created_at.slice(0,10)}</span>
+                    <span className="text-foreground/40 shrink-0">{ev.created_at.slice(0, 10)}</span>
                   </div>
                 ))}
               </div>
@@ -994,7 +1003,30 @@ function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => vo
 }
 
 interface HoldingFormState {
-  symbol: string; shares: string; cost_basis: string; acquired_date: string; notes: string;
+  symbol: string; company_name: string; shares: string; cost_basis: string; acquired_date: string; notes: string;
+}
+
+function HoldingLivePrice({ symbol, adjBasis, shares }: { symbol: string; adjBasis: number; shares: number }) {
+  const { data } = useQuery({
+    queryKey: ["stockHistory", symbol, "1d"],
+    queryFn: () => fetchStockHistory(symbol, "1d", "5m"),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  const price = data?.current_price;
+  if (price == null) return <td className="px-3 py-2.5 text-foreground/40 text-xs">—</td>;
+  const unrealized = (price - adjBasis) * shares;
+  return (
+    <td className="px-3 py-2.5 text-sm">
+      <div className="font-semibold text-foreground">${price.toFixed(2)}</div>
+      <div className={`text-[10px] font-bold ${unrealized >= 0 ? "text-green-500" : "text-red-500"}`}>
+        {unrealized >= 0 ? "+" : ""}${unrealized.toFixed(0)}
+        <span className="ml-1 font-normal text-foreground/40">
+          ({((price - adjBasis) / adjBasis * 100).toFixed(1)}%)
+        </span>
+      </div>
+    </td>
+  );
 }
 
 function HoldingsTab() {
@@ -1008,10 +1040,14 @@ function HoldingsTab() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<StockHolding | null>(null);
   const [search, setSearch] = useState("");
-  const [f, setF] = useState<HoldingFormState>({ symbol: "", shares: "", cost_basis: "", acquired_date: new Date().toISOString().slice(0,10), notes: "" });
+  const emptyHoldingForm = (): HoldingFormState => ({
+    symbol: "", company_name: "", shares: "", cost_basis: "",
+    acquired_date: new Date().toISOString().slice(0, 10), notes: "",
+  });
+  const [f, setF] = useState<HoldingFormState>(emptyHoldingForm());
   const [formErr, setFormErr] = useState("");
 
-  function resetForm() { setF({ symbol: "", shares: "", cost_basis: "", acquired_date: new Date().toISOString().slice(0,10), notes: "" }); setFormErr(""); }
+  function resetForm() { setF(emptyHoldingForm()); setFormErr(""); }
   function setField(k: keyof HoldingFormState, v: string) { setF(p => ({ ...p, [k]: v })); }
 
   const deleteMut = useMutation({
@@ -1023,6 +1059,7 @@ function HoldingsTab() {
     mutationFn: () => {
       const body = {
         symbol: f.symbol.toUpperCase().trim(),
+        company_name: f.company_name || undefined,
         shares: parseFloat(f.shares),
         cost_basis: parseFloat(f.cost_basis),
         acquired_date: f.acquired_date || undefined,
@@ -1032,6 +1069,7 @@ function HoldingsTab() {
         return updateHolding(editing.id, {
           shares: body.shares,
           cost_basis: body.cost_basis,
+          company_name: body.company_name ?? null,
           acquired_date: body.acquired_date,
           notes: body.notes,
         } as Partial<StockHolding>);
@@ -1047,16 +1085,26 @@ function HoldingsTab() {
 
   function startEdit(h: StockHolding) {
     setEditing(h);
-    setF({ symbol: h.symbol, shares: String(h.shares), cost_basis: String(h.cost_basis), acquired_date: h.acquired_date?.slice(0,10) ?? "", notes: h.notes ?? "" });
+    setF({
+      symbol: h.symbol,
+      company_name: h.company_name ?? "",
+      shares: String(h.shares),
+      cost_basis: String(h.cost_basis),
+      acquired_date: h.acquired_date?.slice(0, 10) ?? "",
+      notes: h.notes ?? "",
+    });
     setShowForm(true);
   }
 
   const filtered = useMemo(
-    () => holdings.filter(h => h.symbol.toLowerCase().includes(search.toLowerCase())),
+    () => holdings.filter(h =>
+      h.symbol.toLowerCase().includes(search.toLowerCase()) ||
+      (h.company_name ?? "").toLowerCase().includes(search.toLowerCase())
+    ),
     [holdings, search]
   );
 
-  const totalValue = holdings.filter(h => h.status === "ACTIVE").reduce((s, h) => s + h.total_adjusted_cost, 0);
+  const totalAdjCost = holdings.filter(h => h.status === "ACTIVE").reduce((s, h) => s + h.total_adjusted_cost, 0);
   const totalSaved = holdings.reduce((s, h) => s + h.basis_reduction, 0);
 
   const fld = (label: string, el: React.ReactNode) => (
@@ -1069,15 +1117,15 @@ function HoldingsTab() {
       {holdings.length > 0 && (
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
-            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Holdings</p>
+            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Active Lots</p>
             <p className="text-base font-black text-foreground">{holdings.filter(h => h.status === "ACTIVE").length}</p>
           </div>
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
             <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Total Adj Cost</p>
-            <p className="text-base font-black text-blue-500">${totalValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+            <p className="text-base font-black text-blue-500">${totalAdjCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
-            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Basis Reduced</p>
+            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Basis Saved</p>
             <p className="text-base font-black text-green-500">${totalSaved.toFixed(2)}</p>
           </div>
         </div>
@@ -1086,7 +1134,7 @@ function HoldingsTab() {
       <div className="flex items-center justify-between mb-4 gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search symbol…" className={`${inp} pl-8`} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search symbol or company…" className={`${inp} pl-8`} />
         </div>
         <button
           onClick={() => { setEditing(null); resetForm(); setShowForm(v => !v); }}
@@ -1100,13 +1148,38 @@ function HoldingsTab() {
       {showForm && (
         <div className="bg-[var(--surface)] border border-blue-200 dark:border-blue-800 rounded-2xl p-5 mb-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-foreground">{editing ? "Edit Holding" : "Add Holding"}</h3>
+            <h3 className="font-bold text-foreground">{editing ? `Edit ${editing.symbol}` : "Add Holding"}</h3>
             <button onClick={() => { setShowForm(false); setEditing(null); }} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={15} /></button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-            {fld("Symbol", <input value={f.symbol} onChange={e => setField("symbol", e.target.value.toUpperCase())} placeholder="AAPL" className={inp} disabled={!!editing} />)}
+
+          {/* Ticker search — only for new holdings */}
+          {!editing && (
+            <div className="mb-4">
+              <label className="text-xs text-foreground/70 block mb-1">Search Company / Ticker</label>
+              <TickerSearchInput
+                value={f.symbol}
+                onChange={(v) => setField("symbol", v)}
+                onSelect={(sym) => setField("symbol", sym)}
+                placeholder="Type AAPL, Apple, MSFT…"
+                actionLabel="SELECT"
+                accentColor="#2563eb"
+              />
+              {f.symbol && (
+                <p className="mt-1.5 text-[11px] text-blue-500 font-semibold">✓ {f.symbol} selected</p>
+              )}
+            </div>
+          )}
+          {editing && (
+            <div className="mb-4 p-3 bg-[var(--surface-2)] rounded-xl">
+              <p className="text-xs text-foreground/60">Editing</p>
+              <p className="font-black text-foreground text-lg">{editing.symbol}</p>
+              {editing.company_name && <p className="text-xs text-foreground/50">{editing.company_name}</p>}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
             {fld("Shares", <input type="number" min="1" step="1" value={f.shares} onChange={e => setField("shares", e.target.value)} placeholder="100" className={inp} />)}
-            {fld("Cost Basis / Share ($)", <input type="number" step="0.01" value={f.cost_basis} onChange={e => setField("cost_basis", e.target.value)} placeholder="150.00" className={inp} />)}
+            {fld("Avg Cost / Share ($)", <input type="number" step="0.01" value={f.cost_basis} onChange={e => setField("cost_basis", e.target.value)} placeholder="150.00" className={inp} />)}
             {fld("Acquired Date", <input type="date" value={f.acquired_date} onChange={e => setField("acquired_date", e.target.value)} className={inp} />)}
           </div>
           {fld("Notes", <input value={f.notes} onChange={e => setField("notes", e.target.value)} placeholder="optional" className={`${inp} mb-3`} />)}
@@ -1124,7 +1197,7 @@ function HoldingsTab() {
       {isLoading && <div className="space-y-2">{[1,2,3].map(i => <SkeletonCard key={i} rows={1} />)}</div>}
 
       {!isLoading && filtered.length === 0 && (
-        <EmptyState icon={Wallet} title="No holdings yet" body={search ? "No holdings match your search." : "Add a holding to track your stock positions and link option trades."} />
+        <EmptyState icon={Wallet} title="No holdings yet" body={search ? "No holdings match your search." : "Click \"Add Holding\", search for a company, enter shares and average cost."} />
       )}
 
       {!isLoading && filtered.length > 0 && (
@@ -1132,8 +1205,8 @@ function HoldingsTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
-                {["Symbol","Shares","Orig Basis","Adj Basis","Acquired","Actions"].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
+                {["Company","Shares","Avg Cost","Adj Basis","Current Price / P&L","Actions"].map(col => (
+                  <th key={col} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{col}</th>
                 ))}
               </tr>
             </thead>

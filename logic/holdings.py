@@ -30,6 +30,7 @@ def _holding_to_dict(h: StockHolding) -> dict:
     return {
         "id":                  h.id,
         "symbol":              h.symbol,
+        "company_name":        h.company_name,
         "shares":              h.shares,
         "cost_basis":          h.cost_basis,
         "adjusted_cost_basis": h.adjusted_cost_basis,
@@ -83,6 +84,7 @@ def create_holding(*, user_id: int, data: dict) -> dict:
         h = StockHolding(
             user_id             = user_id,
             symbol              = str(data["symbol"]).upper().strip(),
+            company_name        = data.get("company_name"),
             shares              = float(data["shares"]),
             cost_basis          = cost,
             adjusted_cost_basis = cost,   # starts equal to cost basis
@@ -115,6 +117,7 @@ def update_holding(*, user_id: int, holding_id: int, data: dict) -> dict:
         if "acquired_date"        in data: h.acquired_date        = _parse_dt(data["acquired_date"])
         if "notes"                in data: h.notes                = data["notes"]
         if "status"               in data: h.status               = data["status"]
+        if "company_name"         in data: h.company_name         = data["company_name"]
         h.updated_at = datetime.utcnow()
         session.commit()
         session.refresh(h)

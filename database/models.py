@@ -377,6 +377,7 @@ class StockHolding(Base):
     id                   = Column(Integer, primary_key=True)
     user_id              = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
     symbol               = Column(String, nullable=False, index=True)
+    company_name         = Column(String, nullable=True)                   # full company name from ticker search
     shares               = Column(Float, nullable=False)                   # current shares (auto-decrements on CC assignment)
     cost_basis           = Column(Float, nullable=False)                   # original per-share cost (never changes)
     adjusted_cost_basis  = Column(Float, nullable=False)                   # reduces as CC premiums expire worthless
@@ -818,6 +819,7 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
                     id INTEGER PRIMARY KEY,
                     user_id INTEGER NOT NULL,
                     symbol TEXT NOT NULL,
+                    company_name TEXT,
                     shares REAL NOT NULL,
                     cost_basis REAL NOT NULL,
                     adjusted_cost_basis REAL NOT NULL,
@@ -858,6 +860,8 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
 
         # holding_id column on option_positions
         _add_columns("option_positions", [("holding_id", "INTEGER")])
+        # company_name column on stock_holdings (for existing DBs)
+        _add_columns("stock_holdings", [("company_name", "TEXT")])
     except Exception:
         # Best-effort: never break app startup due to migration helpers.
         return

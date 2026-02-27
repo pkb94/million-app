@@ -454,6 +454,7 @@ export const fetchSymbolSummary = () => api.get<SymbolSummary[]>("/portfolio/sym
 export interface StockHolding {
   id: number;
   symbol: string;
+  company_name: string | null;
   shares: number;
   cost_basis: number;
   adjusted_cost_basis: number;
@@ -485,7 +486,7 @@ export interface HoldingEvent {
 export const fetchHoldings = () => api.get<StockHolding[]>("/portfolio/holdings");
 export const createHolding = (body: {
   symbol: string; shares: number; cost_basis: number;
-  acquired_date?: string; notes?: string;
+  company_name?: string; acquired_date?: string; notes?: string;
 }) => api.post<StockHolding>("/portfolio/holdings", body);
 export const updateHolding = (id: number, body: Partial<StockHolding>) =>
   api.patch<StockHolding>(`/portfolio/holdings/${id}`, body);
