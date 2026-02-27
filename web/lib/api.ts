@@ -350,6 +350,7 @@ export interface OptionPosition {
   status: PositionStatus;
   rolled_to_id: number | null;
   carried_from_id: number | null;
+  holding_id: number | null;
   margin: number | null;
   notes: string | null;
   // computed
@@ -447,6 +448,50 @@ export const updateAssignment = (id: number, body: Partial<StockAssignment>) =>
 // Summary
 export const fetchPortfolioSummary = () => api.get<PortfolioSummary>("/portfolio/summary");
 export const fetchSymbolSummary = () => api.get<SymbolSummary[]>("/portfolio/symbols");
+
+// ── Stock Holdings ────────────────────────────────────────────────────────────
+
+export interface StockHolding {
+  id: number;
+  symbol: string;
+  shares: number;
+  cost_basis: number;
+  adjusted_cost_basis: number;
+  acquired_date: string | null;
+  status: "ACTIVE" | "CLOSED";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // computed
+  total_original_cost: number;
+  total_adjusted_cost: number;
+  basis_reduction: number;
+}
+
+export type HoldingEventType = "CC_EXPIRED" | "CC_ASSIGNED" | "CSP_ASSIGNED" | "MANUAL";
+
+export interface HoldingEvent {
+  id: number;
+  holding_id: number;
+  position_id: number | null;
+  event_type: HoldingEventType;
+  shares_delta: number | null;
+  basis_delta: number | null;
+  realized_gain: number | null;
+  description: string | null;
+  created_at: string;
+}
+
+export const fetchHoldings = () => api.get<StockHolding[]>("/portfolio/holdings");
+export const createHolding = (body: {
+  symbol: string; shares: number; cost_basis: number;
+  acquired_date?: string; notes?: string;
+}) => api.post<StockHolding>("/portfolio/holdings", body);
+export const updateHolding = (id: number, body: Partial<StockHolding>) =>
+  api.patch<StockHolding>(`/portfolio/holdings/${id}`, body);
+export const deleteHolding = (id: number) => api.del(`/portfolio/holdings/${id}`);
+export const fetchHoldingEvents = (holding_id: number) =>
+  api.get<HoldingEvent[]>(`/portfolio/holdings/${holding_id}/events`);
 
 // ── Orders ───────────────────────────────────────────────────────────────────
 

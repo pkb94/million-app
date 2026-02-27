@@ -6,11 +6,13 @@ import {
   fetchPositions, createPosition, updatePosition, deletePosition,
   createAssignment, fetchAssignment, updateAssignment,
   fetchPortfolioSummary, fetchSymbolSummary,
+  fetchHoldings, createHolding, updateHolding, deleteHolding, fetchHoldingEvents,
   WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus, WeekBreakdown,
+  StockHolding, HoldingEvent,
 } from "@/lib/api";
 import {
   BarChart2, Plus, X, ChevronDown, ChevronUp, CheckCircle2, LockOpen,
-  TrendingUp, DollarSign, Activity, AlertCircle, Search, Trophy, Calendar,
+  TrendingUp, DollarSign, Activity, AlertCircle, Search, Trophy, Calendar, Wallet, TrendingDown, Edit2, Trash2,
 } from "lucide-react";
 import { PageHeader, EmptyState, SkeletonCard, Tabs, RefreshButton } from "@/components/ui";
 
@@ -150,14 +152,14 @@ interface PosFormState {
   symbol: string; contracts: string; strike: string;
   option_type: "PUT" | "CALL"; sold_date: string; expiry_date: string;
   buy_date: string; premium_in: string; premium_out: string;
-  is_roll: boolean; margin: string; notes: string;
+  is_roll: boolean; margin: string; notes: string; holding_id: string;
 }
 
 const emptyForm = (): PosFormState => ({
-  symbol: "", contracts: "1", strike: "", option_type: "PUT",
+  symbol: "", contracts: "1", strike: "", option_type: "CALL",
   sold_date: new Date().toISOString().slice(0, 10),
   expiry_date: "", buy_date: "", premium_in: "", premium_out: "",
-  is_roll: false, margin: "", notes: "",
+  is_roll: false, margin: "", notes: "", holding_id: "",
 });
 
 function posToForm(p: OptionPosition): PosFormState {
@@ -169,6 +171,7 @@ function posToForm(p: OptionPosition): PosFormState {
     premium_out: p.premium_out != null ? String(p.premium_out) : "",
     is_roll: p.is_roll, margin: p.margin != null ? String(p.margin) : "",
     notes: p.notes ?? "",
+    holding_id: p.holding_id != null ? String(p.holding_id) : "",
   };
 }
 
@@ -178,6 +181,21 @@ function PositionForm({
   const qc = useQueryClient();
   const [f, setF] = useState<PosFormState>(editPos ? posToForm(editPos) : emptyForm());
   const [err, setErr] = useState("");
+
+  // Load holdings for the dropdown
+  const { data: allHoldings = [] } = useQuery({
+    queryKey: ["holdings"],
+    queryFn: fetchHoldings,
+    staleTime: 30_000,
+  });
+
+  // For CC: filter to holdings matching the typed symbol; for CSP: show all active
+  const relevantHoldings = allHoldings.filter((h) =>
+    h.status === "ACTIVE" &&
+    (f.option_type === "CALL"
+      ? h.symbol === f.symbol.toUpperCase()
+      : true)
+  );
 
   function set(k: keyof PosFormState, v: string | boolean) {
     setF((prev) => ({ ...prev, [k]: v }));
@@ -198,6 +216,7 @@ function PositionForm({
         is_roll: f.is_roll,
         margin: f.margin ? parseFloat(f.margin) : null,
         notes: f.notes || null,
+        holding_id: f.holding_id ? parseInt(f.holding_id) : null,
       };
       return editPos
         ? updatePosition(editPos.id, body)
@@ -231,8 +250,8 @@ function PositionForm({
         {field("Strike ($)", <input type="number" step="0.5" value={f.strike} onChange={(e) => set("strike", e.target.value)} placeholder="150.00" className={inp} />)}
         {field("Type", (
           <select value={f.option_type} onChange={(e) => set("option_type", e.target.value as "PUT" | "CALL")} className={inp}>
-            <option value="PUT">PUT (CSP)</option>
             <option value="CALL">CALL (CC)</option>
+            <option value="PUT">PUT (CSP)</option>
           </select>
         ))}
         {field("Sold Date", <input type="date" value={f.sold_date} onChange={(e) => set("sold_date", e.target.value)} className={inp} />)}
@@ -262,6 +281,26 @@ function PositionForm({
       </div>
       <div className="mb-3">
         {field("Notes", <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="optional" className={inp} />)}
+      </div>
+      <div className="mb-3">
+        {field(
+          f.option_type === "CALL" ? "Link to Holding (CC)" : "Link to Holding (CSP — optional)",
+          <select
+            value={f.holding_id}
+            onChange={(e) => set("holding_id", e.target.value)}
+            className={inp}
+          >
+            <option value="">— No holding linked —</option>
+            {relevantHoldings.map((h) => (
+              <option key={h.id} value={String(h.id)}>
+                {h.symbol} · {h.shares} shares · adj basis ${h.adjusted_cost_basis.toFixed(2)}
+              </option>
+            ))}
+            {f.option_type === "CALL" && relevantHoldings.length === 0 && (
+              <option disabled value="">(no {f.symbol || ""} holdings — add one in Holdings tab)</option>
+            )}
+          </select>
+        )}
       </div>
       {err && <p className="text-xs text-red-500 mb-3">{err}</p>}
       {(!f.symbol || !f.strike) && (
@@ -860,6 +899,261 @@ function YearTab() {
   );
 }
 
+// ── Holdings Tab ─────────────────────────────────────────────────────────────
+
+function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => void; onDelete: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: events = [], isLoading: eventsLoading } = useQuery({
+    queryKey: ["holdingEvents", h.id],
+    queryFn: () => fetchHoldingEvents(h.id),
+    enabled: expanded,
+    staleTime: 30_000,
+  });
+
+  const unrealizedPct = h.adjusted_cost_basis > 0
+    ? ((h.adjusted_cost_basis - h.cost_basis) / h.cost_basis * -100)
+    : 0;
+
+  return (
+    <>
+      <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+        <td className="px-3 py-2.5 font-bold text-foreground">
+          <div className="flex items-center gap-1.5">
+            {h.symbol}
+            {h.status === "CLOSED" && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 font-semibold">CLOSED</span>
+            )}
+          </div>
+        </td>
+        <td className="px-3 py-2.5 text-foreground font-semibold">{h.shares.toFixed(0)}</td>
+        <td className="px-3 py-2.5 text-foreground/70 text-sm">${h.cost_basis.toFixed(2)}</td>
+        <td className="px-3 py-2.5 text-sm">
+          <div>
+            <span className="font-semibold text-blue-500">${h.adjusted_cost_basis.toFixed(2)}</span>
+            {h.basis_reduction > 0 && (
+              <span className="ml-1 text-[9px] text-green-500">(-${h.basis_reduction.toFixed(2)} saved)</span>
+            )}
+          </div>
+        </td>
+        <td className="px-3 py-2.5 text-sm text-foreground/70">
+          {h.acquired_date ? h.acquired_date.slice(0, 10) : "—"}
+        </td>
+        <td className="px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="text-[10px] px-2 py-1 rounded-lg bg-[var(--surface-2)] text-foreground/70 font-semibold hover:bg-[var(--surface-3,var(--surface-2))] transition flex items-center gap-1"
+            >
+              {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />} History
+            </button>
+            <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
+            <button
+              onClick={() => { if (window.confirm(`Delete ${h.symbol} holding (${h.shares} shares)?`)) onDelete(); }}
+              className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
+            >Del</button>
+          </div>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]/40">
+          <td colSpan={6} className="px-4 pb-3 pt-2">
+            {eventsLoading ? (
+              <p className="text-xs text-foreground/50">Loading history…</p>
+            ) : events.length === 0 ? (
+              <p className="text-xs text-foreground/50">No events yet — events are recorded automatically when linked option positions change status.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {events.map((ev: HoldingEvent) => (
+                  <div key={ev.id} className={`flex items-start gap-3 text-xs px-3 py-2 rounded-xl border ${
+                    ev.event_type === "CC_ASSIGNED" ? "bg-green-50/50 dark:bg-green-900/10 border-green-200 dark:border-green-800" :
+                    ev.event_type === "CC_EXPIRED"  ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800" :
+                    ev.event_type === "CSP_ASSIGNED"? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800" :
+                    "bg-[var(--surface)] border-[var(--border)]"
+                  }`}>
+                    <span className={`font-bold shrink-0 ${
+                      ev.event_type === "CC_ASSIGNED" ? "text-green-600" :
+                      ev.event_type === "CC_EXPIRED"  ? "text-blue-500" :
+                      ev.event_type === "CSP_ASSIGNED"? "text-yellow-600" : "text-foreground/60"
+                    }`}>{ev.event_type.replace("_", " ")}</span>
+                    <span className="text-foreground/70 flex-1">{ev.description}</span>
+                    {ev.realized_gain != null && (
+                      <span className={`font-bold shrink-0 ${ev.realized_gain >= 0 ? "text-green-500" : "text-red-500"}`}>
+                        {ev.realized_gain >= 0 ? "+" : ""}{ev.realized_gain.toFixed(2)}
+                      </span>
+                    )}
+                    <span className="text-foreground/40 shrink-0">{ev.created_at.slice(0,10)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+interface HoldingFormState {
+  symbol: string; shares: string; cost_basis: string; acquired_date: string; notes: string;
+}
+
+function HoldingsTab() {
+  const qc = useQueryClient();
+  const { data: holdings = [], isLoading } = useQuery({
+    queryKey: ["holdings"],
+    queryFn: fetchHoldings,
+    staleTime: 30_000,
+  });
+
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<StockHolding | null>(null);
+  const [search, setSearch] = useState("");
+  const [f, setF] = useState<HoldingFormState>({ symbol: "", shares: "", cost_basis: "", acquired_date: new Date().toISOString().slice(0,10), notes: "" });
+  const [formErr, setFormErr] = useState("");
+
+  function resetForm() { setF({ symbol: "", shares: "", cost_basis: "", acquired_date: new Date().toISOString().slice(0,10), notes: "" }); setFormErr(""); }
+  function setField(k: keyof HoldingFormState, v: string) { setF(p => ({ ...p, [k]: v })); }
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => deleteHolding(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["holdings"] }),
+  });
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const body = {
+        symbol: f.symbol.toUpperCase().trim(),
+        shares: parseFloat(f.shares),
+        cost_basis: parseFloat(f.cost_basis),
+        acquired_date: f.acquired_date || undefined,
+        notes: f.notes || undefined,
+      };
+      if (editing) {
+        return updateHolding(editing.id, {
+          shares: body.shares,
+          cost_basis: body.cost_basis,
+          acquired_date: body.acquired_date,
+          notes: body.notes,
+        } as Partial<StockHolding>);
+      }
+      return createHolding(body);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["holdings"] });
+      setShowForm(false); setEditing(null); resetForm();
+    },
+    onError: (e: Error) => setFormErr(e.message),
+  });
+
+  function startEdit(h: StockHolding) {
+    setEditing(h);
+    setF({ symbol: h.symbol, shares: String(h.shares), cost_basis: String(h.cost_basis), acquired_date: h.acquired_date?.slice(0,10) ?? "", notes: h.notes ?? "" });
+    setShowForm(true);
+  }
+
+  const filtered = useMemo(
+    () => holdings.filter(h => h.symbol.toLowerCase().includes(search.toLowerCase())),
+    [holdings, search]
+  );
+
+  const totalValue = holdings.filter(h => h.status === "ACTIVE").reduce((s, h) => s + h.total_adjusted_cost, 0);
+  const totalSaved = holdings.reduce((s, h) => s + h.basis_reduction, 0);
+
+  const fld = (label: string, el: React.ReactNode) => (
+    <div><label className="text-xs text-foreground/70 block mb-1">{label}</label>{el}</div>
+  );
+
+  return (
+    <div>
+      {/* Summary cards */}
+      {holdings.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
+            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Holdings</p>
+            <p className="text-base font-black text-foreground">{holdings.filter(h => h.status === "ACTIVE").length}</p>
+          </div>
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
+            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Total Adj Cost</p>
+            <p className="text-base font-black text-blue-500">${totalValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+          </div>
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
+            <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Basis Reduced</p>
+            <p className="text-base font-black text-green-500">${totalSaved.toFixed(2)}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search symbol…" className={`${inp} pl-8`} />
+        </div>
+        <button
+          onClick={() => { setEditing(null); resetForm(); setShowForm(v => !v); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition"
+        >
+          <Plus size={12} /> Add Holding
+        </button>
+      </div>
+
+      {/* Add / Edit form */}
+      {showForm && (
+        <div className="bg-[var(--surface)] border border-blue-200 dark:border-blue-800 rounded-2xl p-5 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-foreground">{editing ? "Edit Holding" : "Add Holding"}</h3>
+            <button onClick={() => { setShowForm(false); setEditing(null); }} className="p-1.5 rounded-xl text-foreground/70 hover:bg-[var(--surface-2)] transition"><X size={15} /></button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            {fld("Symbol", <input value={f.symbol} onChange={e => setField("symbol", e.target.value.toUpperCase())} placeholder="AAPL" className={inp} disabled={!!editing} />)}
+            {fld("Shares", <input type="number" min="1" step="1" value={f.shares} onChange={e => setField("shares", e.target.value)} placeholder="100" className={inp} />)}
+            {fld("Cost Basis / Share ($)", <input type="number" step="0.01" value={f.cost_basis} onChange={e => setField("cost_basis", e.target.value)} placeholder="150.00" className={inp} />)}
+            {fld("Acquired Date", <input type="date" value={f.acquired_date} onChange={e => setField("acquired_date", e.target.value)} className={inp} />)}
+          </div>
+          {fld("Notes", <input value={f.notes} onChange={e => setField("notes", e.target.value)} placeholder="optional" className={`${inp} mb-3`} />)}
+          {formErr && <p className="text-xs text-red-500 mb-3">{formErr}</p>}
+          <button
+            onClick={() => saveMut.mutate()}
+            disabled={saveMut.isPending || !f.symbol || !f.shares || !f.cost_basis}
+            className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {saveMut.isPending ? "Saving…" : editing ? "Save Changes" : "Add Holding"}
+          </button>
+        </div>
+      )}
+
+      {isLoading && <div className="space-y-2">{[1,2,3].map(i => <SkeletonCard key={i} rows={1} />)}</div>}
+
+      {!isLoading && filtered.length === 0 && (
+        <EmptyState icon={Wallet} title="No holdings yet" body={search ? "No holdings match your search." : "Add a holding to track your stock positions and link option trades."} />
+      )}
+
+      {!isLoading && filtered.length > 0 && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
+                {["Symbol","Shares","Orig Basis","Adj Basis","Acquired","Actions"].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(h => (
+                <HoldingRow
+                  key={h.id}
+                  h={h}
+                  onEdit={() => startEdit(h)}
+                  onDelete={() => deleteMut.mutate(h.id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Portfolio Summary Bar ─────────────────────────────────────────────────────
 
 function PortfolioSummaryBar() {
@@ -957,7 +1251,7 @@ export default function PortfolioPage() {
   } = useQuery({ queryKey: ["weeks"], queryFn: fetchWeeks, staleTime: 30_000 });
 
   const [selectedWeekId, setSelectedWeekId] = useState<number | null>(null);
-  const [tab, setTab] = useState<"positions" | "symbols" | "year">("positions");
+  const [tab, setTab] = useState<"holdings" | "positions" | "symbols" | "year">("holdings");
   const [autoSelected, setAutoSelected] = useState(false);
 
   if (!autoSelected && weeks.length > 0) {
@@ -1031,8 +1325,9 @@ export default function PortfolioPage() {
         <div className="mb-5">
           <Tabs
             active={tab}
-            onChange={(k) => setTab(k as "positions" | "symbols" | "year")}
+            onChange={(k) => setTab(k as "holdings" | "positions" | "symbols" | "year")}
             tabs={[
+              { key: "holdings",  label: "Holdings"  },
               { key: "positions", label: "Positions" },
               { key: "symbols",   label: "Symbols"   },
               { key: "year",      label: "Year"      },
@@ -1040,6 +1335,8 @@ export default function PortfolioPage() {
           />
         </div>
       )}
+
+      {tab === "holdings" && <HoldingsTab />}
 
       {tab === "positions" && (
         selectedWeek

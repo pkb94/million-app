@@ -1105,8 +1105,20 @@ def create_position(week_id: int, body: Dict[str, Any], user=Depends(get_current
 @app.patch("/portfolio/positions/{position_id}", response_model=Dict[str, Any])
 def update_position(position_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
     from logic.portfolio import update_position as _update
+    from logic.holdings import apply_position_status_change as _apply_holding
     try:
-        return _update(user_id=int(user["sub"]), position_id=position_id, data=body)
+        result = _update(user_id=int(user["sub"]), position_id=position_id, data=body)
+        # Fire holding trigger automatically when status changes
+        if "status" in body:
+            try:
+                _apply_holding(
+                    user_id=int(user["sub"]),
+                    position_id=position_id,
+                    new_status=body["status"],
+                )
+            except Exception:
+                pass  # holding trigger errors never break the position update
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -1158,6 +1170,48 @@ def portfolio_summary(user=Depends(get_current_user)) -> Dict[str, Any]:
 def symbol_summary(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
     from logic.portfolio import symbol_summary as _sym_summary
     return _sym_summary(user_id=int(user["sub"]))
+
+
+# ── Stock Holdings ────────────────────────────────────────────────────────────
+
+@app.get("/portfolio/holdings", response_model=List[Dict[str, Any]])
+def list_holdings(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.holdings import list_holdings as _list
+    return _list(user_id=int(user["sub"]))
+
+
+@app.post("/portfolio/holdings", response_model=Dict[str, Any])
+def create_holding(body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.holdings import create_holding as _create
+    try:
+        return _create(user_id=int(user["sub"]), data=body)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/portfolio/holdings/{holding_id}", response_model=Dict[str, Any])
+def update_holding(holding_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.holdings import update_holding as _update
+    try:
+        return _update(user_id=int(user["sub"]), holding_id=holding_id, data=body)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/portfolio/holdings/{holding_id}")
+def delete_holding(holding_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
+    from logic.holdings import delete_holding as _delete
+    try:
+        _delete(user_id=int(user["sub"]), holding_id=holding_id)
+        return {"status": "ok"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/portfolio/holdings/{holding_id}/events", response_model=List[Dict[str, Any]])
+def list_holding_events(holding_id: int, user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.holdings import list_holding_events as _events
+    return _events(user_id=int(user["sub"]), holding_id=holding_id)
 
 
 @app.get("/cash", response_model=List[Dict[str, Any]])

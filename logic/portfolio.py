@@ -59,6 +59,7 @@ def _pos_to_dict(p: OptionPosition) -> dict:
         "status":          p.status.value if p.status else "ACTIVE",
         "rolled_to_id":    p.rolled_to_id,
         "carried_from_id": p.carried_from_id,
+        "holding_id":      p.holding_id,
         "margin":          p.margin,
         "notes":           p.notes,
         # Computed
@@ -423,6 +424,7 @@ def create_position(*, user_id: int, week_id: int, data: dict) -> dict:
             is_roll     = bool(data.get("is_roll", False)),
             status      = status_val,
             margin      = _float_or_none(data.get("margin")),
+            holding_id  = int(data["holding_id"]) if data.get("holding_id") else None,
             notes       = data.get("notes"),
             created_at  = now,
             updated_at  = now,
@@ -467,6 +469,8 @@ def update_position(*, user_id: int, position_id: int, data: dict) -> dict:
 
         if "status" in data:
             pos.status = OptionPositionStatus(data["status"].upper())
+        if "holding_id" in data:
+            pos.holding_id = int(data["holding_id"]) if data["holding_id"] else None
 
         pos.updated_at = datetime.utcnow()
         session.commit()
