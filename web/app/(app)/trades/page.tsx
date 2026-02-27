@@ -303,7 +303,7 @@ function PositionForm({
             <option value="">— No holding linked —</option>
             {relevantHoldings.map((h) => (
               <option key={h.id} value={String(h.id)}>
-                {h.symbol}{h.company_name ? ` · ${h.company_name.slice(0, 25)}` : ""} · {h.shares.toLocaleString()} shares · live adj basis ${h.live_adj_basis.toFixed(2)}
+                {h.symbol}{h.company_name ? ` · ${h.company_name.slice(0, 25)}` : ""} · {h.shares.toLocaleString()} shares · live adj basis ${(h.live_adj_basis ?? h.adjusted_cost_basis).toFixed(2)}
               </option>
             ))}
             {f.option_type === "CALL" && relevantHoldings.length === 0 && (
@@ -968,6 +968,13 @@ function YearTab() {
 
 function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => void; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  // Fallback for old cached responses that predate the live-basis fields
+  const liveAdj        = h.live_adj_basis     ?? h.adjusted_cost_basis;
+  const downsideBasis  = h.downside_basis      ?? liveAdj;
+  const upsideBasis    = h.upside_basis        ?? null;
+  const pendingPremium = h.pending_premium     ?? 0;
+  const basisReduction = h.basis_reduction     ?? 0;
+
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["holdingEvents", h.id],
     queryFn: () => fetchHoldingEvents(h.id),
@@ -995,24 +1002,24 @@ function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => vo
         {/* Adj basis */}
         <td className="px-3 py-2.5 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-blue-500">${h.live_adj_basis.toFixed(2)}</span>
-            {h.pending_premium > 0 && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold" title="Premium in-flight from active positions">⏳ -${(h.pending_premium / h.shares).toFixed(2)}/sh pending</span>
+            <span className="font-semibold text-blue-500">${liveAdj.toFixed(2)}</span>
+            {pendingPremium > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold" title="Premium in-flight from active positions">⏳ -${(pendingPremium / h.shares).toFixed(2)}/sh pending</span>
             )}
           </div>
-          {h.basis_reduction > 0 && (
-            <div className="text-[9px] text-green-500 font-semibold">↓ ${h.basis_reduction.toFixed(2)} saved total</div>
+          {basisReduction > 0 && (
+            <div className="text-[9px] text-green-500 font-semibold">↓ ${basisReduction.toFixed(2)} saved total</div>
           )}
           {/* Upside / Downside basis */}
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[9px] text-foreground/50" title="Breakeven if stock goes to zero">▼ BE: <span className="text-red-400 font-semibold">${h.downside_basis.toFixed(2)}</span></span>
-            {h.upside_basis != null && (
-              <span className="text-[9px] text-foreground/50" title="Lowest active covered call strike — shares get called away here">▲ CC: <span className="text-green-500 font-semibold">${h.upside_basis.toFixed(2)}</span></span>
+            <span className="text-[9px] text-foreground/50" title="Breakeven if stock goes to zero">▼ BE: <span className="text-red-400 font-semibold">${downsideBasis.toFixed(2)}</span></span>
+            {upsideBasis != null && (
+              <span className="text-[9px] text-foreground/50" title="Lowest active covered call strike — shares get called away here">▲ CC: <span className="text-green-500 font-semibold">${upsideBasis.toFixed(2)}</span></span>
             )}
           </div>
         </td>
         {/* Live price + unrealized P&L */}
-        <HoldingLivePrice symbol={h.symbol} liveAdjBasis={h.live_adj_basis} shares={h.shares} />
+        <HoldingLivePrice symbol={h.symbol} liveAdjBasis={liveAdj} shares={h.shares} />
         {/* Actions */}
         <td className="px-3 py-2.5">
           <div className="flex items-center gap-1.5">
