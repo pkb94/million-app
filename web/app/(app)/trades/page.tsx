@@ -6,11 +6,11 @@ import {
   fetchPositions, createPosition, updatePosition, deletePosition,
   createAssignment, fetchAssignment, updateAssignment,
   fetchPortfolioSummary, fetchSymbolSummary,
-  WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus,
+  WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus, WeekBreakdown,
 } from "@/lib/api";
 import {
   BarChart2, Plus, X, ChevronDown, ChevronUp, CheckCircle2,
-  TrendingUp, DollarSign, Activity, AlertCircle, Search,
+  TrendingUp, DollarSign, Activity, AlertCircle, Search, Trophy, Calendar,
 } from "lucide-react";
 import { PageHeader, EmptyState, SkeletonCard, Tabs, RefreshButton } from "@/components/ui";
 
@@ -211,10 +211,13 @@ function PositionForm({
         {field("Notes", <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="optional" className={inp} />)}
       </div>
       {err && <p className="text-xs text-red-500 mb-3">{err}</p>}
+      {(!f.symbol || !f.strike) && (
+        <p className="text-xs text-foreground/50 mb-2">* Symbol and Strike are required</p>
+      )}
       <button
         onClick={() => mut.mutate()}
         disabled={mut.isPending || !f.symbol || !f.strike}
-        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
+        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
       >
         {mut.isPending ? "Saving…" : editPos ? "Save Changes" : "Add Position"}
       </button>
@@ -631,6 +634,154 @@ function SymbolsTab() {
   );
 }
 
+// ── Year Summary Tab ─────────────────────────────────────────────────────────
+
+function YearTab() {
+  const { data: s, isLoading } = useQuery({
+    queryKey: ["portfolioSummary"],
+    queryFn: fetchPortfolioSummary,
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return <div className="space-y-3">{[1,2,3].map(i => <SkeletonCard key={i} rows={2} />)}</div>;
+  if (!s) return <EmptyState icon={BarChart2} title="No data yet" body="Complete a week to see your yearly summary." />;
+
+  const monthNames: Record<string, string> = {
+    "01":"Jan","02":"Feb","03":"Mar","04":"Apr","05":"May","06":"Jun",
+    "07":"Jul","08":"Aug","09":"Sep","10":"Oct","11":"Nov","12":"Dec",
+  };
+
+  const monthlyEntries = Object.entries(s.monthly_premium ?? {}).sort(([a],[b]) => a.localeCompare(b));
+  const maxMonthlyPremium = Math.max(...monthlyEntries.map(([,v]) => v), 1);
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Total Premium</p>
+          <p className="text-xl font-black text-green-500">${s.total_premium_collected.toFixed(2)}</p>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Realized P/L</p>
+          <p className={`text-xl font-black ${s.realized_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>{fmt$(s.realized_pnl)}</p>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Win Rate</p>
+          <p className="text-xl font-black text-blue-500">{s.win_rate}%</p>
+          <p className="text-[10px] text-foreground/50">{s.complete_weeks}/{s.total_weeks} weeks</p>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Est. Tax ({(s.cap_gains_tax_rate*100).toFixed(0)}%)</p>
+          <p className="text-xl font-black text-orange-400">${s.estimated_tax.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* ── Best / Worst week ── */}
+      {(s.best_week || s.worst_week) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {s.best_week && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Trophy size={14} className="text-green-600" />
+                <p className="text-xs font-bold text-green-700 dark:text-green-400">Best Week</p>
+              </div>
+              <p className="text-sm text-foreground/70">{s.best_week.week_end}</p>
+              <p className="text-2xl font-black text-green-600">${s.best_week.premium.toFixed(2)}</p>
+              <p className="text-xs text-foreground/50">{s.best_week.position_count} positions</p>
+            </div>
+          )}
+          {s.worst_week && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle size={14} className="text-red-500" />
+                <p className="text-xs font-bold text-red-600 dark:text-red-400">Worst Week</p>
+              </div>
+              <p className="text-sm text-foreground/70">{s.worst_week.week_end}</p>
+              <p className={`text-2xl font-black ${s.worst_week.premium >= 0 ? "text-green-600" : "text-red-500"}`}>
+                {fmt$(s.worst_week.premium)}
+              </p>
+              <p className="text-xs text-foreground/50">{s.worst_week.position_count} positions</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Monthly bar chart ── */}
+      {monthlyEntries.length > 0 && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar size={14} className="text-blue-500" />
+            <h3 className="text-sm font-bold text-foreground">Monthly Premium</h3>
+          </div>
+          <div className="flex items-end gap-2 h-28">
+            {monthlyEntries.map(([ym, val]) => {
+              const [year, month] = ym.split("-");
+              const pct = Math.max(4, Math.round((val / maxMonthlyPremium) * 100));
+              return (
+                <div key={ym} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-foreground/60 font-semibold">${val >= 1000 ? (val/1000).toFixed(1)+"k" : val.toFixed(0)}</span>
+                  <div
+                    className={`w-full rounded-t-md ${val >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                    style={{ height: `${pct}%` }}
+                  />
+                  <span className="text-[9px] text-foreground/50">{monthNames[month] ?? month}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Week-by-week table ── */}
+      {s.weeks_breakdown.length > 0 && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-x-auto">
+          <div className="px-4 py-3 border-b border-[var(--border)]">
+            <h3 className="text-sm font-bold text-foreground">Week-by-Week</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
+                {["Week Ending","Status","Positions","Premium","Realized P/L","Account Value"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {s.weeks_breakdown.map((w: WeekBreakdown) => (
+                <tr key={w.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+                  <td className="px-4 py-2.5 font-semibold text-foreground">{w.week_end}</td>
+                  <td className="px-4 py-2.5">
+                    {w.is_complete
+                      ? <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-300 px-2 py-0.5 rounded-full font-semibold">Complete</span>
+                      : <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">Active</span>
+                    }
+                  </td>
+                  <td className="px-4 py-2.5 text-foreground/70">{w.position_count}</td>
+                  <td className={`px-4 py-2.5 font-semibold ${w.premium >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {fmt$(w.premium)}
+                  </td>
+                  <td className={`px-4 py-2.5 font-semibold ${w.realized_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {fmt$(w.realized_pnl)}
+                  </td>
+                  <td className="px-4 py-2.5 text-foreground/70">
+                    {w.account_value != null ? `$${w.account_value.toLocaleString()}` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {s.weeks_breakdown.length === 0 && (
+        <EmptyState icon={Calendar} title="No completed weeks yet" body="Mark a week complete to populate your yearly summary." />
+      )}
+    </div>
+  );
+}
+
 // ── Portfolio Summary Bar ─────────────────────────────────────────────────────
 
 function PortfolioSummaryBar() {
@@ -728,7 +879,7 @@ export default function PortfolioPage() {
   } = useQuery({ queryKey: ["weeks"], queryFn: fetchWeeks, staleTime: 30_000 });
 
   const [selectedWeekId, setSelectedWeekId] = useState<number | null>(null);
-  const [tab, setTab] = useState<"positions" | "symbols">("positions");
+  const [tab, setTab] = useState<"positions" | "symbols" | "year">("positions");
   const [autoSelected, setAutoSelected] = useState(false);
 
   if (!autoSelected && weeks.length > 0) {
@@ -738,12 +889,36 @@ export default function PortfolioPage() {
 
   const selectedWeek = weeks.find((w) => w.id === selectedWeekId) ?? weeks[0] ?? null;
 
+  // Find the next Friday not yet in the weeks list, so "New Week" always
+  // creates a genuinely new week rather than idempotently returning the current one.
+  function nextUnusedFriday(): string {
+    const existingEnds = new Set(weeks.map((w) => w.week_end.slice(0, 10)));
+    // Start from today; walk forward day-by-day until we hit a Friday not in the list.
+    const d = new Date();
+    for (let i = 0; i < 365; i++) {
+      if (d.getDay() === 5) { // 5 = Friday
+        const iso = d.toISOString().slice(0, 10);
+        if (!existingEnds.has(iso)) return iso;
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    // Fallback: 7 days after the latest week_end
+    const latest = weeks[0]?.week_end;
+    if (latest) {
+      const next = new Date(latest);
+      next.setDate(next.getDate() + 7);
+      return next.toISOString().slice(0, 10);
+    }
+    return new Date().toISOString().slice(0, 10);
+  }
+
   const newWeekMut = useMutation({
-    mutationFn: () => getOrCreateWeek(),
+    mutationFn: () => getOrCreateWeek(nextUnusedFriday()),
     onSuccess: (w) => {
       qc.invalidateQueries({ queryKey: ["weeks"] });
       setSelectedWeekId(w.id);
     },
+    onError: (e: Error) => alert(`Could not create week: ${e.message}`),
   });
 
   return (
@@ -778,10 +953,11 @@ export default function PortfolioPage() {
         <div className="mb-5">
           <Tabs
             active={tab}
-            onChange={(k) => setTab(k as "positions" | "symbols")}
+            onChange={(k) => setTab(k as "positions" | "symbols" | "year")}
             tabs={[
               { key: "positions", label: "Positions" },
               { key: "symbols",   label: "Symbols"   },
+              { key: "year",      label: "Year"      },
             ]}
           />
         </div>
@@ -800,6 +976,7 @@ export default function PortfolioPage() {
       )}
 
       {tab === "symbols" && <SymbolsTab />}
+      {tab === "year"    && <YearTab />}
     </div>
   );
 }

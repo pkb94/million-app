@@ -582,12 +582,58 @@ def portfolio_summary(*, user_id: int) -> dict:
             elif p.status == OptionPositionStatus.ASSIGNED:
                 assigned_count += 1
 
+        # Per-week breakdown for the Year tab
+        week_ids = {w.id: w for w in all_weeks}
+        week_premium: dict[int, float] = {w.id: 0.0 for w in all_weeks}
+        week_realized: dict[int, float] = {w.id: 0.0 for w in all_weeks}
+        week_pos_count: dict[int, int] = {w.id: 0 for w in all_weeks}
+        seen_origin2: set[int] = set()
+
+        for p in all_positions:
+            origin_id = p.id if not p.carried_from_id else p.carried_from_id
+            if origin_id in seen_origin2:
+                continue
+            seen_origin2.add(origin_id)
+            if p.week_id not in week_premium:
+                continue
+            net = _net_premium(p) * p.contracts * 100
+            week_premium[p.week_id] += net
+            week_pos_count[p.week_id] += 1
+            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
+                week_realized[p.week_id] += net
+
+        weeks_breakdown = []
+        for w in sorted(all_weeks, key=lambda x: x.week_end, reverse=True):
+            prem = round(week_premium[w.id], 2)
+            weeks_breakdown.append({
+                "id":            w.id,
+                "week_start":    w.week_start.date().isoformat(),
+                "week_end":      w.week_end.date().isoformat(),
+                "is_complete":   w.is_complete,
+                "account_value": w.account_value,
+                "premium":       prem,
+                "realized_pnl":  round(week_realized[w.id], 2),
+                "position_count": week_pos_count[w.id],
+            })
+
         # Monthly account value series
         monthly: dict[str, float] = {}
+        monthly_premium: dict[str, float] = {}
         for w in all_weeks:
+            key = w.week_end.strftime("%Y-%m")
             if w.account_value is not None and w.is_complete:
-                key = w.week_end.strftime("%Y-%m")
                 monthly[key] = w.account_value  # last complete week of the month wins
+            monthly_premium[key] = round(
+                monthly_premium.get(key, 0.0) + week_premium.get(w.id, 0.0), 2
+            )
+
+        # Win rate: weeks with positive premium
+        complete_weeks = [w for w in all_weeks if w.is_complete]
+        winning_weeks = sum(1 for w in complete_weeks if week_premium.get(w.id, 0) > 0)
+        win_rate = round(winning_weeks / len(complete_weeks) * 100, 1) if complete_weeks else 0.0
+
+        best_week = max(weeks_breakdown, key=lambda x: x["premium"], default=None)
+        worst_week = min(weeks_breakdown, key=lambda x: x["premium"], default=None)
 
         # Estimated capital gains tax (short-term: 22% bracket default)
         cap_gains_tax_rate = 0.22
@@ -601,7 +647,13 @@ def portfolio_summary(*, user_id: int) -> dict:
             "estimated_tax":           round(estimated_tax, 2),
             "cap_gains_tax_rate":      cap_gains_tax_rate,
             "monthly_account_values":  monthly,
+            "monthly_premium":         monthly_premium,
             "total_weeks":             len(all_weeks),
+            "complete_weeks":          len(complete_weeks),
+            "win_rate":                win_rate,
+            "best_week":               best_week,
+            "worst_week":              worst_week,
+            "weeks_breakdown":         weeks_breakdown,
         }
     finally:
         session.close()

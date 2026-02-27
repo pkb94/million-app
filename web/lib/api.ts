@@ -377,6 +377,17 @@ export interface StockAssignment {
   upside_breakeven: number;
 }
 
+export interface WeekBreakdown {
+  id: number;
+  week_start: string;
+  week_end: string;
+  is_complete: boolean;
+  account_value: number | null;
+  premium: number;
+  realized_pnl: number;
+  position_count: number;
+}
+
 export interface PortfolioSummary {
   total_premium_collected: number;
   realized_pnl: number;
@@ -385,7 +396,13 @@ export interface PortfolioSummary {
   estimated_tax: number;
   cap_gains_tax_rate: number;
   monthly_account_values: Record<string, number>;
+  monthly_premium: Record<string, number>;
   total_weeks: number;
+  complete_weeks: number;
+  win_rate: number;
+  best_week: WeekBreakdown | null;
+  worst_week: WeekBreakdown | null;
+  weeks_breakdown: WeekBreakdown[];
 }
 
 export interface SymbolSummary {
