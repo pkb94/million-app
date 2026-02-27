@@ -319,6 +319,116 @@ export const createTrade = (body: Omit<Trade, "id">) => api.post("/trades", body
 export const updateTrade = (id: number, body: Partial<Trade>) => api.put(`/trades/${id}`, body);
 export const deleteTrade = (id: number) => api.del(`/trades/${id}`);
 
+// ── Weekly Options Portfolio ──────────────────────────────────────────────────
+
+export interface WeeklySnapshot {
+  id: number;
+  week_start: string;
+  week_end: string;
+  account_value: number | null;
+  is_complete: boolean;
+  completed_at: string | null;
+  notes: string | null;
+  label: string;
+}
+
+export type PositionStatus = "ACTIVE" | "CLOSED" | "EXPIRED" | "ASSIGNED" | "ROLLED";
+
+export interface OptionPosition {
+  id: number;
+  week_id: number;
+  symbol: string;
+  contracts: number;
+  strike: number;
+  option_type: "CALL" | "PUT";
+  sold_date: string | null;
+  buy_date: string | null;
+  expiry_date: string | null;
+  premium_in: number | null;
+  premium_out: number | null;
+  is_roll: boolean;
+  status: PositionStatus;
+  rolled_to_id: number | null;
+  carried_from_id: number | null;
+  margin: number | null;
+  notes: string | null;
+  // computed
+  net_premium: number;
+  total_premium: number;
+}
+
+export interface StockAssignment {
+  id: number;
+  position_id: number;
+  symbol: string;
+  shares_acquired: number;
+  acquisition_price: number;
+  additional_buys: { shares: number; price: number }[];
+  covered_calls: { contracts: number; strike: number; premium: number; sold_date: string; status: string }[];
+  net_option_premium: number;
+  notes: string | null;
+  // computed cost basis
+  total_shares: number;
+  total_cost: number;
+  weighted_avg_cost: number;
+  downside_basis: number;
+  upside_basis: number;
+  downside_breakeven: number;
+  upside_breakeven: number;
+}
+
+export interface PortfolioSummary {
+  total_premium_collected: number;
+  realized_pnl: number;
+  active_positions: number;
+  assigned_positions: number;
+  estimated_tax: number;
+  cap_gains_tax_rate: number;
+  monthly_account_values: Record<string, number>;
+  total_weeks: number;
+}
+
+export interface SymbolSummary {
+  symbol: string;
+  total_premium: number;
+  realized_pnl: number;
+  active: number;
+  closed: number;
+  expired: number;
+  assigned: number;
+}
+
+// Weeks
+export const fetchWeeks = () => api.get<WeeklySnapshot[]>("/portfolio/weeks");
+export const getOrCreateWeek = (for_date?: string) =>
+  api.post<WeeklySnapshot>("/portfolio/weeks", { for_date: for_date ?? null });
+export const fetchWeek = (id: number) => api.get<WeeklySnapshot>(`/portfolio/weeks/${id}`);
+export const updateWeek = (id: number, body: { account_value?: number; notes?: string }) =>
+  api.patch<WeeklySnapshot>(`/portfolio/weeks/${id}`, body);
+export const completeWeek = (id: number, account_value?: number) =>
+  api.post<WeeklySnapshot>(`/portfolio/weeks/${id}/complete`, { account_value: account_value ?? null });
+
+// Positions
+export const fetchPositions = (week_id: number) =>
+  api.get<OptionPosition[]>(`/portfolio/weeks/${week_id}/positions`);
+export const createPosition = (week_id: number, body: Partial<OptionPosition>) =>
+  api.post<OptionPosition>(`/portfolio/weeks/${week_id}/positions`, body);
+export const updatePosition = (id: number, body: Partial<OptionPosition> & { status?: PositionStatus }) =>
+  api.patch<OptionPosition>(`/portfolio/positions/${id}`, body);
+export const deletePosition = (id: number) => api.del(`/portfolio/positions/${id}`);
+
+// Assignments
+export const createAssignment = (position_id: number, body: Partial<StockAssignment>) =>
+  api.post<StockAssignment>(`/portfolio/positions/${position_id}/assign`, body);
+export const fetchAssignment = (position_id: number) =>
+  api.get<StockAssignment>(`/portfolio/positions/${position_id}/assignment`);
+export const updateAssignment = (id: number, body: Partial<StockAssignment>) =>
+  api.patch<StockAssignment>(`/portfolio/assignments/${id}`, body);
+
+// Summary
+export const fetchPortfolioSummary = () => api.get<PortfolioSummary>("/portfolio/summary");
+export const fetchSymbolSummary = () => api.get<SymbolSummary[]>("/portfolio/symbols");
+
 // ── Orders ───────────────────────────────────────────────────────────────────
 
 export interface Order {
