@@ -1078,6 +1078,15 @@ def mark_week_complete(week_id: int, body: Dict[str, Any], user=Depends(get_curr
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/portfolio/weeks/{week_id}/reopen", response_model=Dict[str, Any])
+def reopen_week(week_id: int, user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import reopen_week as _reopen
+    try:
+        return _reopen(user_id=int(user["sub"]), week_id=week_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.get("/portfolio/weeks/{week_id}/positions", response_model=List[Dict[str, Any]])
 def list_positions(week_id: int, user=Depends(get_current_user)) -> List[Dict[str, Any]]:
     from logic.portfolio import list_positions as _list_positions

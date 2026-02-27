@@ -424,6 +424,8 @@ export const updateWeek = (id: number, body: { account_value?: number; notes?: s
   api.patch<WeeklySnapshot>(`/portfolio/weeks/${id}`, body);
 export const completeWeek = (id: number, account_value?: number) =>
   api.post<WeeklySnapshot>(`/portfolio/weeks/${id}/complete`, { account_value: account_value ?? null });
+export const reopenWeek = (id: number) =>
+  api.post<WeeklySnapshot>(`/portfolio/weeks/${id}/reopen`, {});
 
 // Positions
 export const fetchPositions = (week_id: number) =>

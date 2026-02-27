@@ -2,14 +2,14 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  fetchWeeks, getOrCreateWeek, completeWeek,
+  fetchWeeks, getOrCreateWeek, completeWeek, reopenWeek,
   fetchPositions, createPosition, updatePosition, deletePosition,
   createAssignment, fetchAssignment, updateAssignment,
   fetchPortfolioSummary, fetchSymbolSummary,
   WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus, WeekBreakdown,
 } from "@/lib/api";
 import {
-  BarChart2, Plus, X, ChevronDown, ChevronUp, CheckCircle2,
+  BarChart2, Plus, X, ChevronDown, ChevronUp, CheckCircle2, LockOpen,
   TrendingUp, DollarSign, Activity, AlertCircle, Search, Trophy, Calendar,
 } from "lucide-react";
 import { PageHeader, EmptyState, SkeletonCard, Tabs, RefreshButton } from "@/components/ui";
@@ -78,6 +78,59 @@ function CompleteWeekModal({ week, onDone }: { week: WeeklySnapshot; onDone: () 
             className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition"
           >
             {mut.isPending ? "Completing…" : "✓ Mark Complete"}
+          </button>
+          <button
+            onClick={onDone}
+            className="flex-1 py-2.5 rounded-xl border border-[var(--border)] text-sm text-foreground hover:bg-[var(--surface-2)] transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reopen Week Modal ────────────────────────────────────────────────────────
+
+function ReopenWeekModal({ week, onDone }: { week: WeeklySnapshot; onDone: () => void }) {
+  const qc = useQueryClient();
+  const [err, setErr] = useState("");
+  const mut = useMutation({
+    mutationFn: () => reopenWeek(week.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["weeks"] });
+      qc.invalidateQueries({ queryKey: ["positions", week.id] });
+      onDone();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-[var(--surface)] rounded-2xl p-6 w-full sm:max-w-sm shadow-2xl border border-[var(--border)]">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+            <LockOpen size={18} className="text-orange-500" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-foreground">Re-open Week</h3>
+            <p className="text-xs text-foreground/60">{weekLabel(week)}</p>
+          </div>
+        </div>
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-3 mb-4">
+          <p className="text-xs text-orange-700 dark:text-orange-300 font-semibold mb-1">⚠ Heads up</p>
+          <p className="text-xs text-orange-600 dark:text-orange-400">
+            Any positions that were carried forward into the following week from this week will be
+            <strong> removed</strong> from that week. You can re-complete this week when done to carry them forward again.
+          </p>
+        </div>
+        {err && <p className="text-xs text-red-500 mb-3">{err}</p>}
+        <div className="flex gap-2">
+          <button
+            onClick={() => mut.mutate()} disabled={mut.isPending}
+            className="flex-1 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-50 transition"
+          >
+            {mut.isPending ? "Re-opening…" : "✎ Re-open Week"}
           </button>
           <button
             onClick={onDone}
@@ -459,6 +512,7 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OptionPosition | null>(null);
   const [showComplete, setShowComplete] = useState(false);
+  const [showReopen, setShowReopen] = useState(false);
 
   const deleteMut = useMutation({
     mutationFn: deletePosition,
@@ -517,13 +571,22 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
           )}
         </div>
         {week.is_complete && (
-          <span className="flex items-center gap-1.5 text-xs text-green-600 font-semibold">
-            <CheckCircle2 size={13} /> Week complete — positions carried forward
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs text-green-600 font-semibold">
+              <CheckCircle2 size={13} /> Week complete
+            </span>
+            <button
+              onClick={() => setShowReopen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 text-xs font-semibold hover:bg-orange-100 dark:hover:bg-orange-900/40 border border-orange-200 dark:border-orange-800 transition"
+            >
+              <LockOpen size={11} /> Re-open Week
+            </button>
+          </div>
         )}
       </div>
 
       {showComplete && <CompleteWeekModal week={week} onDone={() => setShowComplete(false)} />}
+      {showReopen && <ReopenWeekModal week={week} onDone={() => setShowReopen(false)} />}
 
       {(showForm && !week.is_complete) && (
         <PositionForm

@@ -321,6 +321,58 @@ def mark_week_complete(*, user_id: int, week_id: int, account_value: float | Non
         session.close()
 
 
+def reopen_week(*, user_id: int, week_id: int) -> dict:
+    """
+    Re-open a completed week so edits can be made.
+
+    Steps:
+      1. Set is_complete=False, completed_at=None on the snapshot.
+      2. Find all positions in *other* weeks that were carried forward from
+         this week (carried_from_id points to a position in week_id).
+         Delete those carried copies so they are not orphaned duplicates.
+    """
+    session = get_session()
+    try:
+        snap = session.query(WeeklySnapshot).filter(
+            WeeklySnapshot.id == week_id,
+            WeeklySnapshot.user_id == user_id,
+        ).first()
+        if snap is None:
+            raise ValueError("Week not found")
+        if not snap.is_complete:
+            return _snap_to_dict(snap)  # idempotent
+
+        # Collect the IDs of positions that lived in this week
+        week_position_ids = [
+            p.id for p in session.query(OptionPosition.id).filter(
+                OptionPosition.week_id == week_id,
+                OptionPosition.user_id == user_id,
+            ).all()
+        ]
+
+        # Delete any positions in other weeks whose carried_from_id is one of those IDs
+        if week_position_ids:
+            carried_copies = (
+                session.query(OptionPosition)
+                .filter(
+                    OptionPosition.user_id == user_id,
+                    OptionPosition.week_id != week_id,
+                    OptionPosition.carried_from_id.in_(week_position_ids),
+                )
+                .all()
+            )
+            for copy in carried_copies:
+                session.delete(copy)
+
+        snap.is_complete  = False
+        snap.completed_at = None
+        session.commit()
+        session.refresh(snap)
+        return _snap_to_dict(snap)
+    finally:
+        session.close()
+
+
 # ── Option positions ──────────────────────────────────────────────────────────
 
 def list_positions(*, user_id: int, week_id: int) -> list[dict]:
