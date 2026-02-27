@@ -539,6 +539,53 @@ export const syncPremiumLedger = () =>
 export const fetchHoldingPremiumLedger = (holding_id: number) =>
   api.get<PremiumSummary>(`/portfolio/holdings/${holding_id}/premium-ledger`);
 
+// ── Premium Dashboard ─────────────────────────────────────────────────────────
+
+export interface PremiumSymbolRow {
+  symbol: string;
+  holding_id: number;
+  cost_basis: number;
+  shares: number;
+  realized_premium: number;
+  unrealized_premium: number;
+  total_premium_sold: number;
+  positions: number;
+  realized_per_share: number;
+  unrealized_per_share: number;
+  live_adj_basis: number;
+  adj_basis_stored: number;
+  rows: PremiumLedgerRow[];
+}
+
+export interface PremiumWeekSymbol {
+  symbol: string;
+  realized: number;
+  unrealized: number;
+  sold: number;
+}
+
+export interface PremiumWeekRow {
+  week_id: number;
+  week_label: string;
+  realized_premium: number;
+  unrealized_premium: number;
+  total_premium_sold: number;
+  symbols: PremiumWeekSymbol[];
+}
+
+export interface PremiumDashboard {
+  by_symbol: PremiumSymbolRow[];
+  by_week: PremiumWeekRow[];
+  grand_total: {
+    realized_premium: number;
+    unrealized_premium: number;
+    total_premium_sold: number;
+  };
+}
+
+export const fetchPremiumDashboard = () =>
+  api.get<PremiumDashboard>("/portfolio/premium-dashboard");
+
 // ── Orders ───────────────────────────────────────────────────────────────────
 
 export interface Order {

@@ -1216,6 +1216,13 @@ def sync_premium_ledger(user=Depends(get_current_user)) -> Dict[str, Any]:
     return {"synced_rows": sync_result["upserted"], "updated_holdings": recalc_result["updated"]}
 
 
+@app.get("/portfolio/premium-dashboard", response_model=Dict[str, Any])
+def get_premium_dashboard(user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Full premium dashboard: by-symbol + by-week breakdown of all collected premium."""
+    from logic.premium_ledger import get_premium_dashboard as _dash
+    return _dash(user_id=int(user["sub"]))
+
+
 @app.get("/portfolio/holdings/{holding_id}/premium-ledger", response_model=Dict[str, Any])
 def get_holding_premium_ledger(holding_id: int, user=Depends(get_current_user)) -> Dict[str, Any]:
     """Return the full premium ledger (all option positions) for a single holding."""

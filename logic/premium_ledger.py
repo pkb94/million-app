@@ -74,6 +74,15 @@ def upsert_ledger_row(*, user_id: int, position_id: int, session=None) -> dict |
         ).first()
         if pos is None or pos.holding_id is None:
             return None  # nothing to do if position isn't linked to a holding
+        if pos.carried_from_id is not None:
+            # This is a carry-forward copy — the original already has a ledger row.
+            # Update the original's ledger row with current status instead.
+            position_id = pos.carried_from_id
+            pos = session.query(OptionPosition).filter(
+                OptionPosition.id == position_id,
+            ).first()
+            if pos is None:
+                return None
 
         realized, unrealized = _compute_premiums(pos)
         prem_sold = (pos.premium_in or 0.0) * pos.contracts * 100
@@ -128,6 +137,10 @@ def sync_ledger_from_positions(*, user_id: int, holding_id: int | None = None) -
     Full rebuild of PremiumLedger rows from OptionPosition data.
     Safe to call repeatedly — purely idempotent upserts.
 
+    IMPORTANT: Only ORIGINAL positions are counted (carried_from_id IS NULL).
+    Carry-forward copies exist so the current week's view shows active positions,
+    but they represent the SAME option contract — counting them would double the premium.
+
     Args:
         user_id:    Required.
         holding_id: Optional — limits sync to one holding.
@@ -138,8 +151,9 @@ def sync_ledger_from_positions(*, user_id: int, holding_id: int | None = None) -
     session = get_session()
     try:
         q = session.query(OptionPosition).filter(
-            OptionPosition.user_id    == user_id,
-            OptionPosition.holding_id != None,  # noqa: E711
+            OptionPosition.user_id       == user_id,
+            OptionPosition.holding_id    != None,   # noqa: E711
+            OptionPosition.carried_from_id == None, # noqa: E711  only originals, not carry-forward copies
         )
         if holding_id is not None:
             q = q.filter(OptionPosition.holding_id == holding_id)
@@ -262,6 +276,124 @@ def get_all_premium_summaries(*, user_id: int) -> dict[int, dict]:
             s["unrealized_premium"] = round(s["unrealized_premium"], 4)
             s["total_premium_sold"] = round(s["total_premium_sold"], 4)
         return summaries
+    finally:
+        session.close()
+
+
+def get_premium_dashboard(*, user_id: int) -> dict:
+    """
+    Returns a full premium dashboard for the user:
+      - by_symbol: per-ticker totals (realized, unrealized, total_sold, adj_basis_impact)
+      - by_week:   per-week totals with per-symbol breakdown
+      - grand_total: overall realized + unrealized + total_sold
+      - rows: all individual ledger rows (for the detail table)
+    """
+    session = get_session()
+    try:
+        from database.models import StockHolding, WeeklySnapshot
+        rows = (
+            session.query(PremiumLedger)
+            .filter(PremiumLedger.user_id == user_id)
+            .order_by(PremiumLedger.symbol, PremiumLedger.week_id)
+            .all()
+        )
+
+        # Fetch week labels
+        week_map: dict[int, str] = {}
+        all_week_ids = {r.week_id for r in rows if r.week_id}
+        if all_week_ids:
+            weeks = session.query(WeeklySnapshot).filter(
+                WeeklySnapshot.id.in_(all_week_ids)
+            ).all()
+            for w in weeks:
+                week_map[w.id] = w.week_end.strftime("%b %d, %Y") if w.week_end else str(w.id)
+
+        # Fetch holding cost_basis and shares for adj_basis impact calc
+        holding_map: dict[int, Any] = {}
+        for r in rows:
+            if r.holding_id not in holding_map:
+                h = session.query(StockHolding).filter(StockHolding.id == r.holding_id).first()
+                if h:
+                    holding_map[r.holding_id] = {"cost_basis": h.cost_basis, "shares": h.shares, "symbol": h.symbol}
+
+        # by_symbol
+        by_symbol: dict[str, dict] = {}
+        by_week: dict[int, dict] = {}
+
+        for r in rows:
+            sym = r.symbol
+            if sym not in by_symbol:
+                hinfo = holding_map.get(r.holding_id, {})
+                by_symbol[sym] = {
+                    "symbol":             sym,
+                    "holding_id":         r.holding_id,
+                    "cost_basis":         hinfo.get("cost_basis", 0.0),
+                    "shares":             hinfo.get("shares", 0.0),
+                    "realized_premium":   0.0,
+                    "unrealized_premium": 0.0,
+                    "total_premium_sold": 0.0,
+                    "positions":          0,
+                    "rows":               [],
+                }
+            by_symbol[sym]["realized_premium"]   += r.realized_premium
+            by_symbol[sym]["unrealized_premium"]  += r.unrealized_premium
+            by_symbol[sym]["total_premium_sold"]  += r.premium_sold
+            by_symbol[sym]["positions"]           += 1
+            by_symbol[sym]["rows"].append(_row_to_dict(r))
+
+            wid = r.week_id or 0
+            if wid not in by_week:
+                by_week[wid] = {
+                    "week_id":            wid,
+                    "week_label":         week_map.get(wid, f"Week {wid}"),
+                    "realized_premium":   0.0,
+                    "unrealized_premium": 0.0,
+                    "total_premium_sold": 0.0,
+                    "symbols":            {},
+                }
+            by_week[wid]["realized_premium"]   += r.realized_premium
+            by_week[wid]["unrealized_premium"]  += r.unrealized_premium
+            by_week[wid]["total_premium_sold"]  += r.premium_sold
+            if sym not in by_week[wid]["symbols"]:
+                by_week[wid]["symbols"][sym] = {"realized": 0.0, "unrealized": 0.0, "sold": 0.0}
+            by_week[wid]["symbols"][sym]["realized"]   += r.realized_premium
+            by_week[wid]["symbols"][sym]["unrealized"] += r.unrealized_premium
+            by_week[wid]["symbols"][sym]["sold"]       += r.premium_sold
+
+        # Compute adj_basis_impact per symbol
+        for sym, d in by_symbol.items():
+            shares = d["shares"]
+            d["realized_per_share"]   = round(d["realized_premium"]   / shares, 4) if shares > 0 else 0.0
+            d["unrealized_per_share"] = round(d["unrealized_premium"] / shares, 4) if shares > 0 else 0.0
+            d["live_adj_basis"]       = round(max(0.0, d["cost_basis"] - d["realized_per_share"] - d["unrealized_per_share"]), 4)
+            d["adj_basis_stored"]     = round(max(0.0, d["cost_basis"] - d["realized_per_share"]), 4)
+            d["realized_premium"]     = round(d["realized_premium"],   2)
+            d["unrealized_premium"]   = round(d["unrealized_premium"], 2)
+            d["total_premium_sold"]   = round(d["total_premium_sold"], 2)
+
+        # Round week totals and convert symbols dict to list
+        for wid, w in by_week.items():
+            w["realized_premium"]   = round(w["realized_premium"],   2)
+            w["unrealized_premium"] = round(w["unrealized_premium"], 2)
+            w["total_premium_sold"] = round(w["total_premium_sold"], 2)
+            w["symbols"] = [
+                {"symbol": sym, **vals}
+                for sym, vals in sorted(w["symbols"].items())
+            ]
+
+        grand_realized   = sum(d["realized_premium"]   for d in by_symbol.values())
+        grand_unrealized = sum(d["unrealized_premium"] for d in by_symbol.values())
+        grand_sold       = sum(d["total_premium_sold"] for d in by_symbol.values())
+
+        return {
+            "by_symbol":   sorted(by_symbol.values(), key=lambda x: -x["total_premium_sold"]),
+            "by_week":     sorted(by_week.values(),   key=lambda x: x["week_id"]),
+            "grand_total": {
+                "realized_premium":   round(grand_realized,   2),
+                "unrealized_premium": round(grand_unrealized, 2),
+                "total_premium_sold": round(grand_sold,       2),
+            },
+        }
     finally:
         session.close()
 

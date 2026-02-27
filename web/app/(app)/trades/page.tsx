@@ -8,8 +8,9 @@ import {
   fetchPortfolioSummary, fetchSymbolSummary, fetchStockHistory,
   fetchHoldings, createHolding, updateHolding, deleteHolding, fetchHoldingEvents,
   seedHoldingsFromPositions, recalculateHoldings, syncPremiumLedger,
+  fetchPremiumDashboard,
   WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus, WeekBreakdown,
-  StockHolding, HoldingEvent,
+  StockHolding, HoldingEvent, PremiumDashboard, PremiumSymbolRow, PremiumWeekRow,
 } from "@/lib/api";
 import {
   BarChart2, Plus, X, ChevronDown, ChevronUp, CheckCircle2, LockOpen,
@@ -964,6 +965,208 @@ function YearTab() {
   );
 }
 
+// ── Premium Tab ──────────────────────────────────────────────────────────────
+
+function PremiumTab() {
+  const qc = useQueryClient();
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set());
+  const [syncing, setSyncing] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["premiumDashboard"],
+    queryFn: fetchPremiumDashboard,
+    staleTime: 30_000,
+  });
+
+  const toggleWeek = (weekId: number) => {
+    setExpandedWeeks(prev => {
+      const next = new Set(prev);
+      next.has(weekId) ? next.delete(weekId) : next.add(weekId);
+      return next;
+    });
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await syncPremiumLedger();
+      await refetch();
+      qc.invalidateQueries({ queryKey: ["holdings"] });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  if (isLoading) return <div className="space-y-3">{[1,2,3].map(i => <SkeletonCard key={i} rows={3} />)}</div>;
+  if (!data) return <EmptyState icon={DollarSign} title="No premium data" body="Add holdings and positions to track collected premium." />;
+
+  const { by_symbol, by_week, grand_total } = data;
+  const pctRealized = grand_total.total_premium_sold > 0
+    ? (grand_total.realized_premium / grand_total.total_premium_sold) * 100
+    : 0;
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── 3 stat cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Total Collected</p>
+          <p className="text-2xl font-black text-green-500">${grand_total.total_premium_sold.toFixed(2)}</p>
+          <p className="text-[10px] text-foreground/50 mt-0.5">gross premium ever sold</p>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Realized (Locked In)</p>
+          <p className="text-2xl font-black text-blue-500">${grand_total.realized_premium.toFixed(2)}</p>
+          <p className="text-[10px] text-foreground/50 mt-0.5">{pctRealized.toFixed(1)}% of total collected</p>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+          <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">In-Flight (Active)</p>
+          <p className="text-2xl font-black text-orange-400">${grand_total.unrealized_premium.toFixed(2)}</p>
+          <p className="text-[10px] text-foreground/50 mt-0.5">locks in when options close/expire</p>
+        </div>
+      </div>
+
+      {/* ── Legend ── */}
+      <div className="flex flex-wrap gap-3 text-[11px] text-foreground/60">
+        <span><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1" />Realized = closed/expired, permanently reduces cost basis</span>
+        <span><span className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />In-Flight = active positions, reduces live adj basis until settled</span>
+      </div>
+
+      {/* ── By-symbol table ── */}
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-x-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <h3 className="text-sm font-bold text-foreground">By Symbol</h3>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="text-[11px] px-3 py-1.5 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 transition-colors"
+          >
+            {syncing ? "Syncing…" : "Sync Ledger"}
+          </button>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
+              {["Symbol","Avg Cost","Adj Basis","Live Adj","Sold $","Realized $","In-Flight $","# Pos"].map(h => (
+                <th key={h} className="px-4 py-2.5 text-right first:text-left font-semibold whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {by_symbol.map((row: PremiumSymbolRow) => (
+              <tr key={row.holding_id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+                <td className="px-4 py-3 font-bold text-foreground">{row.symbol}</td>
+                <td className="px-4 py-3 text-right text-foreground/70">${row.cost_basis.toFixed(4)}</td>
+                <td className="px-4 py-3 text-right">
+                  <span className={row.adj_basis_stored < row.cost_basis ? "text-blue-500 font-semibold" : "text-foreground/70"}>
+                    ${row.adj_basis_stored.toFixed(4)}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span className={row.live_adj_basis < row.cost_basis ? "text-green-500 font-semibold" : "text-foreground/70"}>
+                    ${row.live_adj_basis.toFixed(4)}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right font-semibold text-green-500">${row.total_premium_sold.toFixed(2)}</td>
+                <td className="px-4 py-3 text-right">
+                  {row.realized_premium > 0
+                    ? <span className="text-blue-500 font-semibold">${row.realized_premium.toFixed(2)}</span>
+                    : <span className="text-foreground/30">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {row.unrealized_premium > 0
+                    ? <span className="text-orange-400 font-semibold">${row.unrealized_premium.toFixed(2)}</span>
+                    : <span className="text-foreground/30">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right text-foreground/60">{row.positions}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-[var(--border)] bg-[var(--surface-2)] font-bold">
+              <td className="px-4 py-3 text-foreground text-[11px] uppercase tracking-wide">Total</td>
+              <td colSpan={3} />
+              <td className="px-4 py-3 text-right text-green-500">${grand_total.total_premium_sold.toFixed(2)}</td>
+              <td className="px-4 py-3 text-right text-blue-500">
+                {grand_total.realized_premium > 0 ? `$${grand_total.realized_premium.toFixed(2)}` : "—"}
+              </td>
+              <td className="px-4 py-3 text-right text-orange-400">
+                {grand_total.unrealized_premium > 0 ? `$${grand_total.unrealized_premium.toFixed(2)}` : "—"}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* ── By-week breakdown ── */}
+      {by_week.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-bold text-foreground px-1">By Week</h3>
+          {by_week.map((week: PremiumWeekRow) => (
+            <div key={week.week_id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+              <button
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[var(--surface-2)] transition-colors"
+                onClick={() => toggleWeek(week.week_id)}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-foreground">Week {week.week_id}</span>
+                  <span className="text-xs text-foreground/50">{week.week_label}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-bold text-green-500">${week.total_premium_sold.toFixed(2)}</span>
+                  {week.realized_premium > 0 && (
+                    <span className="text-xs text-blue-500 font-semibold">${week.realized_premium.toFixed(2)} realized</span>
+                  )}
+                  {week.unrealized_premium > 0 && (
+                    <span className="text-xs text-orange-400 font-semibold">${week.unrealized_premium.toFixed(2)} in-flight</span>
+                  )}
+                  {expandedWeeks.has(week.week_id)
+                    ? <ChevronUp size={14} className="text-foreground/40" />
+                    : <ChevronDown size={14} className="text-foreground/40" />}
+                </div>
+              </button>
+
+              {expandedWeeks.has(week.week_id) && (
+                <div className="border-t border-[var(--border)]">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] text-foreground/50 uppercase tracking-wide bg-[var(--surface-2)]">
+                        {["Symbol","Sold $","Realized $","In-Flight $"].map(h => (
+                          <th key={h} className="px-4 py-2 text-right first:text-left font-semibold">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {week.symbols.map(sym => (
+                        <tr key={sym.symbol} className="border-t border-[var(--border)] hover:bg-[var(--surface-2)]">
+                          <td className="px-4 py-2 font-semibold text-foreground">{sym.symbol}</td>
+                          <td className="px-4 py-2 text-right text-green-500 font-semibold">${sym.sold.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right">
+                            {sym.realized > 0
+                              ? <span className="text-blue-500 font-semibold">${sym.realized.toFixed(2)}</span>
+                              : <span className="text-foreground/30">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            {sym.unrealized > 0
+                              ? <span className="text-orange-400 font-semibold">${sym.unrealized.toFixed(2)}</span>
+                              : <span className="text-foreground/30">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Holdings Tab ─────────────────────────────────────────────────────────────
 
 function HoldingRow({ h, onEdit, onDelete }: { h: StockHolding; onEdit: () => void; onDelete: () => void }) {
@@ -1509,7 +1712,7 @@ export default function PortfolioPage() {
   } = useQuery({ queryKey: ["weeks"], queryFn: fetchWeeks, staleTime: 30_000 });
 
   const [selectedWeekId, setSelectedWeekId] = useState<number | null>(null);
-  const [tab, setTab] = useState<"holdings" | "positions" | "symbols" | "year">("holdings");
+  const [tab, setTab] = useState<"holdings" | "positions" | "symbols" | "year" | "premium">("holdings");
   const [autoSelected, setAutoSelected] = useState(false);
 
   if (!autoSelected && weeks.length > 0) {
@@ -1583,12 +1786,13 @@ export default function PortfolioPage() {
         <div className="mb-5">
           <Tabs
             active={tab}
-            onChange={(k) => setTab(k as "holdings" | "positions" | "symbols" | "year")}
+            onChange={(k) => setTab(k as "holdings" | "positions" | "symbols" | "year" | "premium")}
             tabs={[
               { key: "holdings",  label: "Holdings"  },
               { key: "positions", label: "Positions" },
               { key: "symbols",   label: "Symbols"   },
               { key: "year",      label: "Year"      },
+              { key: "premium",   label: "Premium"   },
             ]}
           />
         </div>
@@ -1608,8 +1812,9 @@ export default function PortfolioPage() {
           )
       )}
 
-      {tab === "symbols" && <SymbolsTab />}
-      {tab === "year"    && <YearTab />}
+      {tab === "symbols"  && <SymbolsTab />}
+      {tab === "year"     && <YearTab />}
+      {tab === "premium"  && <PremiumTab />}
     </div>
   );
 }
