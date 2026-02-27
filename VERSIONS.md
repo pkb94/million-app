@@ -5,6 +5,20 @@
 
 ---
 
+## v1.3.1 — GEX Accuracy Fix & Test Suite Green
+**Released:** 2026-02-27
+**Tag:** `v1.3.1`
+**Branch:** `main` (production)
+
+### 🐛 Bug Fixes
+- **GEX phantom rows (QQQ -$160B → $5.76B)** — yfinance returns `IV = 1e-5` (0.001%) as a floor placeholder for illiquid options with zero bid/ask. Feeding this to Black-Scholes caused `gamma` to explode to ~55 (vs ~0.025 for a real ATM option) because the denominator `S × σ × √T → 0`. Fix: skip any row where `iv < 0.5%` and `mid == 0` in `_parse_chain_rows`; also add a hard `sigma < 0.005` guard in `bs_gamma` as defence-in-depth
+- **3 failing auth tests** — `authenticate_user()` was updated to return `{'user_id': int, 'role': str}` but three test assertions still compared it to a bare integer. Updated `test_create_and_auth`, `test_change_password`, and `test_password_policy_enforced_on_change_password` to use `result['user_id']`
+
+### ✅ Test Suite
+- **33/33 tests pass** (was 30/33)
+
+---
+
 ## v1.3.0 — Scroll Fix, Dev Tooling & Startup Guide
 **Released:** 2026-02-27
 **Tag:** `v1.3.0`
