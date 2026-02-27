@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { PageHeader, EmptyState, SkeletonCard, Tabs, RefreshButton } from "@/components/ui";
 import TickerSearchInput from "@/components/TickerSearchInput";
-import { fetchStockHistory } from "@/lib/api";
 
 
 // ── helpers ──────────────────────────────────────────────────────────────────
