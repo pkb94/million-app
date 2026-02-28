@@ -719,6 +719,17 @@ def portfolio_summary(*, user_id: int) -> dict:
                 monthly_premium.get(key, 0.0) + week_premium.get(w.id, 0.0), 2
             )
 
+        # Always return all 12 months of the current calendar year so the chart
+        # shows a complete Jan–Dec skeleton even when only a few weeks exist.
+        import datetime as _dt
+        _cy = _dt.datetime.utcnow().year
+        for _m in range(1, 13):
+            _k = f"{_cy}-{_m:02d}"
+            if _k not in monthly_premium:
+                monthly_premium[_k] = 0.0
+        # Keep chronological order
+        monthly_premium = dict(sorted(monthly_premium.items()))
+
         # Win rate: weeks with positive premium
         complete_weeks = [w for w in all_weeks if w.is_complete]
         winning_weeks = sum(1 for w in complete_weeks if week_premium.get(w.id, 0) > 0)

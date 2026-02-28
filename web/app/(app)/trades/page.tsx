@@ -1196,31 +1196,96 @@ function YearTab() {
         </div>
       )}
 
-      {/* ── Monthly bar chart ── */}
-      {monthlyEntries.length > 0 && (
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar size={14} className="text-blue-500" />
-            <h3 className="text-sm font-bold text-foreground">Monthly Premium</h3>
+      {/* ── Monthly bar chart + line graph ── */}
+      {monthlyEntries.length > 0 && (() => {
+        // Build SVG polyline points over the 112px bar area (h-28 = 112px).
+        // We use a 100×100 viewBox; bars occupy bottom ~85 units (labels take top 15).
+        const chartH = 85; // usable vertical range in viewBox units
+        const n = monthlyEntries.length;
+        const linePoints = monthlyEntries
+          .map(([, v], i) => {
+            const x = n === 1 ? 50 : (i / (n - 1)) * 100;
+            const y = chartH - Math.max(2, (v / maxMonthlyPremium) * (chartH - 4));
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(" ");
+        const areaPoints =
+          `0,${chartH} ` +
+          monthlyEntries
+            .map(([, v], i) => {
+              const x = n === 1 ? 50 : (i / (n - 1)) * 100;
+              const y = chartH - Math.max(2, (v / maxMonthlyPremium) * (chartH - 4));
+              return `${x.toFixed(1)},${y.toFixed(1)}`;
+            })
+            .join(" ") +
+          ` 100,${chartH}`;
+        return (
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar size={14} className="text-blue-500" />
+              <h3 className="text-sm font-bold text-foreground">Monthly Premium</h3>
+            </div>
+            {/* relative wrapper so SVG overlays the bars */}
+            <div className="relative">
+              <div className="flex items-end gap-1 h-28">
+                {monthlyEntries.map(([ym, val]) => {
+                  const [, month] = ym.split("-");
+                  const pct = Math.max(4, Math.round((val / maxMonthlyPremium) * 100));
+                  const hasData = val > 0;
+                  return (
+                    <div key={ym} className="flex-1 flex flex-col items-center gap-0.5">
+                      <span className="text-[8px] text-foreground/60 font-semibold leading-none">
+                        {hasData ? (val >= 1000 ? (val/1000).toFixed(1)+"k" : val.toFixed(0)) : ""}
+                      </span>
+                      <div
+                        className={`w-full rounded-t-sm ${hasData ? "bg-green-500/60" : "bg-[var(--surface-2)]"}`}
+                        style={{ height: `${pct}%` }}
+                      />
+                      <span className="text-[8px] text-foreground/50 leading-none">{monthNames[month] ?? month}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* SVG line overlay — covers just the bar area (not the label row) */}
+              <svg
+                className="absolute pointer-events-none"
+                style={{ top: "14px", left: 0, right: 0, bottom: "16px", width: "100%", height: "calc(100% - 30px)" }}
+                viewBox="0 0 100 85"
+                preserveAspectRatio="none"
+              >
+                {/* soft area fill */}
+                <polygon
+                  points={areaPoints}
+                  fill="rgba(59,130,246,0.08)"
+                />
+                {/* trend line */}
+                <polyline
+                  points={linePoints}
+                  fill="none"
+                  stroke="rgb(59,130,246)"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+                {/* dots */}
+                {monthlyEntries.map(([, v], i) => {
+                  const x = n === 1 ? 50 : (i / (n - 1)) * 100;
+                  const y = chartH - Math.max(2, (v / maxMonthlyPremium) * (chartH - 4));
+                  return (
+                    <circle
+                      key={i}
+                      cx={x.toFixed(1)}
+                      cy={y.toFixed(1)}
+                      r={v > 0 ? "2" : "1.2"}
+                      fill={v > 0 ? "rgb(59,130,246)" : "rgba(59,130,246,0.3)"}
+                    />
+                  );
+                })}
+              </svg>
+            </div>
           </div>
-          <div className="flex items-end gap-2 h-28">
-            {monthlyEntries.map(([ym, val]) => {
-              const [, month] = ym.split("-");
-              const pct = Math.max(4, Math.round((val / maxMonthlyPremium) * 100));
-              return (
-                <div key={ym} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px] text-foreground/60 font-semibold">${val >= 1000 ? (val/1000).toFixed(1)+"k" : val.toFixed(0)}</span>
-                  <div
-                    className={`w-full rounded-t-md ${val >= 0 ? "bg-green-500" : "bg-red-500"}`}
-                    style={{ height: `${pct}%` }}
-                  />
-                  <span className="text-[9px] text-foreground/50">{monthNames[month] ?? month}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Week-by-week table ── */}
       {weeksBreakdown.length > 0 && (
