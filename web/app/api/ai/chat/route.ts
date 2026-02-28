@@ -48,17 +48,16 @@ function buildSystemPrompt(ctx: Awaited<ReturnType<typeof fetchContext>>) {
     : "  (none)";
 
   const positionLines = Array.isArray(positions)
-    ? positions
-        .map(
-          (p: {
-            symbol: string;
-            option_type: string;
-            strike: number;
-            contracts: number;
-            status: string;
-            premium_in: number | null;
-            expiry_date: string | null;
-          }) => {
+    ? (positions as {
+        symbol: string;
+        option_type: string;
+        strike: number;
+        contracts: number;
+        status: string;
+        premium_in: number | null;
+        expiry_date: string | null;
+      }[])
+        .map((p) => {
             const dte = p.expiry_date
               ? Math.round(
                   (new Date(p.expiry_date).getTime() - Date.now()) / 86_400_000
