@@ -1806,11 +1806,11 @@ export default function PortfolioPage() {
             active={tab}
             onChange={(k) => setTab(k as "holdings" | "positions" | "symbols" | "year" | "premium")}
             tabs={[
-              { key: "holdings",  label: "Holdings"  },
-              { key: "positions", label: "Positions" },
-              { key: "symbols",   label: "Symbols"   },
-              { key: "year",      label: "Year"      },
-              { key: "premium",   label: "Premium"   },
+              { key: "holdings",  label: "Holdings"    },
+              { key: "positions", label: "Positions"  },
+              { key: "symbols",   label: "Activity"   },
+              { key: "year",      label: "Performance" },
+              { key: "premium",   label: "Premium"    },
             ]}
           />
         </div>
