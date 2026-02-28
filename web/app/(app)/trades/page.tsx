@@ -2432,9 +2432,16 @@ function AccountTab() {
             </div>
             <span className="text-[10px] text-foreground/40">{changes.filter(c => c.chg != null).length} weeks</span>
           </div>
-          {/* Horizontally scrollable bar chart — each bar is a fixed width so all 54 fit */}
+          {/* Horizontally scrollable bar chart — each bar is a fixed width so all weeks fit */}
           {(() => {
-            const maxChg = Math.max(...changes.filter(c => c.chg != null).map(c => Math.abs(c.chg!)), 1);
+            const withChg = changes.filter(c => c.chg != null);
+            // Use absolute account value as fallback scale so bars are always visible
+            const maxAbs = Math.max(...withChg.map(c => Math.abs(c.chg!)), 0);
+            // If all changes are $0 or near-zero, fall back to account-value-based bars
+            const useValueFallback = maxAbs < 50;
+            const maxVal = useValueFallback
+              ? Math.max(...changes.filter(c => c.account_value != null).map(c => c.account_value!), 1)
+              : maxAbs;
             const n = changes.length;
             const step = n <= 12 ? 1 : n <= 26 ? 2 : n <= 52 ? 4 : 8;
             return (
@@ -2445,17 +2452,24 @@ function AccountTab() {
             >
               {changes.map((r, i) => {
                 if (r.chg == null) return <div key={i} style={{ width: 16, minWidth: 16 }} className="shrink-0" />;
-                const pct = Math.max(4, Math.round((Math.abs(r.chg) / maxChg) * 96));
+                const rawVal = useValueFallback ? (r.account_value ?? 0) : Math.abs(r.chg);
+                // Minimum 18% height so bars are always clearly visible
+                const pct = Math.max(18, Math.round((rawVal / maxVal) * 94));
                 const isUp = r.chg >= 0;
+                // Flat/zero week → neutral slate bar
+                const barColor = r.chg === 0 ? "bg-slate-500" : isUp ? "bg-green-500" : "bg-red-400";
+                const label = useValueFallback
+                  ? `$${(r.account_value ?? 0).toLocaleString()}`
+                  : `${isUp ? "+" : ""}$${r.chg.toFixed(0)}`;
                 return (
                   <div
                     key={i}
-                    title={`${new Date(r.week_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${isUp ? "+" : ""}$${r.chg.toFixed(0)}`}
+                    title={`${new Date(r.week_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${label}`}
                     className="shrink-0 flex flex-col items-center justify-end h-full gap-0.5"
                     style={{ width: 16, minWidth: 16 }}
                   >
                     <div
-                      className={`w-full rounded-t ${isUp ? "bg-green-500" : "bg-red-400"}`}
+                      className={`w-full rounded-t ${barColor}`}
                       style={{ height: `${pct}%` }}
                     />
                   </div>
@@ -2487,6 +2501,7 @@ function AccountTab() {
           <div className="flex items-center gap-4 mt-3 pt-2 border-t border-[var(--border)]">
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-green-500" /><span className="text-[10px] text-foreground/50">Gain</span></div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-red-400" /><span className="text-[10px] text-foreground/50">Loss</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-slate-500" /><span className="text-[10px] text-foreground/50">Flat</span></div>
             <span className="text-[10px] text-foreground/30 ml-auto">Hover bar for value</span>
           </div>
         </div>
