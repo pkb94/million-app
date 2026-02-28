@@ -1,11 +1,8 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const runtime = "nodejs";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY ?? "",
-});
 
 // ── Fetch portfolio context from the FastAPI backend (server-side) ────────────
 async function fetchContext(accessToken: string) {
@@ -113,9 +110,12 @@ Today's date: ${new Date().toISOString().slice(0, 10)}`;
 
 // ── POST /api/ai/chat ─────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  if (!process.env.OPENAI_API_KEY) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  if (!geminiKey && !openaiKey) {
     return new Response(
-      JSON.stringify({ error: "OPENAI_API_KEY not set. Add it to your .env file." }),
+      JSON.stringify({ error: "No AI key configured. Add GEMINI_API_KEY (free) or OPENAI_API_KEY to web/.env.local" }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -139,29 +139,92 @@ export async function POST(req: NextRequest) {
 
   const systemPrompt = buildSystemPrompt(ctx);
 
-  // Stream response
-  const stream = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    stream: true,
-    max_tokens: 1024,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...messages,
-    ],
-  });
+  // ── Gemini (free tier — preferred) ──────────────────────────────────────────
+  if (geminiKey) {
+    try {
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      for await (const chunk of stream) {
-        const text = chunk.choices[0]?.delta?.content ?? "";
-        if (text) controller.enqueue(encoder.encode(text));
+      // Build Gemini history (all messages except the last user message)
+      const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      const lastUserMessage: string = messages[messages.length - 1]?.content ?? "";
+
+      const chat = model.startChat({
+        history,
+        systemInstruction: systemPrompt,
+      });
+
+      const result = await chat.sendMessageStream(lastUserMessage);
+
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        async start(controller) {
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
+            if (text) controller.enqueue(encoder.encode(text));
+          }
+          controller.close();
+        },
+      });
+
+      return new Response(readable, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? "Gemini error";
+      // If Gemini fails and OpenAI key exists, fall through to OpenAI below
+      if (!openaiKey) {
+        return new Response(JSON.stringify({ error: `Gemini error: ${msg}` }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
       }
-      controller.close();
-    },
-  });
+    }
+  }
 
-  return new Response(readable, {
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+  // ── OpenAI fallback ──────────────────────────────────────────────────────────
+  try {
+    const openai = new OpenAI({ apiKey: openaiKey });
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      stream: true,
+      max_tokens: 1024,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages,
+      ],
+    });
+
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          const text = chunk.choices[0]?.delta?.content ?? "";
+          if (text) controller.enqueue(encoder.encode(text));
+        }
+        controller.close();
+      },
+    });
+
+    return new Response(readable, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status ?? 500;
+    const code = (err as { code?: string }).code ?? "";
+    const message =
+      code === "insufficient_quota"
+        ? "OpenAI quota exceeded — add billing at platform.openai.com/settings/billing"
+        : code === "invalid_api_key"
+        ? "Invalid OpenAI API key — check OPENAI_API_KEY in web/.env.local"
+        : `OpenAI error: ${(err as Error).message}`;
+    return new Response(JSON.stringify({ error: message }), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
