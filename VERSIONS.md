@@ -5,9 +5,39 @@
 
 ---
 
+## v1.5.0 — Performance Charts, Holdings & Monthly Premium
+**Released:** 2026-02-27
+**Tag:** `v1.5.0`
+**Branch:** `main` (production)
+
+### ✨ New Features
+- **Performance tab** — accumulation curve, projection, and basis reduction charts per position; tabs renamed Symbols→Activity, Year→Performance
+- **Monthly premium chart** — shows all 12 months of premium collected with a line graph overlay
+- **Holdings tab** — stock holdings with ticker search, company name, live price, unrealized P&L, and cost basis tracking; seeded automatically from positions (strike → avg cost, holding_id linked)
+- **Carry-forward positions** — open positions automatically carried into the current week view
+- **Live adj basis** — live adjusted basis + upside/downside from linked positions
+- **Re-open completed week** — ability to re-open a completed week for further editing
+- **Year summary tab** — yearly summary with weekly breakdown
+- **Weekly options portfolio UI** — full weekly portfolio management interface
+- **Notation key on Premium tab** — legend added to bottom of Premium tab
+
+### 🐛 Bug Fixes
+- **Adj basis not reverting** — fixed adj basis not reverting when a position is flipped back to ACTIVE
+- **Fallback for live_adj_basis** — added fallback for `live_adj_basis` undefined on stale cache responses
+- **Edit/delete positions on completed weeks** — fixed editing and deleting positions on completed weeks; added delete confirmation dialog
+- **Duplicate import build error** — removed duplicate `fetchStockHistory` import causing Next.js build failure
+
+### 🧪 Tests
+- **Portfolio service** — 23/23 tests passing after bug fixes
+- **GEX sweep** — 31-symbol GEX sweep + API endpoint tests + pre-release CI gate
+- **GEX unit tests** — GEX unit tests + GitHub Actions CI workflow
+
+---
+
 ## v1.4.0 — Premium Ledger Fix & Premium Tab
 **Released:** 2026-02-27
-**Branch:** `develop`
+**Tag:** `v1.4.0`
+**Branch:** `main` (production)
 
 ### 🐛 Bug Fixes
 - **Adj basis double-counting** — `sync_ledger_from_positions()` was creating a `PremiumLedger` row for both original positions *and* their carry-forward copies (positions created when completing a week, with `carried_from_id` set). This doubled every premium figure (e.g. $487 appeared as $974). Fix: added `carried_from_id == None` filter so only originals get ledger rows. `upsert_ledger_row()` also updated to redirect any carry-forward call to the original position's row. Stale carry-forward rows deleted from DB (14 → 7 rows)
