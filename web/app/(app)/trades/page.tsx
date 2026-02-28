@@ -614,9 +614,8 @@ function PositionRow({ pos, onEdit, onDelete }: { pos: OptionPosition; onEdit: (
   // ── Per-trade metrics ────────────────────────────────────────────────────
   const capitalAtRisk = pos.strike * pos.contracts * 100;
   const premIn = pos.premium_in ?? 0;
-  // /$1K: normalize per 100 shares (1 contract) so it's comparable across positions
-  const perContractCap = pos.strike * 100;
-  const premPerK = perContractCap > 0 ? (premIn / pos.contracts / perContractCap) * 1000 : null;
+  // /$1K: premium_in is per-share price; (premIn×100)/(strike×100)×1000 = (premIn/strike)×1000
+  const premPerK = pos.strike > 0 ? (premIn / pos.strike) * 1000 : null;
   // ROI: use net P&L if closed, else prem_in as unrealised income
   const netForRoi = premOutCell?.isClosed
     ? premOutCell.netPL
@@ -884,12 +883,10 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
         const totalPremCollected = premDash?.grand_total.total_premium_sold ?? 0;
         const coveragePct = totalCostBasis > 0 ? (totalPremCollected / totalCostBasis) * 100 : null;
         // Avg prem/$1K across this week's active positions — normalized to 1 contract (100 shares)
-        const weekPositionsWithPrem = thisWeekPositions.filter(p => p.premium_in != null && p.strike > 0 && p.contracts > 0);
+        const weekPositionsWithPrem = thisWeekPositions.filter(p => p.premium_in != null && p.strike > 0);
         const avgPremPerK = weekPositionsWithPrem.length > 0
           ? weekPositionsWithPrem.reduce((acc, p) => {
-              const perContractCap = p.strike * 100;
-              const premPerContract = (p.premium_in ?? 0) / p.contracts;
-              return acc + (perContractCap > 0 ? (premPerContract / perContractCap) * 1000 : 0);
+              return acc + (p.strike > 0 ? ((p.premium_in ?? 0) / p.strike) * 1000 : 0);
             }, 0) / weekPositionsWithPrem.length
           : null;
         return (
