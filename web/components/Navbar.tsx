@@ -103,7 +103,7 @@ export default function Navbar() {
       {/* ── Desktop sidebar ──────────────────────────────────────────────── */}
       <aside
         className={clsx(
-          "hidden lg:flex flex-col fixed top-0 left-0 h-screen border-r border-[var(--border)] bg-[var(--surface)] z-30 shrink-0 transition-[width] duration-200 ease-in-out",
+          "hidden md:flex flex-col fixed top-0 left-0 h-screen border-r border-[var(--border)] bg-[var(--surface)] z-30 shrink-0 transition-[width] duration-200 ease-in-out",
           collapsed ? "w-[64px]" : "w-[240px]",
         )}
       >
@@ -143,7 +143,7 @@ export default function Navbar() {
 
         {/* Nav links */}
         <nav className={clsx(
-          "flex-1 overflow-y-auto overscroll-contain py-4 space-y-0.5",
+          "flex-1 overflow-y-auto overscroll-contain touch-scroll py-4 space-y-0.5",
           collapsed ? "px-2" : "px-3",
         )}>
           {NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
@@ -218,7 +218,7 @@ export default function Navbar() {
       </aside>
 
       {/* ── Mobile top bar ───────────────────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-[var(--border)] glass">
+      <header className="md:hidden sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-[var(--border)] glass">
         <Link href="/dashboard" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
           <span className="w-7 h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
             <Zap size={13} className="text-white" strokeWidth={2.5} />
@@ -236,7 +236,7 @@ export default function Navbar() {
 
       {/* ── Mobile slide-out drawer ──────────────────────────────────────── */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 flex">
+        <div className="md:hidden fixed inset-0 z-40 flex">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
