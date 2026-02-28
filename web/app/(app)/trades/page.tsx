@@ -879,9 +879,10 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
   return (
     <div>
       {positions.length > 0 && (() => {
-        const totalCostBasis = holdings.reduce((acc, h) => acc + h.cost_basis * h.shares, 0);
+        // Use account_value (full portfolio $25K) as denominator; fall back to holdings cost basis
+        const portfolioValue = week.account_value ?? holdings.reduce((acc, h) => acc + h.cost_basis * h.shares, 0);
         const totalPremCollected = premDash?.grand_total.total_premium_sold ?? 0;
-        const coveragePct = totalCostBasis > 0 ? (totalPremCollected / totalCostBasis) * 100 : null;
+        const coveragePct = portfolioValue > 0 ? (totalPremCollected / portfolioValue) * 100 : null;
         // Avg prem/$1K across this week's active positions — normalized to 1 contract (100 shares)
         const weekPositionsWithPrem = thisWeekPositions.filter(p => p.premium_in != null && p.strike > 0);
         const avgPremPerK = weekPositionsWithPrem.length > 0
