@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
   if (geminiKey) {
     try {
       const genAI = new GoogleGenerativeAI(geminiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Build Gemini history (all messages except the last user message)
       const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
