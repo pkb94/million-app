@@ -109,10 +109,16 @@ Today's date: ${new Date().toISOString().slice(0, 10)}`;
 
 // ── POST /api/ai/chat ─────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const geminiKey = process.env.GEMINI_API_KEY;
+  // Support up to 3 Gemini keys for rotation when one hits quota
+  const geminiKeys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+  ].filter(Boolean) as string[];
+  const geminiKey = geminiKeys[0]; // kept for backward compat checks below
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  if (!geminiKey && !openaiKey) {
+  if (geminiKeys.length === 0 && !openaiKey) {
     return new Response(
       JSON.stringify({ error: "No AI key configured. Add GEMINI_API_KEY (free) or OPENAI_API_KEY to web/.env.local" }),
       { status: 503, headers: { "Content-Type": "application/json" } }
@@ -138,66 +144,67 @@ export async function POST(req: NextRequest) {
 
   const systemPrompt = buildSystemPrompt(ctx);
 
-  // ── Gemini (free tier — preferred) ──────────────────────────────────────────
-  if (geminiKey) {
-    try {
-      const genAI = new GoogleGenerativeAI(geminiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+  // ── Gemini (free tier — preferred, tries all configured keys) ───────────────
+  if (geminiKeys.length > 0) {
+    // Build shared history/message once
+    const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+    const lastUserMessage: string = messages[messages.length - 1]?.content ?? "";
 
-      // Build Gemini history (all messages except the last user message)
-      const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
-
-      const lastUserMessage: string = messages[messages.length - 1]?.content ?? "";
-
-      const chat = model.startChat({
-        history,
-        systemInstruction: {
-          role: "user",
-          parts: [{ text: systemPrompt }],
-        },
-      });
-
-      const result = await chat.sendMessageStream(lastUserMessage);
-
-      const encoder = new TextEncoder();
-      const readable = new ReadableStream({
-        async start(controller) {
-          for await (const chunk of result.stream) {
-            const text = chunk.text();
-            if (text) controller.enqueue(encoder.encode(text));
-          }
-          controller.close();
-        },
-      });
-
-      return new Response(readable, {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
-    } catch (err: unknown) {
-      const msg = (err as Error).message ?? "Gemini error";
-      console.error("[AI] Gemini error:", msg);
-
-      // Detect quota exhaustion and surface a friendly message
-      const isQuotaError = msg.includes("429") || msg.includes("quota") || msg.includes("Too Many Requests");
-      if (isQuotaError && !openaiKey) {
-        const retryMatch = msg.match(/retry in ([\d.]+)s/i);
-        const retryIn = retryMatch ? `Please retry in ${Math.ceil(parseFloat(retryMatch[1]))} seconds.` : "Daily free quota is exhausted — resets at midnight PT.";
-        return new Response(
-          JSON.stringify({ error: `AI quota exceeded. ${retryIn}` }),
-          { status: 429, headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      // If Gemini fails and OpenAI key exists, fall through to OpenAI below
-      if (!openaiKey) {
-        return new Response(JSON.stringify({ error: `Gemini error: ${msg}` }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
+    let lastQuotaRetry = 0;
+    for (let i = 0; i < geminiKeys.length; i++) {
+      try {
+        const genAI = new GoogleGenerativeAI(geminiKeys[i]);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+        const chat = model.startChat({
+          history,
+          systemInstruction: { role: "user", parts: [{ text: systemPrompt }] },
         });
+        const result = await chat.sendMessageStream(lastUserMessage);
+        const encoder = new TextEncoder();
+        const readable = new ReadableStream({
+          async start(controller) {
+            for await (const chunk of result.stream) {
+              const text = chunk.text();
+              if (text) controller.enqueue(encoder.encode(text));
+            }
+            controller.close();
+          },
+        });
+        return new Response(readable, {
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      } catch (err: unknown) {
+        const msg = (err as Error).message ?? "Gemini error";
+        const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("Too Many Requests");
+        if (isQuota) {
+          const retryMatch = msg.match(/retry in ([\d.]+)s/i);
+          lastQuotaRetry = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+          console.warn(`[AI] Gemini key ${i + 1}/${geminiKeys.length} quota exceeded, trying next key...`);
+          continue; // try next key
+        }
+        console.error("[AI] Gemini error:", msg);
+        if (!openaiKey) {
+          return new Response(JSON.stringify({ error: `Gemini error: ${msg}` }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        break; // non-quota error, fall through to OpenAI
       }
+    }
+
+    // All Gemini keys exhausted by quota
+    if (!openaiKey) {
+      const msg = lastQuotaRetry > 0
+        ? `AI quota exceeded on all keys. Resets at midnight PT.`
+        : "All Gemini keys failed.";
+      return new Response(
+        JSON.stringify({ error: msg }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
     }
   }
 
