@@ -14,8 +14,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <Navbar />
       <main
         className={[
-          "min-w-0 w-full overflow-x-hidden pb-nav lg:pb-0 animate-fade-up transition-[padding-left] duration-200 ease-in-out",
-          collapsed ? "lg:pl-[64px]" : "lg:pl-[240px]",
+          "min-w-0 w-full overflow-x-hidden pb-nav md:pb-0 animate-fade-up transition-[padding-left] duration-200 ease-in-out",
+          collapsed ? "md:pl-[64px]" : "md:pl-[240px]",
         ].join(" ")}
       >
         {children}

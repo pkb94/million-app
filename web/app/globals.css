@@ -120,6 +120,12 @@ input[type="number"] { -moz-appearance: textfield; }
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .pb-nav  { padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
 
+  /* iPad-friendly touch scrolling for panels */
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
   /* Card hover */
   .card-hover {
     @apply transition-all duration-200 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5;

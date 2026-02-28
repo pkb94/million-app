@@ -129,7 +129,7 @@ export default function AiChat() {
         onClick={() => setOpen((v) => !v)}
         aria-label="AI Assistant"
         className={[
-          "fixed bottom-20 right-4 z-50 lg:bottom-6 lg:right-6",
+          "fixed bottom-20 right-4 z-50 md:bottom-6 md:right-6",
           "w-12 h-12 rounded-full shadow-lg flex items-center justify-center",
           "transition-all duration-200",
           open
@@ -153,11 +153,11 @@ export default function AiChat() {
       {/* Chat panel */}
       <div
         className={[
-          "fixed z-40 inset-x-0 bottom-0 lg:inset-x-auto lg:right-6 lg:bottom-20",
-          "lg:w-[420px] lg:rounded-2xl",
+          "fixed z-40 inset-x-0 bottom-0 md:inset-x-auto md:right-6 md:bottom-20",
+          "md:w-[420px] md:rounded-2xl",
           "bg-[var(--surface)] border border-[var(--border)] shadow-2xl",
           "flex flex-col transition-all duration-300 ease-out",
-          open ? "h-[70dvh] lg:h-[600px] opacity-100 pointer-events-auto" : "h-0 opacity-0 pointer-events-none overflow-hidden",
+          open ? "h-[70dvh] md:h-[600px] opacity-100 pointer-events-auto" : "h-0 opacity-0 pointer-events-none overflow-hidden",
         ].join(" ")}
       >
         {/* Header */}
@@ -275,7 +275,7 @@ export default function AiChat() {
       {/* Backdrop on mobile */}
       {open && (
         <div
-          className="fixed inset-0 z-30 bg-black/20 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/20 md:hidden"
           onClick={() => setOpen(false)}
         />
       )}
