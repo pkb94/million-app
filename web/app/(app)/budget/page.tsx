@@ -166,14 +166,46 @@ function EditableRow({
         </td>
       )}
       {isRecurring && (
-        <td className="px-2 py-1.5 w-[130px]">
-          <input
-            type="month"
-            value={draft.active_until}
-            onChange={(e) => set("active_until", e.target.value)}
-            title="Leave blank for indefinite"
-            className={selCls + " cursor-pointer"}
-          />
+        <td className="px-2 py-1.5 w-[180px]">
+          {(() => {
+            const [auY, auM] = draft.active_until ? draft.active_until.split("-") : ["", ""];
+            const setAU = (y: string, m: string) => set("active_until", y && m ? `${y}-${m}` : "");
+            const curYear = new Date().getFullYear();
+            const years = Array.from({ length: 10 }, (_, i) => String(curYear + i));
+            const months = [
+              ["01","Jan"],["02","Feb"],["03","Mar"],["04","Apr"],
+              ["05","May"],["06","Jun"],["07","Jul"],["08","Aug"],
+              ["09","Sep"],["10","Oct"],["11","Nov"],["12","Dec"],
+            ];
+            return (
+              <div className="flex gap-1">
+                <select
+                  value={auM}
+                  onChange={(e) => setAU(auY || String(curYear), e.target.value)}
+                  className="flex-1 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-xs text-foreground px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Mo</option>
+                  {months.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+                <select
+                  value={auY}
+                  onChange={(e) => setAU(e.target.value, auM || "12")}
+                  className="flex-1 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-xs text-foreground px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Yr</option>
+                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+                {draft.active_until && (
+                  <button
+                    type="button"
+                    onClick={() => set("active_until", "")}
+                    title="Clear (set to ongoing)"
+                    className="text-foreground/30 hover:text-red-400 px-0.5 text-xs"
+                  >✕</button>
+                )}
+              </div>
+            );
+          })()}
         </td>
       )}
       <td className="px-2 py-1.5 w-[120px]">
