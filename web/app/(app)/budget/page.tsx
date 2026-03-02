@@ -8,7 +8,7 @@ import {
   fetchBudgetOverrides, saveBudgetOverride, deleteBudgetOverride, BudgetOverride,
 } from "@/lib/api";
 import {
-  Plus, ChevronLeft, ChevronRight, Trash2, Check, X, Repeat, Zap, PencilLine, CreditCard,
+  Plus, ChevronLeft, ChevronRight, Trash2, Check, X, Repeat, Zap, PencilLine, CreditCard, TrendingUp,
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 
@@ -20,10 +20,9 @@ const PIE_COLORS = [
 ];
 
 const CATEGORIES = [
-  "Food & Dining","Groceries","Transport","Gas","Entertainment",
-  "Shopping","Utilities","Insurance","Healthcare","Education",
-  "Subscriptions","Housing","Travel","Savings","Investment","Tax",
-  "Personal Care","Pets","Gifts","Other",
+  "Groceries","Personal Loan","Car Payment","Communication",
+  "Personal Care","Gas","Utilities","Shopping","Housing",
+  "Entertainment","Subscriptions","Travel","Gifts","Other",
 ];
 
 const RECURRENCE_MONTHS: Record<BudgetRecurrence, number> = {
@@ -350,7 +349,7 @@ function ReadRow({
 
 // ── Section ───────────────────────────────────────────────────────────────────
 function Section({
-  title, icon, accentCls, rows, isRecurring, currentMonth, overrides,
+  title, icon, accentCls, rows, isRecurring, currentMonth, overrides, typeFilter,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -359,6 +358,7 @@ function Section({
   isRecurring: boolean;
   currentMonth: string;
   overrides: BudgetOverride[];   // all overrides for the current user
+  typeFilter?: "INCOME" | "EXPENSE";  // pre-fill type when adding new row
 }) {
   const qc = useQueryClient();
   const [drafts, setDrafts]       = useState<DraftRow[]>([]);
@@ -385,7 +385,7 @@ function Section({
         date: d.date,
         description: d.description || undefined,
         merchant: d.merchant || undefined,
-        active_until: (d.entry_type === "RECURRING" && d.active_until) ? d.active_until : undefined,
+        active_until: (d.entry_type === "RECURRING" && d.active_until) ? d.active_until : null,
       };
       return d.id ? updateBudget(d.id, body) : saveBudget(body);
     },
@@ -409,7 +409,11 @@ function Section({
     onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-overrides"] }),
   });
 
-  const addRow = () => setDrafts((p) => [...p, blankDraft(currentMonth, isRecurring)]);
+  const addRow = () => {
+    const draft = blankDraft(currentMonth, isRecurring);
+    if (typeFilter) draft.type = typeFilter;
+    setDrafts((p) => [...p, draft]);
+  };
 
   const saveDraft = async (idx: number) => {
     const d = drafts[idx];
@@ -1288,45 +1292,60 @@ export default function BudgetPage() {
     return m;
   }, [allOverrides, currentMonth]);
 
-  const { floating, recurring } = useMemo(() => {
+  const { floating, recurring, incomeRows } = useMemo(() => {
     const floating: { entry: BudgetEntry; displayAmount: number }[] = [];
     const recurring: { entry: BudgetEntry; displayAmount: number }[] = [];
+    const incomeRows: { entry: BudgetEntry; displayAmount: number }[] = [];
     for (const entry of allEntries) {
       const et = (entry.entry_type ?? "FLOATING").toUpperCase();
+      const typeUp = entry.type?.toUpperCase();
       if (et !== "RECURRING") {
-        if (entry.date.slice(0, 7) === currentMonth)
-          floating.push({ entry, displayAmount: entry.amount });
+        if (entry.date.slice(0, 7) === currentMonth) {
+          if (typeUp === "INCOME") incomeRows.push({ entry, displayAmount: entry.amount });
+          else floating.push({ entry, displayAmount: entry.amount });
+        }
       } else {
         if (recurringAppliesToMonth(entry, currentMonth)) {
           const base = proratedMonthly(entry);
           const effective = overrideMap[entry.id!] ?? base;
-          recurring.push({ entry, displayAmount: effective });
+          if (typeUp === "INCOME") incomeRows.push({ entry, displayAmount: effective });
+          else recurring.push({ entry, displayAmount: effective });
         }
       }
     }
-    return { floating, recurring };
+    return { floating, recurring, incomeRows };
   }, [allEntries, currentMonth, overrideMap]);
 
   const stats = useMemo(() => {
-    const all = [...floating, ...recurring];
-    const expense  = all.filter((r) => r.entry.type?.toUpperCase() === "EXPENSE").reduce((s, r) => s + r.displayAmount, 0);
-    const income   = all.filter((r) => r.entry.type?.toUpperCase() === "INCOME").reduce((s, r) => s + r.displayAmount, 0);
-    const fixedExp = recurring.filter((r) => r.entry.type?.toUpperCase() === "EXPENSE").reduce((s, r) => s + r.displayAmount, 0);
+    const expense  = [...floating, ...recurring].reduce((s, r) => s + r.displayAmount, 0);
+    const income   = incomeRows.reduce((s, r) => s + r.displayAmount, 0);
+    const fixedExp = recurring.reduce((s, r) => s + r.displayAmount, 0);
     return { expense, income, fixedExp, net: income - expense };
-  }, [floating, recurring]);
+  }, [floating, recurring, incomeRows]);
+
+  // Pull CC totals for this month into expense summary
+  const { data: allCCWeeks = [] } = useQuery<CreditCardWeek[]>({
+    queryKey: ["cc-weeks"],
+    queryFn: fetchCCWeeks,
+    staleTime: 30_000,
+  });
+  const ccMonthTotal = useMemo(() => {
+    return allCCWeeks
+      .filter((r) => r.week_start.slice(0, 7) === currentMonth && (!r.card_name || !r.card_name.toLowerCase().startsWith("robinhood")))
+      .reduce((s, r) => s + (r.balance ?? 0), 0);
+  }, [allCCWeeks, currentMonth]);
 
   const pieData = useMemo(() => {
     const map: Record<string, number> = {};
     for (const { entry, displayAmount } of [...floating, ...recurring]) {
-      if (entry.type?.toUpperCase() === "EXPENSE")
-        map[entry.category] = (map[entry.category] ?? 0) + displayAmount;
+      map[entry.category] = (map[entry.category] ?? 0) + displayAmount;
     }
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
       .map(([name, value]) => ({ name, value }));
   }, [floating, recurring]);
 
-  const totalEntries = floating.length + recurring.length;
+  const totalEntries = floating.length + recurring.length + incomeRows.length;
   const [activeTab, setActiveTab] = useState<"monthly" | "annual">("monthly");
   const currentYear = Number(currentMonth.split("-")[0]);
 
@@ -1395,11 +1414,11 @@ export default function BudgetPage() {
         <>
           {/* stat cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-            <StatCard label="Income"      value={fmt(stats.income)}   cls="text-emerald-400" />
-            <StatCard label="Expenses"    value={fmt(stats.expense)}  cls="text-red-400" />
-            <StatCard label="Fixed/Month" value={fmt(stats.fixedExp)} cls="text-purple-400" />
-            <StatCard label="Net"         value={fmt(stats.net)}      cls={stats.net >= 0 ? "text-emerald-400" : "text-red-400"} />
-            <SavingsRate income={stats.income} net={stats.net} />
+            <StatCard label="Income"      value={fmt(stats.income)}                cls="text-emerald-400" />
+            <StatCard label="Expenses"    value={fmt(stats.expense + ccMonthTotal)} cls="text-red-400" />
+            <StatCard label="Fixed/Month" value={fmt(stats.fixedExp)}              cls="text-purple-400" />
+            <StatCard label="Net"         value={fmt(stats.income - stats.expense - ccMonthTotal)} cls={(stats.income - stats.expense - ccMonthTotal) >= 0 ? "text-emerald-400" : "text-red-400"} />
+            <SavingsRate income={stats.income} net={stats.income - stats.expense - ccMonthTotal} />
           </div>
 
           {/* charts row — 3 equal columns */}
@@ -1451,15 +1470,25 @@ export default function BudgetPage() {
               {/* Income vs expense split */}
               <IncomeExpenseSplit
                 income={stats.income}
-                expense={stats.expense}
+                expense={stats.expense + ccMonthTotal}
                 fixedExp={stats.fixedExp}
-                floatExp={stats.expense - stats.fixedExp}
+                floatExp={stats.expense - stats.fixedExp + ccMonthTotal}
               />
             </div>
           )}
 
           {/* tables */}
           <div className="flex flex-col gap-5">
+            <Section
+              title="Income"
+              icon={<TrendingUp size={14} />}
+              accentCls="text-emerald-400"
+              rows={incomeRows}
+              isRecurring={false}
+              currentMonth={currentMonth}
+              overrides={allOverrides}
+              typeFilter="INCOME"
+            />
             <Section
               title="One-off / Floating"
               icon={<Zap size={14} />}

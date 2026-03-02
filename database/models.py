@@ -159,6 +159,8 @@ class Budget(Base):
     amount = Column(Float)
     date = Column(DateTime)
     description = Column(String)
+    merchant = Column(String, nullable=True)       # payee / merchant name
+    active_until = Column(String, nullable=True)   # YYYY-MM end month (recurring)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
 
 
@@ -168,6 +170,7 @@ class CreditCardWeek(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
     week_start = Column(DateTime, nullable=False)   # Monday of the week
+    card_name = Column(String, nullable=True)       # e.g. "Robinhood Gold", "Citi", etc.
     balance = Column(Float, nullable=False, default=0.0)
     squared_off = Column(Boolean, nullable=False, default=False)
     paid_amount = Column(Float, nullable=True)       # how much was paid from trading

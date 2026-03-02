@@ -633,6 +633,8 @@ export interface BudgetEntry {
   amount: number;
   date: string;
   description?: string;
+  merchant?: string;
+  active_until?: string;  // YYYY-MM
 }
 
 export const fetchBudget  = () => api.get<BudgetEntry[]>("/budget");
@@ -661,6 +663,7 @@ export const deleteBudgetOverride = (id: number) => api.del<void>(`/budget-overr
 export interface CreditCardWeek {
   id?: number;
   week_start: string;   // ISO date string — Monday of the week
+  card_name?: string | null;
   balance: number;
   squared_off: boolean;
   paid_amount?: number | null;

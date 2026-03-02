@@ -222,6 +222,8 @@ class BudgetCreateRequest(BaseModel):
     amount: float
     date: datetime
     description: str = ""
+    merchant: Optional[str] = None
+    active_until: Optional[str] = None   # YYYY-MM
 
 
 class BudgetOut(BaseModel):
@@ -233,6 +235,8 @@ class BudgetOut(BaseModel):
     amount: float
     date: datetime
     description: Optional[str] = None
+    merchant: Optional[str] = None
+    active_until: Optional[str] = None
 
 
 class BudgetOverrideRequest(BaseModel):
@@ -256,6 +260,7 @@ class CreditCardWeekRequest(BaseModel):
     squared_off: bool = False
     paid_amount: Optional[float] = None
     note: Optional[str] = None
+    card_name: Optional[str] = None
 
 
 class CreditCardWeekOut(BaseModel):
@@ -265,3 +270,4 @@ class CreditCardWeekOut(BaseModel):
     squared_off: bool
     paid_amount: Optional[float] = None
     note: Optional[str] = None
+    card_name: Optional[str] = None

@@ -1292,6 +1292,8 @@ def create_budget(req: BudgetCreateRequest, user=Depends(get_current_user)) -> D
         user_id=int(user["sub"]),
         entry_type=req.entry_type,
         recurrence=req.recurrence,
+        merchant=req.merchant,
+        active_until=req.active_until,
     )
     return {"status": "ok"}
 
@@ -1307,6 +1309,8 @@ def patch_budget(budget_id: int, req: BudgetCreateRequest, user=Depends(get_curr
         amount=req.amount,
         date=req.date,
         description=req.description,
+        merchant=req.merchant,
+        active_until=req.active_until,
     )
     return {"status": "ok"}
 
@@ -1360,6 +1364,7 @@ def create_cc_week(req: CreditCardWeekRequest, user=Depends(get_current_user)):
         squared_off=req.squared_off,
         paid_amount=req.paid_amount,
         note=req.note,
+        card_name=req.card_name,
     )
     return {"id": row_id, "status": "ok"}
 
@@ -1373,6 +1378,7 @@ def patch_cc_week(row_id: int, req: CreditCardWeekRequest, user=Depends(get_curr
         squared_off=req.squared_off,
         paid_amount=req.paid_amount,
         note=req.note,
+        card_name=req.card_name,
     )
     return {"status": "ok"}
 
