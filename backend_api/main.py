@@ -1398,6 +1398,9 @@ def ledger_cash_balance(user=Depends(get_current_user)) -> Dict[str, Any]:
 _STOCK_INFO_CACHE: dict[str, tuple[float, Any]] = {}
 _STOCK_INFO_TTL = 300  # 5 minutes — fundamentals don't change quickly
 
+_QUOTE_CACHE: dict[str, tuple[float, float]] = {}  # sym -> (fetched_at, price)
+_QUOTE_TTL = 60  # 60 seconds — live price cache
+
 @app.get("/stocks/{symbol}/info", response_model=Dict[str, Any])
 def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
     """Return fundamental and descriptive info for a ticker via yfinance.
@@ -1505,6 +1508,33 @@ def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
     except Exception as exc:
         err: Dict[str, Any] = {"symbol": sym, "error": str(exc)}
         return err
+
+
+@app.get("/quote/{symbol}", response_model=Dict[str, Any])
+def get_live_quote(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Return the live/delayed price for a ticker via yfinance fast_info.
+    Cached for 60 seconds to avoid hammering the API on rapid form interactions.
+    """
+    import yfinance as yf
+    sym = symbol.strip().upper()
+    now = time.monotonic()
+    cached = _QUOTE_CACHE.get(sym)
+    if cached and (now - cached[0]) < _QUOTE_TTL:
+        return {"symbol": sym, "price": cached[1], "from_cache": True}
+    try:
+        ticker = yf.Ticker(sym)
+        fi = ticker.fast_info
+        price = float(getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None) or 0.0)
+        if price <= 0:
+            hist = ticker.history(period="1d", progress=False)
+            if not hist.empty:
+                price = float(hist["Close"].iloc[-1])
+        if price <= 0:
+            return {"symbol": sym, "price": None, "error": "Price unavailable"}
+        _QUOTE_CACHE[sym] = (now, price)
+        return {"symbol": sym, "price": round(price, 4), "from_cache": False}
+    except Exception as exc:
+        return {"symbol": sym, "price": None, "error": str(exc)}
 
 
 @app.get("/stocks/{symbol}/history", response_model=Dict[str, Any])

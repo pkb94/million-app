@@ -416,7 +416,7 @@ function Section({
         date: d.date,
         description: d.description || undefined,
         merchant: d.merchant || undefined,
-        active_until: (d.entry_type === "RECURRING" && d.active_until) ? d.active_until : null,
+        active_until: (d.entry_type === "RECURRING" && d.active_until) ? d.active_until : undefined,
       };
       return d.id ? updateBudget(d.id, body) : saveBudget(body);
     },
@@ -626,7 +626,7 @@ function TrendChart({ entries }: { entries: BudgetEntry[] }) {
             <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} />
             <YAxis tickFormatter={fmtK} tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} width={44} />
             <Tooltip
-              formatter={(v: unknown, name: string) => [fmt(Number(v)), name]}
+              formatter={(v: unknown, name: string | undefined) => [fmt(Number(v)), name ?? ""]}
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
             />
             <Bar dataKey="Income"   fill="#10b981" radius={[3,3,0,0]} />
@@ -1041,7 +1041,7 @@ function CCSection({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<CCDraft | null>(null);
 
-  const saveMut = useMutation({
+  const saveMut = useMutation<void | { id: number }, Error, CCDraft>({
     mutationFn: (d: CCDraft) => {
       const body: Omit<CreditCardWeek, "id"> = {
         week_start: d.date,
@@ -1319,7 +1319,7 @@ function CCSection({
                     <XAxis dataKey="week" tick={{ fill: "var(--foreground)", opacity: 0.4, fontSize: 8 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: "var(--foreground)", opacity: 0.4, fontSize: 8 }} tickLine={false} axisLine={false} tickFormatter={(v) => "$" + v} />
                     <Tooltip contentStyle={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--foreground)", fontSize: 11 }}
-                      formatter={(v: number) => "$" + v.toFixed(2)} />
+                      formatter={(v: number | undefined) => "$" + (v ?? 0).toFixed(2)} />
                     <Legend wrapperStyle={{ fontSize: 10, color: "var(--foreground)", opacity: 0.5 }} />
                     <Bar dataKey="Charged" fill="#f43f5e" radius={[3, 3, 0, 0]} />
                     <Bar dataKey="Paid" fill="#10b981" radius={[3, 3, 0, 0]} />

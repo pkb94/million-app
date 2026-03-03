@@ -5,6 +5,92 @@
 
 ---
 
+## v1.8.1 — Effective Premium Formula Fix & Spot Price Support
+**Released:** 2026-03-02
+**Tag:** `v1.8.1`
+**Branch:** `develop`
+
+### 📐 Effective Premium Formula (Trades Page)
+- **Corrected formula:** `Eff Prem = (strike − avg_cost) + pre_collected_per_share` × contracts × 100
+- Previously used extrinsic-only value; now reflects the **true economic gain per share if called away**
+- Cross-references each position's linked holding for `cost_basis` and `total_premium_sold`
+- Positions without a linked holding (CSPs) gracefully fall back to $0
+
+### 📍 Option Position Spot Price
+- Added `spot_price` field to `OptionPosition` model (migration `0019`)
+- `logic/portfolio.py` now computes `intrinsic_value`, `extrinsic_value`, and `moneyness` from live spot
+- `web/lib/api.ts` interface updated with `spot_price` field
+
+---
+
+## v1.8.0 — Budget: Category Annual Cards, Income Separation & CC Integration
+**Released:** 2026-03-01
+**Tag:** `v1.8.0`
+**Branch:** `develop`
+
+### 💰 Income Separation
+- Income entries are now fully separated from expense rows — income no longer bleeds into expense totals
+- `allEntries` split into three buckets: `floating` (one-off expenses), `recurring` (fixed expenses), `incomeRows` (all INCOME type)
+- Dedicated **Income section** in the monthly view with TrendingUp icon
+- Stats `expense` total is EXPENSE-only; `income` figure comes from `incomeRows` exclusively
+
+### 💳 Credit Card Total in Expense Summary
+- CC week charges for the current month are now included in the **Expenses** stat card
+- `ccMonthTotal` query filters out Robinhood Gold rows (tracked separately) and sums non-Robinhood CC charges
+- **Net** stat card also deducts `ccMonthTotal` for an accurate real net figure
+- Savings Rate widget uses the corrected net (income − budget expenses − CC charges)
+
+### 📅 Ends Column (Recurring Rows) — Month/Year Dropdowns
+- Replaced `<input type="month">` (invisible on WebKit/Safari) with two `<select>` dropdowns: **Mo** + **Yr**
+- Year dropdown offers current year + 9 future years
+- ✕ clear button resets `active_until` back to "ongoing"
+- `active_until` stored as `YYYY-MM`; `recurringAppliesToMonth` respects the end date
+- Added `merchant` and `active_until` columns to `budget` DB table (migration 0017/0018)
+- Added `card_name` column to `credit_card_weeks` table
+
+### 📋 Curated Categories List
+- `CATEGORIES` array replaced with a focused 14-item list:
+  Groceries · Personal Loan · Car Payment · Communication · Personal Care · Gas · Utilities · Shopping · Housing · Entertainment · Subscriptions · Travel · Gifts · Other
+
+### 🔧 Fix: Recurring Row Edits Now Save Correctly
+- `saveEdit` was routing recurring edits through `overrideMut` (budget_overrides table), discarding category/ends/frequency changes
+- Fixed: `saveEdit` now always calls `mut` (base row PATCH) so all fields persist
+- `startEdit` pre-fills with `entry.amount` (base amount) instead of prorated/overridden value
+
+### 📊 Annual Summary — Category Spend Cards with Monthly Bar Charts
+- New **`CategoryAnnualCards`** component rendered below the Annual Summary table
+- One card per expense category that has spend in the selected year, sorted by annual total (highest first)
+- **4-column responsive grid**: 1 col mobile → 2 sm → 3 lg → 4 xl
+- Each card shows:
+  - Category name with color dot + annual total
+  - Avg monthly spend (active months only) + "X of 12 months" counter
+  - **12-bar chart** (Jan–Dec): colored bars for months with spend, grey for zero months
+  - Hover tooltip shows exact dollar amount per month
+- Uses existing `PIE_COLORS` palette for consistent color coding across charts
+
+---
+
+## v1.7.2 — Mobile & iPad Responsive Optimizations
+**Released:** 2026-03-01
+**Tag:** `v1.7.2`
+**Branch:** `develop`
+
+### 📱 Mobile (< 640px)
+- Page header text scales down (`text-xl`); "Annual Summary" tab label truncates to "Annual" on phones
+- `StatCard` font scales: `text-xl` phone → `text-2xl` sm+
+- CC card header uses `flex-wrap` so the Charged/Paid/Due chips wrap instead of overflowing
+- Free-add CC table has `min-w-[520px]` + `overflow-x-auto` for clean horizontal scroll
+- Metrics stat cards: 2×2 grid on phone → 4-in-a-row at `sm` (640px)
+- Tighter padding on metrics right panel (`px-3 py-3` on mobile)
+
+### 📟 iPad / Tablet (`md` = 768px)
+- Stat cards: `2col → 3col at md → 5col at lg` (no more jump from 2 to 5)
+- Charts grid: `1col → 2col at md → 3col at lg`
+- Robinhood Gold tracker: table + metrics side-by-side activates at `md` (iPad portrait) instead of `lg` (1024px only)
+- Table left column narrows to `w-[320px]` on md, expands to `w-[360px]` on lg
+
+---
+
 ## v1.7.1 — Robinhood Gold Tracker Improvements
 **Released:** 2026-03-01
 **Tag:** `v1.7.1`
