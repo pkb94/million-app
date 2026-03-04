@@ -1,1399 +1,22 @@
+// ── THIS FILE IS AUTO-SPLIT — edit components in /web/components/budget/ ──────
 "use client";
-import { useState, useMemo, useRef, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  fetchBudget, saveBudget, updateBudget, deleteBudget,
-  BudgetEntry, BudgetEntryType, BudgetRecurrence,
-  fetchCCWeeks, saveCCWeek, updateCCWeek, deleteCCWeek, CreditCardWeek,
-  fetchBudgetOverrides, saveBudgetOverride, deleteBudgetOverride, BudgetOverride,
+  fetchBudget, fetchCCWeeks, fetchBudgetOverrides,
+  BudgetEntry, CreditCardWeek, BudgetOverride,
 } from "@/lib/api";
+import { ChevronLeft, ChevronRight, TrendingUp, Zap, Repeat } from "lucide-react";
+import { Section } from "@/components/budget/BudgetSection";
 import {
-  Plus, ChevronLeft, ChevronRight, Trash2, Check, X, Repeat, Zap, PencilLine, CreditCard, TrendingUp,
-} from "lucide-react";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+  SavingsRate, TopCategoriesBar, IncomeExpenseSplit, ExpensePieChart, TrendChart,
+} from "@/components/budget/BudgetCharts";
+import { AnnualSummary } from "@/components/budget/BudgetAnnualSummary";
+import { CCSection, StatCard } from "@/components/budget/CCSection";
+import {
+  fmt, monthKey, monthLabel, proratedMonthly, recurringAppliesToMonth,
+} from "@/components/budget/BudgetHelpers";
 
-// ── constants ─────────────────────────────────────────────────────────────────
-const PIE_COLORS = [
-  "#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444",
-  "#06b6d4","#84cc16","#f97316","#ec4899","#14b8a6",
-  "#6366f1","#f43f5e","#22d3ee","#a3e635","#fb923c",
-];
-
-const CATEGORIES = [
-  "Groceries","Personal Loan","Car Payment","Communication",
-  "Personal Care","Gas","Utilities","Shopping","Housing",
-  "Entertainment","Subscriptions","Travel","Gifts","Other",
-];
-
-const RECURRENCE_MONTHS: Record<BudgetRecurrence, number> = {
-  MONTHLY: 1, SEMI_ANNUAL: 6, ANNUAL: 12,
-};
-const RECURRENCE_LABEL: Record<BudgetRecurrence, string> = {
-  MONTHLY: "Monthly", SEMI_ANNUAL: "Every 6 mo", ANNUAL: "Yearly",
-};
-
-const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const fmtK = (v: number) => v >= 1000 ? "$" + (v / 1000).toFixed(1) + "k" : "$" + Math.round(v);
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-const fmt = (v: number) =>
-  "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function monthKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function monthLabel(key: string) {
-  const [y, m] = key.split("-");
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", {
-    month: "long", year: "numeric",
-  });
-}
-function proratedMonthly(entry: BudgetEntry): number {
-  const months = RECURRENCE_MONTHS[(entry.recurrence ?? "ANNUAL") as BudgetRecurrence];
-  return entry.amount / months;
-}
-function recurringAppliesToMonth(entry: BudgetEntry, targetKey: string): boolean {
-  const period = RECURRENCE_MONTHS[(entry.recurrence ?? "ANNUAL") as BudgetRecurrence];
-  const base = new Date(entry.date.slice(0, 10) + "T00:00:00");
-  const [ty, tm] = targetKey.split("-").map(Number);
-  const diff = (ty - base.getFullYear()) * 12 + (tm - (base.getMonth() + 1));
-  if (diff < 0) return false;                         // before start
-  if (diff % period !== 0) return false;               // not on cycle
-  if (entry.active_until) {                            // respect end date
-    const [ey, em] = entry.active_until.split("-").map(Number);
-    if (ty > ey || (ty === ey && tm > em)) return false;
-  }
-  return true;
-}
-
-// ── draft row type ────────────────────────────────────────────────────────────
-interface DraftRow {
-  id?: number;
-  category: string;
-  type: "EXPENSE" | "INCOME" | "ASSET";
-  entry_type: BudgetEntryType;
-  recurrence: BudgetRecurrence;
-  amount: string;
-  date: string;
-  description: string;
-  merchant: string;
-  active_until: string;  // YYYY-MM, empty = indefinite
-}
-
-function blankDraft(month: string, isRecurring: boolean): DraftRow {
-  return {
-    category: "",
-    type: "EXPENSE",
-    entry_type: isRecurring ? "RECURRING" : "FLOATING",
-    recurrence: "MONTHLY",
-    amount: "",
-    date: `${month}-01`,
-    description: "",
-    merchant: "",
-    active_until: "",
-  };
-}
-
-// ── shared input styles ───────────────────────────────────────────────────────
-const cellCls = "w-full bg-transparent text-sm text-foreground outline-none placeholder:text-foreground/25 focus:bg-blue-500/10 rounded px-1 py-0.5";
-const selCls  = "w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-sm text-foreground px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500";
-
-// ── EditableRow ───────────────────────────────────────────────────────────────
-function EditableRow({
-  draft, isRecurring, onChange, onSave, onCancel, saving,
-}: {
-  draft: DraftRow;
-  isRecurring: boolean;
-  onChange: (d: DraftRow) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  saving: boolean;
-}) {
-  const firstRef = useRef<HTMLInputElement>(null);
-  const set = (k: keyof DraftRow, v: string) => onChange({ ...draft, [k]: v });
-
-  useEffect(() => { firstRef.current?.focus(); }, []);
-
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter")  onSave();
-    if (e.key === "Escape") onCancel();
-  };
-
-  return (
-    <tr className="bg-blue-500/5 border-b border-blue-500/20" onKeyDown={onKey}>
-      <td className="px-2 py-1.5 w-[115px]">
-        <input
-          ref={firstRef}
-          type="date" value={draft.date}
-          onChange={(e) => set("date", e.target.value)}
-          className={cellCls + " w-[105px]"}
-        />
-      </td>
-      <td className="px-2 py-1.5">
-        <select value={draft.category} onChange={(e) => set("category", e.target.value)} className={selCls}>
-          <option value="">— category —</option>
-          {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-        </select>
-      </td>
-      {!isRecurring && (
-        <td className="px-2 py-1.5">
-          <input
-            value={draft.merchant}
-            onChange={(e) => set("merchant", e.target.value)}
-            placeholder="Merchant / Payee"
-            className={cellCls}
-          />
-        </td>
-      )}
-      <td className="px-2 py-1.5 w-[110px]">
-        <select value={draft.type} onChange={(e) => set("type", e.target.value as DraftRow["type"])} className={selCls}>
-          <option value="EXPENSE">Expense</option>
-          <option value="INCOME">Income</option>
-          <option value="ASSET">Asset</option>
-        </select>
-      </td>
-      {isRecurring && (
-        <td className="px-2 py-1.5 w-[120px]">
-          <select
-            value={draft.recurrence}
-            onChange={(e) => set("recurrence", e.target.value as BudgetRecurrence)}
-            className={selCls}
-          >
-            <option value="MONTHLY">Monthly</option>
-            <option value="SEMI_ANNUAL">Every 6 mo</option>
-            <option value="ANNUAL">Yearly</option>
-          </select>
-        </td>
-      )}
-      {isRecurring && (
-        <td className="px-2 py-1.5 w-[180px]">
-          {(() => {
-            const [auY, auM] = draft.active_until ? draft.active_until.split("-") : ["", ""];
-            const setAU = (y: string, m: string) => set("active_until", y && m ? `${y}-${m}` : "");
-            const curYear = new Date().getFullYear();
-            const years = Array.from({ length: 10 }, (_, i) => String(curYear + i));
-            const months = [
-              ["01","Jan"],["02","Feb"],["03","Mar"],["04","Apr"],
-              ["05","May"],["06","Jun"],["07","Jul"],["08","Aug"],
-              ["09","Sep"],["10","Oct"],["11","Nov"],["12","Dec"],
-            ];
-            return (
-              <div className="flex gap-1">
-                <select
-                  value={auM}
-                  onChange={(e) => setAU(auY || String(curYear), e.target.value)}
-                  className="flex-1 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-xs text-foreground px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Mo</option>
-                  {months.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-                <select
-                  value={auY}
-                  onChange={(e) => setAU(e.target.value, auM || "12")}
-                  className="flex-1 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg text-xs text-foreground px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Yr</option>
-                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
-                {draft.active_until && (
-                  <button
-                    type="button"
-                    onClick={() => set("active_until", "")}
-                    title="Clear (set to ongoing)"
-                    className="text-foreground/30 hover:text-red-400 px-0.5 text-xs"
-                  >✕</button>
-                )}
-              </div>
-            );
-          })()}
-        </td>
-      )}
-      <td className="px-2 py-1.5 w-[120px]">
-        <input
-          type="number" step="0.01" min="0"
-          value={draft.amount}
-          onChange={(e) => set("amount", e.target.value)}
-          placeholder="0.00"
-          className={cellCls + " text-right"}
-        />
-      </td>
-      <td className="px-2 py-1.5">
-        <input
-          value={draft.description}
-          onChange={(e) => set("description", e.target.value)}
-          placeholder="Note (optional)"
-          className={cellCls}
-        />
-      </td>
-      <td className="px-2 py-1.5 w-[70px]">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onSave}
-            disabled={saving || !draft.category || !draft.amount}
-            title="Save (Enter)"
-            className="p-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/40 disabled:opacity-30 transition"
-          >
-            {saving ? <span className="text-[10px]">...</span> : <Check size={13} />}
-          </button>
-          <button
-            onClick={onCancel}
-            title="Cancel (Esc)"
-            className="p-1.5 rounded-lg bg-[var(--surface-2)] text-foreground/50 hover:bg-[var(--border)] transition"
-          >
-            <X size={13} />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-// ── ReadRow ───────────────────────────────────────────────────────────────────
-function ReadRow({
-  entry, displayAmount, isRecurring, onEdit, override, onResetOverride,
-}: {
-  entry: BudgetEntry;
-  displayAmount: number;
-  isRecurring: boolean;
-  onEdit: () => void;
-  override?: BudgetOverride;   // present when this month has an override
-  onResetOverride?: () => void;
-}) {
-  const qc = useQueryClient();
-  const [confirmDel, setConfirmDel] = useState(false);
-  const del = useMutation({
-    mutationFn: () => deleteBudget(entry.id!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget"] }),
-  });
-
-  const typeUp = entry.type?.toUpperCase();
-  const isExpense = typeUp === "EXPENSE";
-  const isIncome  = typeUp === "INCOME";
-  const amtCls = isExpense ? "text-red-400" : isIncome ? "text-emerald-400" : "text-blue-400";
-
-  return (
-    <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors group">
-      <td className="px-3 py-2.5 text-xs text-foreground/50 whitespace-nowrap">
-        {entry.date.slice(0, 10)}
-      </td>
-      <td className="px-3 py-2.5 text-sm font-medium text-foreground">
-        {entry.category || "---"}
-      </td>
-      {!isRecurring && (
-        <td className="px-3 py-2.5 text-sm text-foreground/70">
-          {entry.merchant ? (
-            <span className="inline-flex items-center gap-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-2 py-0.5">
-              {entry.merchant}
-            </span>
-          ) : (
-            <span className="text-foreground/25 text-xs">—</span>
-          )}
-        </td>
-      )}
-      <td className="px-3 py-2.5">
-        <span className={"inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full " + (
-          isExpense ? "bg-red-500/15 text-red-400"
-          : isIncome ? "bg-emerald-500/15 text-emerald-400"
-          : "bg-blue-500/15 text-blue-400"
-        )}>
-          {entry.type}
-        </span>
-      </td>
-      {isRecurring && (
-        <td className="px-3 py-2.5 text-xs text-foreground/50">
-          {RECURRENCE_LABEL[(entry.recurrence ?? "ANNUAL") as BudgetRecurrence]}
-        </td>
-      )}
-      {isRecurring && (
-        <td className="px-3 py-2.5 text-xs">
-          {entry.active_until ? (
-            <span className="text-amber-400/80">{entry.active_until}</span>
-          ) : (
-            <span className="text-foreground/25">∞ ongoing</span>
-          )}
-        </td>
-      )}
-      <td className={"px-3 py-2.5 text-sm font-bold text-right whitespace-nowrap " + amtCls}>
-        {fmt(displayAmount)}
-        {isRecurring && override && (
-          <span className="ml-1 text-[10px] font-normal text-blue-400" title={`Override active (base: ${fmt(entry.amount)})`}>
-            ✎
-          </span>
-        )}
-        {isRecurring && !override && displayAmount !== entry.amount && (
-          <span className="ml-1 text-[10px] font-normal text-foreground/30">
-            ({fmt(entry.amount)})
-          </span>
-        )}
-      </td>
-      <td className="px-3 py-2.5 text-xs text-foreground/40 max-w-[160px] truncate">
-        {override?.description ?? entry.description ?? ""}
-      </td>
-      <td className="px-3 py-2.5 w-[110px]" onClick={(e) => e.stopPropagation()}>
-        {confirmDel ? (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => del.mutate()}
-              disabled={del.isPending}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {del.isPending ? "..." : "Yes"}
-            </button>
-            <button
-              onClick={() => setConfirmDel(false)}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-foreground/70"
-            >
-              No
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={onEdit}
-              title={isRecurring ? "Override amount for this month" : "Edit"}
-              className="p-1.5 rounded-lg text-foreground/40 hover:text-blue-400 hover:bg-blue-500/10 transition"
-            >
-              <PencilLine size={13} />
-            </button>
-            {isRecurring && override && onResetOverride && (
-              <button
-                onClick={onResetOverride}
-                title="Reset to base amount"
-                className="p-1.5 rounded-lg text-foreground/40 hover:text-amber-400 hover:bg-amber-500/10 transition"
-              >
-                <X size={11} />
-              </button>
-            )}
-            <button
-              onClick={() => setConfirmDel(true)}
-              title="Delete"
-              className="p-1.5 rounded-lg text-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-// ── Section ───────────────────────────────────────────────────────────────────
-function Section({
-  title, icon, accentCls, rows, isRecurring, currentMonth, overrides, typeFilter,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  accentCls: string;
-  rows: { entry: BudgetEntry; displayAmount: number }[];
-  isRecurring: boolean;
-  currentMonth: string;
-  overrides: BudgetOverride[];   // all overrides for the current user
-  typeFilter?: "INCOME" | "EXPENSE";  // pre-fill type when adding new row
-}) {
-  const qc = useQueryClient();
-  const [drafts, setDrafts]       = useState<DraftRow[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<DraftRow | null>(null);
-
-  // index overrides by budget_id+month_key for fast lookup
-  const overrideMap = useMemo(() => {
-    const m: Record<string, BudgetOverride> = {};
-    for (const o of overrides) m[`${o.budget_id}:${o.month_key}`] = o;
-    return m;
-  }, [overrides]);
-
-  const getOverride = (entryId: number) => overrideMap[`${entryId}:${currentMonth}`];
-
-  const mut = useMutation({
-    mutationFn: (d: DraftRow) => {
-    const body: Omit<BudgetEntry, "id"> = {
-        category: d.category,
-        type: d.type,
-        entry_type: d.entry_type,
-        recurrence: d.entry_type === "RECURRING" ? d.recurrence : undefined,
-        amount: parseFloat(d.amount),
-        date: d.date,
-        description: d.description || undefined,
-        merchant: d.merchant || undefined,
-        active_until: (d.entry_type === "RECURRING" && d.active_until) ? d.active_until : undefined,
-      };
-      return d.id ? updateBudget(d.id, body) : saveBudget(body);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget"] }),
-  });
-
-  // For recurring rows: save an override for this month instead of touching the base
-  const overrideMut = useMutation({
-    mutationFn: (d: DraftRow) =>
-      saveBudgetOverride({
-        budget_id: d.id!,
-        month_key: currentMonth,
-        amount: parseFloat(d.amount),
-        description: d.description || null,
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-overrides"] }),
-  });
-
-  const resetOverrideMut = useMutation({
-    mutationFn: (overrideId: number) => deleteBudgetOverride(overrideId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budget-overrides"] }),
-  });
-
-  const addRow = () => {
-    const draft = blankDraft(currentMonth, isRecurring);
-    if (typeFilter) draft.type = typeFilter;
-    setDrafts((p) => [...p, draft]);
-  };
-
-  const saveDraft = async (idx: number) => {
-    const d = drafts[idx];
-    if (!d.category || !d.amount) return;
-    await mut.mutateAsync(d);
-    setDrafts((p) => p.filter((_, i) => i !== idx));
-  };
-
-  const startEdit = (entry: BudgetEntry) => {
-    setEditingId(entry.id!);
-    setEditDraft({
-      id: entry.id,
-      category: entry.category,
-      type: (entry.type?.toUpperCase() as DraftRow["type"]) ?? "EXPENSE",
-      entry_type: (entry.entry_type ?? (isRecurring ? "RECURRING" : "FLOATING")) as BudgetEntryType,
-      recurrence: (entry.recurrence ?? "MONTHLY") as BudgetRecurrence,
-      // always use the base row amount so edits go to the right place
-      amount: String(entry.amount),
-      date: entry.date.slice(0, 10),
-      description: entry.description ?? "",
-      merchant: entry.merchant ?? "",
-      active_until: entry.active_until ?? "",
-    });
-  };
-
-  const saveEdit = async () => {
-    if (!editDraft?.category || !editDraft.amount) return;
-    // Always save to the base row so category/ends/frequency changes persist
-    await mut.mutateAsync(editDraft);
-    setEditingId(null);
-    setEditDraft(null);
-  };
-
-  // Effective display amount: override > prorated base
-  const effectiveRows = rows.map(({ entry, displayAmount }) => {
-    const ov = isRecurring ? getOverride(entry.id!) : undefined;
-    return { entry, displayAmount: ov ? ov.amount : displayAmount, override: ov };
-  });
-
-  const total = effectiveRows.reduce((s, r) => s + r.displayAmount, 0);
-  const colSpan = isRecurring ? 7 : 7; // date + category + merchant + type + amount + note + actions
-
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]/40">
-        <div className="flex items-center gap-2">
-          <span className={accentCls}>{icon}</span>
-          <span className="font-bold text-sm text-foreground">{title}</span>
-          <span className="text-xs bg-[var(--surface-2)] text-foreground/50 px-2 py-0.5 rounded-full border border-[var(--border)]">
-            {rows.length}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={"text-sm font-bold " + accentCls}>{fmt(total)}</span>
-          <button
-            onClick={addRow}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition"
-          >
-            <Plus size={12} /> Add row
-          </button>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
-              <th className="px-3 py-2 text-left w-[115px]">Date</th>
-              <th className="px-3 py-2 text-left">Category</th>
-              {!isRecurring && <th className="px-3 py-2 text-left w-[140px]">Merchant</th>}
-              <th className="px-3 py-2 text-left w-[110px]">Type</th>
-              {isRecurring && <th className="px-3 py-2 text-left w-[120px]">Frequency</th>}
-              {isRecurring && <th className="px-3 py-2 text-left w-[110px]" title="Leave blank for indefinite">Ends</th>}
-              <th className="px-3 py-2 text-right w-[120px]">Amount</th>
-              <th className="px-3 py-2 text-left">Note</th>
-              <th className="px-3 py-2 w-[110px]"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {effectiveRows.map(({ entry, displayAmount, override }) =>
-              editingId === entry.id && editDraft ? (
-                <EditableRow
-                  key={entry.id}
-                  draft={editDraft}
-                  isRecurring={isRecurring}
-                  onChange={setEditDraft}
-                  onSave={saveEdit}
-                  onCancel={() => { setEditingId(null); setEditDraft(null); }}
-                  saving={mut.isPending || overrideMut.isPending}
-                />
-              ) : (
-                <ReadRow
-                  key={entry.id}
-                  entry={entry}
-                  displayAmount={displayAmount}
-                  isRecurring={isRecurring}
-                  onEdit={() => startEdit(entry)}
-                  override={override}
-                  onResetOverride={override?.id ? () => resetOverrideMut.mutate(override.id!) : undefined}
-                />
-              )
-            )}
-
-            {drafts.map((d, idx) => (
-              <EditableRow
-                key={"new-" + idx}
-                draft={d}
-                isRecurring={isRecurring}
-                onChange={(nd) => setDrafts((p) => p.map((r, i) => i === idx ? nd : r))}
-                onSave={() => saveDraft(idx)}
-                onCancel={() => setDrafts((p) => p.filter((_, i) => i !== idx))}
-                saving={mut.isPending}
-              />
-            ))}
-
-            {rows.length === 0 && drafts.length === 0 && (
-              <tr>
-                <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-foreground/30">
-                  No entries yet — click <strong className="text-foreground/50">Add row</strong> to get started
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── computeMonthStats ────────────────────────────────────────────────────────
-function computeMonthStats(entries: BudgetEntry[], key: string) {
-  let income = 0, expense = 0;
-  for (const e of entries) {
-    const et = (e.entry_type ?? "FLOATING").toUpperCase();
-    const isIncome = e.type?.toUpperCase() === "INCOME";
-    const isExpense = e.type?.toUpperCase() === "EXPENSE";
-    if (et !== "RECURRING") {
-      if (e.date.slice(0, 7) === key) {
-        if (isIncome)  income  += e.amount;
-        if (isExpense) expense += e.amount;
-      }
-    } else {
-      if (recurringAppliesToMonth(e, key)) {
-        const m = RECURRENCE_MONTHS[(e.recurrence ?? "ANNUAL") as BudgetRecurrence];
-        const prorated = e.amount / m;
-        if (isIncome)  income  += prorated;
-        if (isExpense) expense += prorated;
-      }
-    }
-  }
-  return { income, expense, net: income - expense };
-}
-
-// ── TrendChart ────────────────────────────────────────────────────────────────
-function TrendChart({ entries }: { entries: BudgetEntry[] }) {
-  const data = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const { income, expense } = computeMonthStats(entries, key);
-      return { month: SHORT_MONTHS[d.getMonth()], Income: Math.round(income), Expenses: Math.round(expense) };
-    });
-  }, [entries]);
-
-  const hasData = data.some((d) => d.Income > 0 || d.Expenses > 0);
-
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
-      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">12-Month Trend</p>
-      {!hasData ? (
-        <div className="h-[180px] flex items-center justify-center text-sm text-foreground/30">
-          No data yet — add entries to see trends
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data} barGap={2} barCategoryGap="30%">
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} />
-            <YAxis tickFormatter={fmtK} tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} width={44} />
-            <Tooltip
-              formatter={(v: unknown, name: string | undefined) => [fmt(Number(v)), name ?? ""]}
-              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-            />
-            <Bar dataKey="Income"   fill="#10b981" radius={[3,3,0,0]} />
-            <Bar dataKey="Expenses" fill="#ef4444" radius={[3,3,0,0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  );
-}
-
-// ── SavingsRate ───────────────────────────────────────────────────────────────
-function SavingsRate({ income, net }: { income: number; net: number }) {
-  const rate = income > 0 ? Math.round((net / income) * 100) : 0;
-  const color = rate < 10 ? "bg-red-500" : rate < 20 ? "bg-amber-400" : "bg-emerald-500";
-  const hint  = rate < 10 ? "Below target" : rate < 20 ? "Getting there" : "On track";
-  const textColor = rate < 10 ? "text-red-400" : rate < 20 ? "text-amber-400" : "text-emerald-400";
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
-      <p className="text-[11px] font-semibold text-foreground/50 uppercase tracking-wide mb-1">Savings Rate</p>
-      <p className={"text-2xl font-black " + textColor}>{rate}%</p>
-      <div className="mt-2 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-        <div className={"h-full rounded-full transition-all " + color} style={{ width: Math.min(Math.max(rate, 0), 100) + "%" }} />
-      </div>
-      <p className="text-[11px] text-foreground/40 mt-1">{hint}</p>
-    </div>
-  );
-}
-
-// ── AnnualSummary ─────────────────────────────────────────────────────────────
-function AnnualSummary({ entries, year }: { entries: BudgetEntry[]; year: number }) {
-  const rows = useMemo(() => Array.from({ length: 12 }, (_, i) => {
-    const key = `${year}-${String(i + 1).padStart(2, "0")}`;
-    return { month: SHORT_MONTHS[i], key, ...computeMonthStats(entries, key) };
-  }), [entries, year]);
-
-  const totals = rows.reduce((acc, r) => ({ income: acc.income + r.income, expense: acc.expense + r.expense, net: acc.net + r.net }), { income: 0, expense: 0, net: 0 });
-  const avgRate = totals.income > 0 ? Math.round((totals.net / totals.income) * 100) : 0;
-
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]/40">
-        <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide">{year} Annual Summary</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
-              <th className="px-3 py-2 text-left">Month</th>
-              <th className="px-3 py-2 text-right">Income</th>
-              <th className="px-3 py-2 text-right">Expenses</th>
-              <th className="px-3 py-2 text-right">Net</th>
-              <th className="px-3 py-2 text-left w-[140px]">Savings Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const rate = r.income > 0 ? Math.round((r.net / r.income) * 100) : 0;
-              const color = rate < 10 ? "bg-red-500" : rate < 20 ? "bg-amber-400" : "bg-emerald-500";
-              const empty = r.income === 0 && r.expense === 0;
-              return (
-                <tr key={r.key} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                  <td className="px-3 py-2 font-medium text-foreground/70">{r.month}</td>
-                  <td className="px-3 py-2 text-right text-emerald-400 font-semibold">{empty ? "—" : fmt(r.income)}</td>
-                  <td className="px-3 py-2 text-right text-red-400 font-semibold">{empty ? "—" : fmt(r.expense)}</td>
-                  <td className={"px-3 py-2 text-right font-bold " + (r.net >= 0 ? "text-emerald-400" : "text-red-400")}>{empty ? "—" : fmt(r.net)}</td>
-                  <td className="px-3 py-2">
-                    {empty ? <span className="text-foreground/30">—</span> : (
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                          <div className={"h-full rounded-full " + color} style={{ width: Math.min(Math.max(rate, 0), 100) + "%" }} />
-                        </div>
-                        <span className="text-[11px] text-foreground/50 w-8 text-right">{rate}%</span>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-[var(--border)] bg-[var(--surface-2)]/40 font-bold">
-              <td className="px-3 py-2 text-foreground/60 text-xs uppercase">Total</td>
-              <td className="px-3 py-2 text-right text-emerald-400">{fmt(totals.income)}</td>
-              <td className="px-3 py-2 text-right text-red-400">{fmt(totals.expense)}</td>
-              <td className={"px-3 py-2 text-right " + (totals.net >= 0 ? "text-emerald-400" : "text-red-400")}>{fmt(totals.net)}</td>
-              <td className="px-3 py-2 text-[11px] text-foreground/50">Avg {avgRate}% saved</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── CategoryAnnualCards ──────────────────────────────────────────────────────
-function CategoryAnnualCards({ entries, year }: { entries: BudgetEntry[]; year: number }) {
-  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
-    label: SHORT_MONTHS[i],
-    key: `${year}-${String(i + 1).padStart(2, "0")}`,
-  })), [year]);
-
-  // Build { [category]: [{label, value}, ...] }
-  const catData = useMemo(() => {
-    const map: Record<string, number[]> = {};
-    for (const e of entries) {
-      if (e.type?.toUpperCase() !== "EXPENSE") continue;
-      const cat = e.category || "Other";
-      if (!map[cat]) map[cat] = Array(12).fill(0);
-      const et = (e.entry_type ?? "FLOATING").toUpperCase();
-      if (et !== "RECURRING") {
-        const mi = months.findIndex((m) => m.key === e.date.slice(0, 7));
-        if (mi >= 0) map[cat][mi] += e.amount;
-      } else {
-        months.forEach(({ key }, mi) => {
-          if (recurringAppliesToMonth(e, key)) {
-            const m2 = RECURRENCE_MONTHS[(e.recurrence ?? "ANNUAL") as BudgetRecurrence];
-            map[cat][mi] += e.amount / m2;
-          }
-        });
-      }
-    }
-    return map;
-  }, [entries, months, year]);
-
-  const categories = useMemo(
-    () => Object.entries(catData)
-      .map(([name, vals]) => ({ name, vals, total: vals.reduce((s, v) => s + v, 0) }))
-      .filter((c) => c.total > 0)
-      .sort((a, b) => b.total - a.total),
-    [catData],
-  );
-
-  if (categories.length === 0) return null;
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide px-1">
-        Category Spend — Monthly Breakdown
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {categories.map(({ name, vals, total }, ci) => {
-          const color = PIE_COLORS[ci % PIE_COLORS.length];
-          const chartData = months.map(({ label }, i) => ({ month: label, Amount: Math.round(vals[i]) }));
-          const maxVal = Math.max(...vals, 1);
-          const activeMonths = vals.filter((v) => v > 0).length;
-          const avgMonthly = activeMonths > 0 ? total / activeMonths : 0;
-
-          return (
-            <div key={name} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col gap-2">
-              {/* header */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-                  <span className="text-sm font-bold text-foreground truncate">{name}</span>
-                </div>
-                <span className="text-sm font-black text-foreground/80 tabular-nums shrink-0">{fmt(total)}</span>
-              </div>
-
-              {/* sub-stats */}
-              <div className="flex gap-3 text-[11px] text-foreground/45">
-                <span>Avg <span className="text-foreground/70 font-semibold">{fmt(avgMonthly)}</span>/mo</span>
-                <span>{activeMonths} of 12 months</span>
-              </div>
-
-              {/* bar chart */}
-              <div className="mt-1">
-                <ResponsiveContainer width="100%" height={80}>
-                  <BarChart data={chartData} barCategoryGap="20%" margin={{ top: 0, right: 0, left: -32, bottom: 0 }}>
-                    <XAxis
-                      dataKey="month"
-                      tick={{ fontSize: 8, fill: "var(--foreground)", opacity: 0.4 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis hide domain={[0, maxVal * 1.15]} />
-                    <Tooltip
-                      formatter={(v: unknown) => [fmt(Number(v)), name]}
-                      contentStyle={{
-                        background: "var(--surface)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                        fontSize: 11,
-                        color: "var(--foreground)",
-                      }}
-                      itemStyle={{ color: "var(--foreground)" }}
-                      cursor={{ fill: "var(--surface-2)" }}
-                    />
-                    <Bar dataKey="Amount" radius={[3, 3, 0, 0]}>
-                      {chartData.map((_, i) => (
-                        <Cell key={i} fill={vals[i] > 0 ? color : "var(--surface-2)"} fillOpacity={vals[i] > 0 ? 0.85 : 1} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── TopCategoriesBar ────────────────────────────────────────────────────────────
-function TopCategoriesBar({ pieData }: { pieData: { name: string; value: number }[] }) {
-  const top = pieData.slice(0, 7);
-  const total = top.reduce((s, d) => s + d.value, 0);
-  if (top.length === 0) return null;
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
-      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">Top Spending Categories</p>
-      <div className="flex flex-col gap-2">
-        {top.map((d, i) => {
-          const pct = total > 0 ? (d.value / total) * 100 : 0;
-          return (
-            <div key={d.name} className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-              <span className="text-xs text-foreground/70 w-28 truncate shrink-0">{d.name}</span>
-              <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: pct + "%", background: PIE_COLORS[i % PIE_COLORS.length] }} />
-              </div>
-              <span className="text-xs font-semibold text-foreground/70 w-16 text-right shrink-0">{fmt(d.value)}</span>
-              <span className="text-[11px] text-foreground/35 w-8 text-right shrink-0">{Math.round(pct)}%</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── IncomeExpenseSplit ──────────────────────────────────────────────────────────
-function IncomeExpenseSplit({
-  income, expense, fixedExp, floatExp,
-}: { income: number; expense: number; fixedExp: number; floatExp: number }) {
-  const data = [
-    { name: "Income",   value: Math.round(income),   fill: "#10b981" },
-    { name: "Expenses", value: Math.round(expense),  fill: "#ef4444" },
-    { name: "Fixed",    value: Math.round(fixedExp), fill: "#8b5cf6" },
-    { name: "Variable", value: Math.round(floatExp), fill: "#f59e0b" },
-  ];
-  const max = Math.max(...data.map((d) => d.value), 1);
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
-      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">Income vs Expenses</p>
-      <div className="flex flex-col gap-3">
-        {data.map((d) => (
-          <div key={d.name} className="flex items-center gap-2">
-            <span className="text-xs text-foreground/60 w-16 shrink-0">{d.name}</span>
-            <div className="flex-1 h-5 rounded-lg bg-[var(--surface-2)] overflow-hidden">
-              <div
-                className="h-full rounded-lg flex items-center justify-end pr-2 transition-all"
-                style={{ width: Math.max((d.value / max) * 100, d.value > 0 ? 4 : 0) + "%", background: d.fill }}
-              >
-                {d.value > 0 && <span className="text-[11px] font-bold text-white whitespace-nowrap">{fmtK(d.value)}</span>}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between">
-        <span className="text-xs text-foreground/40">Fixed vs Variable expenses</span>
-        <span className="text-xs font-semibold text-foreground/60">
-          {expense > 0 ? Math.round((fixedExp / expense) * 100) : 0}% fixed
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-function fmt$(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-// ── Week helpers (used by Robinhood fixed-week tracker) ─────────────────────
-function getWeeksForMonth(yearMonth: string): { sunday: Date; saturday: Date; isoSunday: string }[] {
-  const [y, m] = yearMonth.split("-").map(Number);
-  const firstDay = new Date(y, m - 1, 1);
-  const lastDay  = new Date(y, m, 0);
-  const startSun = new Date(firstDay);
-  startSun.setDate(firstDay.getDate() - firstDay.getDay());
-  const weeks: { sunday: Date; saturday: Date; isoSunday: string }[] = [];
-  const cur = new Date(startSun);
-  while (cur <= lastDay) {
-    const sun = new Date(cur);
-    const sat = new Date(cur);
-    sat.setDate(sat.getDate() + 6);
-    weeks.push({ sunday: sun, saturday: sat, isoSunday: sun.toISOString().slice(0, 10) });
-    cur.setDate(cur.getDate() + 7);
-  }
-  return weeks;
-}
-function fmtWeekLabel(sun: Date, sat: Date): string {
-  const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  return sun.toLocaleDateString("en-US", o) + " – " + sat.toLocaleDateString("en-US", o);
-}
-
-// ── CC Section — simple add-row table (like one-off) with card name column ─────────────────
-interface CCDraft {
-  id?: number;
-  card_name: string;
-  date: string;
-  balance: string;
-  paid_amount: string;
-  note: string;
-}
-function CCEditRow({
-  draft, onChange, onSave, onCancel, datalistId, isSaving,
-}: {
-  draft: CCDraft;
-  onChange: (d: CCDraft) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  datalistId: string;
-  isSaving: boolean;
-}) {
-  const set = (k: keyof CCDraft, v: string) => onChange({ ...draft, [k]: v });
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") onSave();
-    if (e.key === "Escape") onCancel();
-  };
-  return (
-    <tr className="bg-blue-500/5 border-b border-blue-500/20" onKeyDown={onKey}>
-      <td className="px-2 py-1.5">
-        <input type="date" value={draft.date} onChange={(e) => set("date", e.target.value)} className={cellCls + " w-[105px]"} />
-      </td>
-      <td className="px-2 py-1.5">
-        <input type="text" list={datalistId} value={draft.card_name} placeholder="Card name"
-          autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
-          onChange={(e) => set("card_name", e.target.value)} className={cellCls} />
-      </td>
-      <td className="px-2 py-1.5">
-        <input type="number" step="0.01" min="0" value={draft.balance} placeholder="0.00"
-          onChange={(e) => set("balance", e.target.value)} className={cellCls + " text-right"} />
-      </td>
-      <td className="px-2 py-1.5">
-        <input type="number" step="0.01" min="0" value={draft.paid_amount} placeholder="0.00"
-          onChange={(e) => set("paid_amount", e.target.value)} className={cellCls + " text-right"} />
-      </td>
-      <td className="px-2 py-1.5">
-        <input type="text" value={draft.note} placeholder="Note (optional)"
-          onChange={(e) => set("note", e.target.value)} className={cellCls} />
-      </td>
-      <td className="px-2 py-1.5 w-[70px]">
-        <div className="flex items-center gap-1">
-          <button onClick={onSave} disabled={isSaving || !draft.balance}
-            className="p-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/40 disabled:opacity-30 transition">
-            <Check size={13} />
-          </button>
-          <button onClick={onCancel}
-            className="p-1.5 rounded-lg bg-[var(--surface-2)] text-foreground/50 hover:bg-[var(--border)] transition">
-            <X size={13} />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function blankCCDraft(month: string): CCDraft {
-  return { card_name: "", date: `${month}-01`, balance: "", paid_amount: "", note: "" };
-}
-
-function CCSection({
-  currentMonth,
-  title = "Credit Cards",
-  accentColor = "text-blue-400",
-  cardFilter,
-  defaultCard,
-  datalistId = "cc-card-names",
-  fixedWeeks = false,
-}: {
-  currentMonth: string;
-  title?: string;
-  accentColor?: string;
-  cardFilter?: (r: CreditCardWeek) => boolean;
-  defaultCard?: string;
-  datalistId?: string;
-  /** When true, renders one fixed row per week instead of free add-row mode */
-  fixedWeeks?: boolean;
-}) {
-  const qc = useQueryClient();
-  const { data: allRows = [], isLoading } = useQuery<CreditCardWeek[]>({
-    queryKey: ["cc-weeks"],
-    queryFn: fetchCCWeeks,
-    staleTime: 30_000,
-  });
-
-  const rows = useMemo(() => {
-    const monthRows = allRows.filter((r) => r.week_start.slice(0, 7) === currentMonth);
-    return cardFilter ? monthRows.filter(cardFilter) : monthRows;
-  }, [allRows, currentMonth, cardFilter]);
-
-  // ── fixed-week mode state ──────────────────────────────────────────────────
-  const weekSlotList = useMemo(
-    () => fixedWeeks ? getWeeksForMonth(currentMonth) : [],
-    [fixedWeeks, currentMonth],
-  );
-  const rowByDate = useMemo(() => {
-    const m: Record<string, CreditCardWeek> = {};
-    for (const r of rows) m[r.week_start.slice(0, 10)] = r;
-    return m;
-  }, [rows]);
-  // inline field state for fixed-week rows: iso → { balance, paid_amount, note }
-  const [weekEdits, setWeekEdits] = useState<Record<string, { balance: string; paid_amount: string; note: string }>>({});
-
-  // ── free-add mode state ────────────────────────────────────────────────────
-  const [drafts, setDrafts] = useState<CCDraft[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<CCDraft | null>(null);
-
-  const saveMut = useMutation<void | { id: number }, Error, CCDraft>({
-    mutationFn: (d: CCDraft) => {
-      const body: Omit<CreditCardWeek, "id"> = {
-        week_start: d.date,
-        card_name: d.card_name || null,
-        balance: parseFloat(d.balance) || 0,
-        paid_amount: d.paid_amount !== "" ? parseFloat(d.paid_amount) : null,
-        squared_off: false,
-        note: d.note || "",
-      };
-      return d.id ? updateCCWeek(d.id, body) : saveCCWeek(body);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cc-weeks"] }),
-  });
-
-  const delMut = useMutation({
-    mutationFn: (id: number) => deleteCCWeek(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cc-weeks"] }),
-  });
-
-  const addRow = () => setDrafts((p) => [...p, { ...blankCCDraft(currentMonth), card_name: defaultCard ?? "" }]);
-
-  const saveDraft = async (idx: number) => {
-    const d = drafts[idx];
-    if (!d.balance) return;
-    await saveMut.mutateAsync(d);
-    setDrafts((p) => p.filter((_, i) => i !== idx));
-  };
-
-  const startEdit = (r: CreditCardWeek) => {
-    setEditingId(r.id!);
-    setEditDraft({
-      id: r.id,
-      card_name: r.card_name ?? "",
-      date: r.week_start.slice(0, 10),
-      balance: String(r.balance ?? ""),
-      paid_amount: r.paid_amount != null ? String(r.paid_amount) : "",
-      note: r.note ?? "",
-    });
-  };
-
-  const saveEdit = async () => {
-    if (!editDraft) return;
-    await saveMut.mutateAsync(editDraft);
-    setEditingId(null);
-    setEditDraft(null);
-  };
-
-  /** Commit a fixed-week row (called on Enter or blur) */
-  const commitWeekRow = async (iso: string) => {
-    const local = weekEdits[iso];
-    if (!local) return;
-    const existing = rowByDate[iso];
-    const body: Omit<CreditCardWeek, "id"> = {
-      week_start: iso,
-      card_name: defaultCard ?? null,
-      balance: parseFloat(local.balance) || 0,
-      paid_amount: local.paid_amount !== "" ? parseFloat(local.paid_amount) : null,
-      squared_off: existing?.squared_off ?? false,
-      note: local.note || "",
-    };
-    if (existing?.id) await updateCCWeek(existing.id, body);
-    else await saveCCWeek(body);
-    qc.invalidateQueries({ queryKey: ["cc-weeks"] });
-    setWeekEdits((p) => { const n = { ...p }; delete n[iso]; return n; });
-  };
-
-  const getWeekLocal = (iso: string) =>
-    weekEdits[iso] ?? {
-      balance: String(rowByDate[iso]?.balance ?? ""),
-      paid_amount: rowByDate[iso]?.paid_amount != null ? String(rowByDate[iso]!.paid_amount) : "",
-      note: "",
-    };
-
-  const cardNames = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of allRows) if (r.card_name) s.add(r.card_name);
-    return Array.from(s).sort();
-  }, [allRows]);
-
-  const totalCharged = rows.reduce((s, r) => s + (r.balance ?? 0), 0);
-  const totalPaid    = rows.reduce((s, r) => s + (r.paid_amount ?? 0), 0);
-
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-2)]/40">
-        <div className="flex items-center gap-2">
-          <CreditCard size={14} className={accentColor} />
-          <span className="font-bold text-sm text-foreground">{title}</span>
-          <span className="text-xs bg-[var(--surface-2)] text-foreground/50 px-2 py-0.5 rounded-full border border-[var(--border)]">
-            {rows.length}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4">
-          {totalCharged > 0 && (
-            <div className="flex items-center gap-2 sm:gap-3 text-xs">
-              <span className="text-foreground/40"><span className="font-bold text-rose-400">{fmt$(totalCharged)}</span></span>
-              <span className="text-foreground/40"><span className="font-bold text-emerald-400">{fmt$(totalPaid)}</span></span>
-              {totalCharged - totalPaid > 0 && (
-                <span className="text-foreground/40">Due: <span className="font-bold text-amber-400">{fmt$(totalCharged - totalPaid)}</span></span>
-              )}
-            </div>
-          )}
-          {!fixedWeeks && (
-            <button onClick={addRow}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition">
-              <Plus size={12} /> Add row
-            </button>
-          )}
-        </div>
-      </div>
-
-      <datalist id={datalistId}>
-        {cardNames.map((c) => <option key={c} value={c} />)}
-      </datalist>
-
-      {!fixedWeeks && (
-      <div className="overflow-x-auto -mx-px">
-        <table className="w-full min-w-[520px] text-sm">
-          <thead>
-            <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
-              <th className="px-3 py-2 text-left w-[150px]">Date</th>
-              <th className="px-3 py-2 text-left w-[160px]">Card Name</th>
-              <th className="px-3 py-2 text-right w-[110px]">Amount</th>
-              <th className="px-3 py-2 text-right w-[110px]">Paid</th>
-              <th className="px-3 py-2 text-left">Note</th>
-              <th className="px-3 py-2 w-[70px]"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-foreground/30">Loading…</td></tr>
-            ) : (
-              /* ── free-add rows ── */
-              <>
-                {rows.map((r) =>
-                  editingId === r.id && editDraft ? (
-                    <CCEditRow key={r.id} draft={editDraft} onChange={setEditDraft}
-                      datalistId={datalistId} isSaving={saveMut.isPending}
-                      onSave={saveEdit} onCancel={() => { setEditingId(null); setEditDraft(null); }} />
-                  ) : (
-                    <CCReadRow key={r.id} row={r}
-                      onEdit={() => startEdit(r)}
-                      onDelete={() => delMut.mutate(r.id!)} />
-                  )
-                )}
-                {drafts.map((d, idx) => (
-                  <CCEditRow key={"new-" + idx} draft={d}
-                    datalistId={datalistId} isSaving={saveMut.isPending}
-                    onChange={(nd) => setDrafts((p) => p.map((x, i) => i === idx ? nd : x))}
-                    onSave={() => saveDraft(idx)}
-                    onCancel={() => setDrafts((p) => p.filter((_, i) => i !== idx))} />
-                ))}
-                {rows.length === 0 && drafts.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-foreground/30">
-                    No entries yet — click <strong className="text-foreground/50">Add row</strong> to get started
-                  </td></tr>
-                )}
-              </>
-            )}
-          </tbody>
-        </table>
-      </div>
-      )}
-
-      {/* ── metrics + chart (fixed-week mode only) ── */}
-      {fixedWeeks && (
-        <div className="flex flex-col md:flex-row border-t border-[var(--border)]">
-          {/* table — compact left column */}
-          <div className="md:w-[320px] lg:w-[360px] shrink-0 overflow-x-auto border-b md:border-b-0 md:border-r border-[var(--border)]">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
-                  <th className="px-3 py-2 text-left">Week</th>
-                  <th className="px-3 py-2 text-right w-[90px]">Amount</th>
-                  <th className="px-3 py-2 text-right w-[90px]">Paid</th>
-                  <th className="px-3 py-2 w-[50px]"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={4} className="px-3 py-6 text-center text-xs text-foreground/30">Loading…</td></tr>
-                ) : weekSlotList.map(({ sunday, saturday, isoSunday }) => {
-                  const existing = rowByDate[isoSunday];
-                  const local = getWeekLocal(isoSunday);
-                  const isDirty = !!weekEdits[isoSunday];
-                  const ic = cellCls + " text-right text-xs";
-                  return (
-                    <tr key={isoSunday} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors group">
-                      <td className="px-3 py-1.5 text-xs text-foreground/60 whitespace-nowrap">{fmtWeekLabel(sunday, saturday)}</td>
-                      <td className="px-2 py-1">
-                        <input type="number" step="0.01" min="0" value={local.balance} placeholder="0.00"
-                          onChange={(e) => setWeekEdits((p) => ({ ...p, [isoSunday]: { ...getWeekLocal(isoSunday), balance: e.target.value } }))}
-                          onBlur={() => isDirty && commitWeekRow(isoSunday)}
-                          onKeyDown={(e) => e.key === "Enter" && commitWeekRow(isoSunday)}
-                          className={ic} />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input type="number" step="0.01" min="0" value={local.paid_amount} placeholder="0.00"
-                          onChange={(e) => setWeekEdits((p) => ({ ...p, [isoSunday]: { ...getWeekLocal(isoSunday), paid_amount: e.target.value } }))}
-                          onBlur={() => isDirty && commitWeekRow(isoSunday)}
-                          onKeyDown={(e) => e.key === "Enter" && commitWeekRow(isoSunday)}
-                          className={ic} />
-                      </td>
-                      <td className="px-1 py-1 w-[50px]">
-                        <div className="flex items-center gap-0.5">
-                          {isDirty && (
-                            <button onClick={() => commitWeekRow(isoSunday)}
-                              className="p-1 rounded bg-green-500/20 text-green-400 hover:bg-green-500/40 transition">
-                              <Check size={11} />
-                            </button>
-                          )}
-                          {existing?.id && !isDirty && (
-                            <button onClick={() => delMut.mutate(existing.id!)}
-                              className="p-1 rounded text-foreground/20 hover:text-red-400 hover:bg-red-500/10 transition opacity-0 group-hover:opacity-100">
-                              <Trash2 size={11} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* right side: metrics + chart */}
-          {totalCharged > 0 ? (
-            <div className="flex-1 min-w-0 px-3 sm:px-4 py-3 sm:py-4 flex flex-col gap-3 sm:gap-4">
-              {/* stat cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { label: "Total Charged", value: fmt$(totalCharged),                          cls: "text-rose-400" },
-                  { label: "Total Paid",     value: fmt$(totalPaid),                             cls: "text-emerald-400" },
-                  { label: "Net Unpaid",     value: fmt$(Math.max(0, totalCharged - totalPaid)), cls: totalCharged - totalPaid > 0 ? "text-amber-400" : "text-emerald-400" },
-                  { label: "Pay Rate",       value: (Math.min(100, (totalPaid / totalCharged) * 100)).toFixed(1) + "%",
-                    cls: totalPaid >= totalCharged ? "text-emerald-400" : totalPaid / totalCharged >= 0.5 ? "text-amber-400" : "text-rose-400" },
-                ].map(({ label, value, cls }) => (
-                  <div key={label} className="bg-[var(--surface-2)] border border-[var(--border)] rounded-xl p-3">
-                    <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wide mb-0.5">{label}</p>
-                    <p className={"text-lg font-black tabular-nums " + cls}>{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* pay-rate bar */}
-              {(() => {
-                const rate = Math.min(100, (totalPaid / totalCharged) * 100);
-                return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between text-[10px] text-foreground/40">
-                      <span>Pay Coverage</span><span>{rate.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-foreground/10 overflow-hidden">
-                      <div className={"h-full rounded-full transition-all duration-500 " + (rate >= 100 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-400" : "bg-rose-500")}
-                        style={{ width: `${rate}%` }} />
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* bar chart */}
-              <div className="flex-1">
-                <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wide mb-2">Week-by-Week</p>
-                <ResponsiveContainer width="100%" height={140}>
-                  <BarChart
-                    data={weekSlotList.map(({ sunday, saturday, isoSunday }) => ({
-                      week: fmtWeekLabel(sunday, saturday).replace(/ – /g, "–"),
-                      Charged: rowByDate[isoSunday]?.balance ?? 0,
-                      Paid: rowByDate[isoSunday]?.paid_amount ?? 0,
-                    }))}
-                    barCategoryGap="30%" margin={{ top: 2, right: 4, left: -16, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="week" tick={{ fill: "var(--foreground)", opacity: 0.4, fontSize: 8 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: "var(--foreground)", opacity: 0.4, fontSize: 8 }} tickLine={false} axisLine={false} tickFormatter={(v) => "$" + v} />
-                    <Tooltip contentStyle={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--foreground)", fontSize: 11 }}
-                      formatter={(v: number | undefined) => "$" + (v ?? 0).toFixed(2)} />
-                    <Legend wrapperStyle={{ fontSize: 10, color: "var(--foreground)", opacity: 0.5 }} />
-                    <Bar dataKey="Charged" fill="#f43f5e" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Paid" fill="#10b981" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-foreground/25 py-8">
-              Enter amounts to see metrics
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CCReadRow({ row, onEdit, onDelete }: {
-  row: CreditCardWeek;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [confirmDel, setConfirmDel] = useState(false);
-  return (
-    <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors group">
-      <td className="px-3 py-2.5 text-xs text-foreground/50 whitespace-nowrap">{row.week_start.slice(0, 10)}</td>
-      <td className="px-3 py-2.5 text-sm">
-        {row.card_name ? (
-          <span className="inline-flex items-center gap-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-2 py-0.5">
-            {row.card_name}
-          </span>
-        ) : <span className="text-foreground/25 text-xs">—</span>}
-      </td>
-      <td className="px-3 py-2.5 text-sm font-bold text-right text-rose-400">{fmt$(row.balance)}</td>
-      <td className="px-3 py-2.5 text-sm font-bold text-right text-emerald-400">
-        {row.paid_amount != null ? fmt$(row.paid_amount) : <span className="text-foreground/25">—</span>}
-      </td>
-      <td className="px-3 py-2.5 text-xs text-foreground/40 max-w-[160px] truncate">{row.note || ""}</td>
-      <td className="px-3 py-2.5 w-[100px]" onClick={(e) => e.stopPropagation()}>
-        {confirmDel ? (
-          <div className="flex items-center gap-1">
-            <button onClick={onDelete}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-red-600 text-white hover:bg-red-700">Yes</button>
-            <button onClick={() => setConfirmDel(false)}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-foreground/70">No</button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1">
-            <button onClick={onEdit}
-              className="p-1.5 rounded-lg text-foreground/40 hover:text-blue-400 hover:bg-blue-500/10 transition">
-              <PencilLine size={13} />
-            </button>
-            <button onClick={() => setConfirmDel(true)}
-              className="p-1.5 rounded-lg text-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition">
-              <Trash2 size={13} />
-            </button>
-          </div>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-function StatCard({ label, value, cls }: { label: string; value: string; cls: string }) {
-  return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-3 sm:p-4">
-      <p className="text-[10px] sm:text-[11px] font-semibold text-foreground/50 uppercase tracking-wide mb-1">{label}</p>
-      <p className={"text-xl sm:text-2xl font-black " + cls}>{value}</p>
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function BudgetPage() {
   const { data: allEntries = [], isLoading } = useQuery<BudgetEntry[]>({
     queryKey: ["budget"],
@@ -1418,13 +41,12 @@ export default function BudgetPage() {
     setCurrentMonth(monthKey(new Date(y, m, 1)));
   };
 
-  // build override lookup for the current month
   const overrideMap = useMemo(() => {
-    const m: Record<string, number> = {};
+    const map: Record<string, number> = {};
     for (const o of allOverrides) {
-      if (o.month_key === currentMonth) m[o.budget_id] = o.amount;
+      if (o.month_key === currentMonth) map[String(o.budget_id)] = o.amount;
     }
-    return m;
+    return map;
   }, [allOverrides, currentMonth]);
 
   const { floating, recurring, incomeRows } = useMemo(() => {
@@ -1442,7 +64,7 @@ export default function BudgetPage() {
       } else {
         if (recurringAppliesToMonth(entry, currentMonth)) {
           const base = proratedMonthly(entry);
-          const effective = overrideMap[entry.id!] ?? base;
+          const effective = overrideMap[String(entry.id)] ?? base;
           if (typeUp === "INCOME") incomeRows.push({ entry, displayAmount: effective });
           else recurring.push({ entry, displayAmount: effective });
         }
@@ -1458,15 +80,19 @@ export default function BudgetPage() {
     return { expense, income, fixedExp, net: income - expense };
   }, [floating, recurring, incomeRows]);
 
-  // Pull CC totals for this month into expense summary
   const { data: allCCWeeks = [] } = useQuery<CreditCardWeek[]>({
     queryKey: ["cc-weeks"],
     queryFn: fetchCCWeeks,
     staleTime: 30_000,
   });
+
   const ccMonthTotal = useMemo(() => {
     return allCCWeeks
-      .filter((r) => r.week_start.slice(0, 7) === currentMonth && (!r.card_name || !r.card_name.toLowerCase().startsWith("robinhood")))
+      .filter(
+        (r) =>
+          r.week_start.slice(0, 7) === currentMonth &&
+          (!r.card_name || !r.card_name.toLowerCase().startsWith("robinhood")),
+      )
       .reduce((s, r) => s + (r.balance ?? 0), 0);
   }, [allCCWeeks, currentMonth]);
 
@@ -1493,19 +119,23 @@ export default function BudgetPage() {
         <div className="flex items-center gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-1">
           <button
             onClick={() => setActiveTab("monthly")}
-            className={"px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition " +
+            className={
+              "px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition " +
               (activeTab === "monthly"
                 ? "bg-blue-600 text-white shadow"
-                : "text-foreground/50 hover:text-foreground")}
+                : "text-foreground/50 hover:text-foreground")
+            }
           >
             Monthly
           </button>
           <button
             onClick={() => setActiveTab("annual")}
-            className={"px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition " +
+            className={
+              "px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition " +
               (activeTab === "annual"
                 ? "bg-blue-600 text-white shadow"
-                : "text-foreground/50 hover:text-foreground")}
+                : "text-foreground/50 hover:text-foreground")
+            }
           >
             <span className="hidden sm:inline">Annual Summary</span>
             <span className="sm:hidden">Annual</span>
@@ -1513,7 +143,7 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {/* Month navigator — shown on both tabs */}
+      {/* Month navigator */}
       <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-2xl px-4 py-2.5 mb-5">
         <button
           onClick={prev}
@@ -1526,7 +156,9 @@ export default function BudgetPage() {
             <>
               <p className="font-bold text-foreground">{monthLabel(currentMonth)}</p>
               <p className="text-xs text-foreground/40 mt-0.5">
-                {isLoading ? "Loading..." : totalEntries + " entr" + (totalEntries === 1 ? "y" : "ies")}
+                {isLoading
+                  ? "Loading..."
+                  : `${totalEntries} entr${totalEntries === 1 ? "y" : "ies"}`}
               </p>
             </>
           ) : (
@@ -1544,65 +176,27 @@ export default function BudgetPage() {
         </button>
       </div>
 
-      {/* ── MONTHLY TAB ─────────────────────────────────────────────────────── */}
+      {/* ── MONTHLY TAB ──────────────────────────────────────────────────── */}
       {activeTab === "monthly" && (
         <>
-          {/* stat cards */}
+          {/* Stat cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-            <StatCard label="Income"      value={fmt(stats.income)}                cls="text-emerald-400" />
+            <StatCard label="Income"      value={fmt(stats.income)}                 cls="text-emerald-400" />
             <StatCard label="Expenses"    value={fmt(stats.expense + ccMonthTotal)} cls="text-red-400" />
-            <StatCard label="Fixed/Month" value={fmt(stats.fixedExp)}              cls="text-purple-400" />
-            <StatCard label="Net"         value={fmt(stats.income - stats.expense - ccMonthTotal)} cls={(stats.income - stats.expense - ccMonthTotal) >= 0 ? "text-emerald-400" : "text-red-400"} />
+            <StatCard label="Fixed/Month" value={fmt(stats.fixedExp)}               cls="text-purple-400" />
+            <StatCard
+              label="Net"
+              value={fmt(stats.income - stats.expense - ccMonthTotal)}
+              cls={(stats.income - stats.expense - ccMonthTotal) >= 0 ? "text-emerald-400" : "text-red-400"}
+            />
             <SavingsRate income={stats.income} net={stats.income - stats.expense - ccMonthTotal} />
           </div>
 
-          {/* charts row — 3 equal columns */}
+          {/* Charts */}
           {pieData.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
-
-              {/* Donut pie */}
-              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
-                <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-1">Expense Mix</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%" cy="46%"
-                      innerRadius={50}
-                      outerRadius={78}
-                      paddingAngle={2}
-                    >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v: unknown) => [fmt(Number(v)), "Amount"]}
-                      contentStyle={{
-                        background: "var(--surface)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        color: "var(--foreground)",
-                      }}
-                      itemStyle={{ color: "var(--foreground)" }}
-                      labelStyle={{ color: "var(--foreground)" }}
-                    />
-                    <Legend
-                      iconType="circle"
-                      iconSize={7}
-                      wrapperStyle={{ fontSize: 10, paddingTop: 4, color: "var(--foreground)" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Top categories */}
+              <ExpensePieChart pieData={pieData} />
               <TopCategoriesBar pieData={pieData} />
-
-              {/* Income vs expense split */}
               <IncomeExpenseSplit
                 income={stats.income}
                 expense={stats.expense + ccMonthTotal}
@@ -1612,7 +206,7 @@ export default function BudgetPage() {
             </div>
           )}
 
-          {/* tables */}
+          {/* Budget sections */}
           <div className="flex flex-col gap-5">
             <Section
               title="Income"
@@ -1644,7 +238,7 @@ export default function BudgetPage() {
             />
           </div>
 
-          {/* CC trackers — Robinhood Gold + Other Cards */}
+          {/* CC sections */}
           <div className="flex flex-col gap-5 mt-5">
             <CCSection
               currentMonth={currentMonth}
@@ -1666,12 +260,11 @@ export default function BudgetPage() {
         </>
       )}
 
-      {/* ── ANNUAL SUMMARY TAB ───────────────────────────────────────────────── */}
+      {/* ── ANNUAL TAB ───────────────────────────────────────────────────── */}
       {activeTab === "annual" && (
         <div className="flex flex-col gap-5">
           <TrendChart entries={allEntries} />
           <AnnualSummary entries={allEntries} year={currentYear} />
-          <CategoryAnnualCards entries={allEntries} year={currentYear} />
         </div>
       )}
     </div>

@@ -5,6 +5,84 @@
 
 ---
 
+## v2.5.1 — UI Polish: Charts & Account Tab
+**Released:** 2026-03-04
+**Branch:** `develop`
+
+### 🎨 UI Improvements
+
+#### Budget — Expense Mix Pie Chart
+- Replaced crammed recharts `<Legend>` below chart with a compact **donut (140×140) + custom side legend** showing category name + percentage
+- All chart tooltips now use `color: "var(--foreground)"` on `contentStyle`, `itemStyle`, `labelStyle` — fixes black text in dark mode
+
+#### Trades — Account Tab Charts
+- Replaced buggy hand-rolled SVG `<polyline>` area chart with recharts `<AreaChart>`
+- Replaced custom div bar chart with recharts `<BarChart>` + `<ReferenceLine y={0}>` — gains green above zero, losses red below
+- Both charts placed **side by side** (`grid-cols-1 lg:grid-cols-2`) — Account Value left, Week-over-Week Δ right
+- Both charts use a **52-Friday scaffold** for the current year — all Fridays plotted, unlogged weeks show as gaps
+- X-axis shows **month labels** (Jan–Dec) — one label per first Friday of each month, no crowded date strings
+- Y-axis on Account Value chart uses **explicit $1k steps** computed from actual data min/max ± $1k padding
+- Tooltip `labelFormatter` shows full `"Fri, Mar 7"` date on hover for both charts
+- Table rows now show **newest week first**
+
+### 📦 Files Changed
+| File | Change |
+|------|--------|
+| `web/components/budget/BudgetCharts.tsx` | Pie chart redesign; tooltip dark-mode fix |
+| `web/components/trades/AccountTab.tsx` | Full chart rewrite — recharts, side-by-side, 52-week scaffold, $1k Y ticks |
+
+---
+
+## v2.5.0 — Frontend Component Split: Trades & Budget Pages
+**Released:** 2026-03-04
+**Branch:** `develop`
+
+### 🏗️ Architecture
+Purely mechanical split — zero logic changes. Two monolithic page files broken into focused, reusable component files.
+
+#### `web/app/(app)/trades/page.tsx` — 3,612 → 134 lines
+All components extracted to `web/components/trades/`:
+
+| File | Contents |
+|------|----------|
+| `TradesHelpers.ts` | Types (`PosFormState`, `HoldingFormState`, etc.), `emptyForm()`, `posToForm()`, formatters |
+| `TradeModals.tsx` | `CompleteWeekModal`, `ReopenWeekModal` |
+| `PositionForm.tsx` | Add/edit option position form |
+| `StatusSelect.tsx` | Position status dropdown |
+| `AssignmentPanel.tsx` | Assignment/exercise panel |
+| `PositionRow.tsx` | Mobile card + desktop table row with AI streaming + live moneyness |
+| `PositionsTab.tsx` | 9-card metrics grid, live quotes poll, form management |
+| `SymbolsTab.tsx` | Symbol search + breakdown table |
+| `YearTab.tsx` | Annual analytics, cumulative chart, projections |
+| `PremiumTab.tsx` | Premium ledger by-symbol and by-week |
+| `AccountTab.tsx` | Account value tracking with charts |
+| `HoldingsTab.tsx` | Holdings table with expand/collapse events, Sync/Import/Add toolbar |
+| `PortfolioSummaryBar.tsx` | 4-card summary grid + `WeekSelector` dropdown |
+
+#### `web/app/(app)/budget/page.tsx` — 1,679 → 272 lines
+All components extracted to `web/components/budget/`:
+
+| File | Contents |
+|------|----------|
+| `BudgetHelpers.ts` | Constants (`PIE_COLORS`, `CATEGORIES`), formatters (`fmt`, `fmt$`, `fmtK`), `monthKey`, `monthLabel`, `proratedMonthly`, `recurringAppliesToMonth`, `DraftRow` interface, `blankDraft`, `computeMonthStats` |
+| `BudgetSection.tsx` | `EditableRow`, `ReadRow`, `Section` (with full override/mutation logic) |
+| `BudgetCharts.tsx` | `TrendChart`, `SavingsRate`, `TopCategoriesBar`, `IncomeExpenseSplit`, `ExpensePieChart`, `CategoryAnnualCards` |
+| `BudgetAnnualSummary.tsx` | `AnnualSummary` (12-month table with savings rate bars) |
+| `CCSection.tsx` | `CCSection`, `CCEditRow`, `CCReadRow`, `StatCard`, helpers |
+
+### 🐛 Bug Fix
+- **`buy_date` field** — `TradesHelpers.ts`: added `buy_date: string` to `PosFormState`, `buy_date: ""` to `emptyForm()`, `buy_date: p.buy_date?.slice(0, 10) ?? ""` to `posToForm()`. `PositionForm.tsx`: added `buy_date` to mutation body and added "Buy Date" date input in the form UI.
+
+### 📦 Files Changed
+| File | Change |
+|------|--------|
+| `web/app/(app)/trades/page.tsx` | Rewritten — 134-line orchestrator |
+| `web/app/(app)/budget/page.tsx` | Rewritten — 272-line orchestrator |
+| `web/components/trades/` | **13 new files** |
+| `web/components/budget/` | **5 new files** |
+
+---
+
 ## v2.4.0 — Dead Code Removal: Trade Journal & Broker Layer
 **Released:** 2026-03-04
 **Branch:** `develop`

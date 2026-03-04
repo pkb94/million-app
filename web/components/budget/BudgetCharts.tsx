@@ -1,0 +1,304 @@
+"use client";
+import { useMemo } from "react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell,
+} from "recharts";
+import { BudgetEntry, BudgetRecurrence } from "@/lib/api";
+import {
+  SHORT_MONTHS, PIE_COLORS, fmtK, fmt, computeMonthStats,
+  recurringAppliesToMonth, RECURRENCE_MONTHS,
+} from "./BudgetHelpers";
+
+// ── TrendChart ────────────────────────────────────────────────────────────────
+
+export function TrendChart({ entries }: { entries: BudgetEntry[] }) {
+  const data = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const { income, expense } = computeMonthStats(entries, key);
+      return { month: SHORT_MONTHS[d.getMonth()], Income: Math.round(income), Expenses: Math.round(expense) };
+    });
+  }, [entries]);
+
+  const hasData = data.some((d) => d.Income > 0 || d.Expenses > 0);
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">12-Month Trend</p>
+      {!hasData ? (
+        <div className="h-[180px] flex items-center justify-center text-sm text-foreground/30">
+          No data yet — add entries to see trends
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={data} barGap={2} barCategoryGap="30%">
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} />
+            <YAxis tickFormatter={fmtK} tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} width={44} />
+            <Tooltip
+              formatter={(v: unknown, name: string | undefined) => [fmt(Number(v)), name ?? ""]}
+              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+            />
+            <Bar dataKey="Income"   fill="#10b981" radius={[3,3,0,0]} />
+            <Bar dataKey="Expenses" fill="#ef4444" radius={[3,3,0,0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+// ── SavingsRate ───────────────────────────────────────────────────────────────
+
+export function SavingsRate({ income, net }: { income: number; net: number }) {
+  const rate = income > 0 ? Math.round((net / income) * 100) : 0;
+  const color = rate < 10 ? "bg-red-500" : rate < 20 ? "bg-amber-400" : "bg-emerald-500";
+  const hint  = rate < 10 ? "Below target" : rate < 20 ? "Getting there" : "On track";
+  const textColor = rate < 10 ? "text-red-400" : rate < 20 ? "text-amber-400" : "text-emerald-400";
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <p className="text-[11px] font-semibold text-foreground/50 uppercase tracking-wide mb-1">Savings Rate</p>
+      <p className={"text-2xl font-black " + textColor}>{rate}%</p>
+      <div className="mt-2 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+        <div className={"h-full rounded-full transition-all " + color} style={{ width: Math.min(Math.max(rate, 0), 100) + "%" }} />
+      </div>
+      <p className="text-[11px] text-foreground/40 mt-1">{hint}</p>
+    </div>
+  );
+}
+
+// ── TopCategoriesBar ────────────────────────────────────────────────────────────
+
+export function TopCategoriesBar({ pieData }: { pieData: { name: string; value: number }[] }) {
+  const top = pieData.slice(0, 7);
+  const total = top.reduce((s, d) => s + d.value, 0);
+  if (top.length === 0) return null;
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">Top Spending Categories</p>
+      <div className="flex flex-col gap-2">
+        {top.map((d, i) => {
+          const pct = total > 0 ? (d.value / total) * 100 : 0;
+          return (
+            <div key={d.name} className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+              <span className="text-xs text-foreground/70 w-28 truncate shrink-0">{d.name}</span>
+              <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: pct + "%", background: PIE_COLORS[i % PIE_COLORS.length] }} />
+              </div>
+              <span className="text-xs font-semibold text-foreground/70 w-16 text-right shrink-0">{fmt(d.value)}</span>
+              <span className="text-[11px] text-foreground/35 w-8 text-right shrink-0">{Math.round(pct)}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── IncomeExpenseSplit ──────────────────────────────────────────────────────────
+
+export function IncomeExpenseSplit({
+  income, expense, fixedExp, floatExp,
+}: { income: number; expense: number; fixedExp: number; floatExp: number }) {
+  const data = [
+    { name: "Income",   value: Math.round(income),   fill: "#10b981" },
+    { name: "Expenses", value: Math.round(expense),  fill: "#ef4444" },
+    { name: "Fixed",    value: Math.round(fixedExp), fill: "#8b5cf6" },
+    { name: "Variable", value: Math.round(floatExp), fill: "#f59e0b" },
+  ];
+  const max = Math.max(...data.map((d) => d.value), 1);
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">Income vs Expenses</p>
+      <div className="flex flex-col gap-3">
+        {data.map((d) => (
+          <div key={d.name} className="flex items-center gap-2">
+            <span className="text-xs text-foreground/60 w-16 shrink-0">{d.name}</span>
+            <div className="flex-1 h-5 rounded-lg bg-[var(--surface-2)] overflow-hidden">
+              <div
+                className="h-full rounded-lg flex items-center justify-end pr-2 transition-all"
+                style={{ width: Math.max((d.value / max) * 100, d.value > 0 ? 4 : 0) + "%", background: d.fill }}
+              >
+                {d.value > 0 && <span className="text-[11px] font-bold text-white whitespace-nowrap">{fmtK(d.value)}</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between">
+        <span className="text-xs text-foreground/40">Fixed vs Variable expenses</span>
+        <span className="text-xs font-semibold text-foreground/60">
+          {expense > 0 ? Math.round((fixedExp / expense) * 100) : 0}% fixed
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── ExpensePieChart ─────────────────────────────────────────────────────────────
+
+export function ExpensePieChart({ pieData }: { pieData: { name: string; value: number }[] }) {
+  const total = pieData.reduce((s, d) => s + d.value, 0);
+  const top = pieData.slice(0, 8);
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">Expense Mix</p>
+      <div className="flex items-center gap-3">
+        {/* Donut */}
+        <div className="shrink-0" style={{ width: 140, height: 140 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={top}
+                dataKey="value"
+                nameKey="name"
+                cx="50%" cy="50%"
+                innerRadius={38}
+                outerRadius={62}
+                paddingAngle={2}
+                strokeWidth={0}
+              >
+                {top.map((_, i) => (
+                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v: unknown) => [fmt(Number(v)), "Amount"]}
+                contentStyle={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  fontSize: 11,
+                  color: "var(--foreground)",
+                }}
+                itemStyle={{ color: "var(--foreground)" }}
+                labelStyle={{ color: "var(--foreground)" }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        {/* Custom legend */}
+        <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+          {top.map((d, i) => {
+            const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
+            return (
+              <div key={d.name} className="flex items-center gap-1.5 min-w-0">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                <span className="text-[11px] text-foreground/70 truncate flex-1">{d.name}</span>
+                <span className="text-[11px] font-semibold text-foreground/80 shrink-0">{pct}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CategoryAnnualCards ──────────────────────────────────────────────────────
+
+export function CategoryAnnualCards({ entries, year }: { entries: BudgetEntry[]; year: number }) {
+  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+    label: SHORT_MONTHS[i],
+    key: `${year}-${String(i + 1).padStart(2, "0")}`,
+  })), [year]);
+
+  const catData = useMemo(() => {
+    const map: Record<string, number[]> = {};
+    for (const e of entries) {
+      if (e.type?.toUpperCase() !== "EXPENSE") continue;
+      const cat = e.category || "Other";
+      if (!map[cat]) map[cat] = Array(12).fill(0);
+      const et = (e.entry_type ?? "FLOATING").toUpperCase();
+      if (et !== "RECURRING") {
+        const mi = months.findIndex((m) => m.key === e.date.slice(0, 7));
+        if (mi >= 0) map[cat][mi] += e.amount;
+      } else {
+        months.forEach(({ key }, mi) => {
+          if (recurringAppliesToMonth(e, key)) {
+            const m2 = RECURRENCE_MONTHS[(e.recurrence ?? "ANNUAL") as BudgetRecurrence];
+            map[cat][mi] += e.amount / m2;
+          }
+        });
+      }
+    }
+    return map;
+  }, [entries, months, year]);
+
+  const categories = useMemo(
+    () => Object.entries(catData)
+      .map(([name, vals]) => ({ name, vals, total: vals.reduce((s, v) => s + v, 0) }))
+      .filter((c) => c.total > 0)
+      .sort((a, b) => b.total - a.total),
+    [catData],
+  );
+
+  if (categories.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide px-1">
+        Category Spend — Monthly Breakdown
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {categories.map(({ name, vals, total }, ci) => {
+          const color = PIE_COLORS[ci % PIE_COLORS.length];
+          const chartData = months.map(({ label }, i) => ({ month: label, Amount: Math.round(vals[i]) }));
+          const maxVal = Math.max(...vals, 1);
+          const activeMonths = vals.filter((v) => v > 0).length;
+          const avgMonthly = activeMonths > 0 ? total / activeMonths : 0;
+
+          return (
+            <div key={name} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                  <span className="text-sm font-bold text-foreground truncate">{name}</span>
+                </div>
+                <span className="text-sm font-black text-foreground/80 tabular-nums shrink-0">{fmt(total)}</span>
+              </div>
+              <div className="flex gap-3 text-[11px] text-foreground/45">
+                <span>Avg <span className="text-foreground/70 font-semibold">{fmt(avgMonthly)}</span>/mo</span>
+                <span>{activeMonths} of 12 months</span>
+              </div>
+              <div className="mt-1">
+                <ResponsiveContainer width="100%" height={80}>
+                  <BarChart data={chartData} barCategoryGap="20%" margin={{ top: 0, right: 0, left: -32, bottom: 0 }}>
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fontSize: 8, fill: "var(--foreground)", opacity: 0.4 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis hide domain={[0, maxVal * 1.15]} />
+                    <Tooltip
+                      formatter={(v: unknown) => [fmt(Number(v)), name]}
+                      contentStyle={{
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        color: "var(--foreground)",
+                      }}
+                      itemStyle={{ color: "var(--foreground)" }}
+                      cursor={{ fill: "var(--surface-2)" }}
+                    />
+                    <Bar dataKey="Amount" radius={[3, 3, 0, 0]}>
+                      {chartData.map((_, i) => (
+                        <Cell key={i} fill={vals[i] > 0 ? color : "var(--surface-2)"} fillOpacity={vals[i] > 0 ? 0.85 : 1} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

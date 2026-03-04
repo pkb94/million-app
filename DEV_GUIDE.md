@@ -138,8 +138,20 @@ echo "All servers starting..."
 OptionFlow_main/            ← repo root (branch: develop)
 ├── backend_api/            ← FastAPI Python backend
 ├── web/                    ← Next.js frontend
-│   ├── app/                ← App Router pages
-│   ├── components/         ← React components
+│   ├── app/
+│   │   └── (app)/
+│   │       ├── trades/page.tsx     ← slim 134-line orchestrator (v2.5.0)
+│   │       └── budget/page.tsx     ← slim 272-line orchestrator (v2.5.0)
+│   ├── components/
+│   │   ├── trades/         ← 13 component files (split from trades/page in v2.5.0)
+│   │   │   ├── TradesHelpers.ts, TradeModals.tsx, PositionForm.tsx
+│   │   │   ├── StatusSelect.tsx, AssignmentPanel.tsx, PositionRow.tsx
+│   │   │   ├── PositionsTab.tsx, SymbolsTab.tsx, YearTab.tsx
+│   │   │   ├── PremiumTab.tsx, AccountTab.tsx, HoldingsTab.tsx
+│   │   │   └── PortfolioSummaryBar.tsx
+│   │   └── budget/         ← 5 component files (split from budget/page in v2.5.0)
+│   │       ├── BudgetHelpers.ts, BudgetSection.tsx, BudgetCharts.tsx
+│   │       ├── BudgetAnnualSummary.tsx, CCSection.tsx
 │   └── lib/                ← API client, auth, hooks
 ├── database/               ← SQLAlchemy models (5-DB architecture)
 ├── logic/                  ← Domain service modules (auth, budget, portfolio, gamma)

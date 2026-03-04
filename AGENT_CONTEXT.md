@@ -143,12 +143,32 @@ web/app/(app)/
   dashboard/     # Portfolio overview + recent trades
   options-flow/  # GEX + net flow charts
   markets/       # Stock quotes + search
-  trades/        # Weekly options portfolio (covered calls, positions, holdings)
-  budget/        # Budget tracker + credit card weeks
+  trades/        # Weekly options portfolio — slim 134-line orchestrator
+  budget/        # Budget tracker + credit card weeks — slim 272-line orchestrator
   settings/      # User settings
 web/components/
   Navbar.tsx     # Desktop sidebar — Dashboard → Options Flow → Markets → Trades → Budget
   BottomNav.tsx  # Mobile nav — same order
+  trades/        # 13 component files split from trades/page.tsx (v2.5.0)
+    TradesHelpers.ts        # Types, emptyForm(), posToForm(), formatters
+    TradeModals.tsx         # CompleteWeekModal, ReopenWeekModal
+    PositionForm.tsx        # Add/edit position form
+    StatusSelect.tsx        # Status dropdown
+    AssignmentPanel.tsx     # Assignment/exercise panel
+    PositionRow.tsx         # Mobile card + desktop row (AI streaming, live moneyness)
+    PositionsTab.tsx        # Metrics grid, live quotes poll, form management
+    SymbolsTab.tsx          # Symbol search + breakdown table
+    YearTab.tsx             # Annual analytics, cumulative chart
+    PremiumTab.tsx          # Premium ledger by-symbol and by-week
+    AccountTab.tsx          # Account value tracking with charts
+    HoldingsTab.tsx         # Holdings table with Sync/Import/Add toolbar
+    PortfolioSummaryBar.tsx # 4-card summary grid + WeekSelector
+  budget/        # 5 component files split from budget/page.tsx (v2.5.0)
+    BudgetHelpers.ts        # Constants, formatters, monthKey/Label, recurringAppliesToMonth
+    BudgetSection.tsx       # EditableRow, ReadRow, Section (override/mutation logic)
+    BudgetCharts.tsx        # TrendChart, SavingsRate, TopCategoriesBar, IncomeExpenseSplit, ExpensePieChart, CategoryAnnualCards
+    BudgetAnnualSummary.tsx # AnnualSummary (12-month table)
+    CCSection.tsx           # CCSection, StatCard, CCEditRow, CCReadRow
 web/lib/
   api.ts         # All fetch calls to the backend
   auth.tsx       # Auth context — silent refresh on load, proactive refresh timer
@@ -189,6 +209,8 @@ source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_
 
 | Version | What |
 |---------|------|
+| v2.5.1 | UI polish: recharts area+bar charts side-by-side in AccountTab (52-week scaffold, $1k Y ticks, newest-first table); Expense Mix pie redesign; dark-mode tooltip fix across all budget charts. |
+| v2.5.0 | Split trades/page.tsx (3612→134 lines) into 13 components; split budget/page.tsx (1679→272 lines) into 5 components. Fixed buy_date bug in PositionForm. |
 | v2.4.0 | Removed broker layer, order system, raw trade journal, dead frontend pages (orders/accounts/search/stocks). 428 passing tests. |
 | v2.3.1 | Split schemas.py into domain package (auth/trades/budget/portfolio). Fixed npm PATH in dev.sh. |
 | v2.3.0 | Split services.py monolith into auth_services, trade_services, budget_services, portfolio_services. /health probes all 5 DBs. Backend API improvements (GET /trades filters, PATCH/DELETE /cash, GET /budget/summary, enum validation). |
@@ -227,13 +249,14 @@ These are the highest-impact features in priority order:
 
 ## Known Issues / Gotchas
 
-1. **`StockHolding` uses `shares` + `cost_basis`** — not `quantity`. Any new code must use the correct field names.
-2. **Trades page is the weekly options portfolio** — covered calls, CSPs, option positions. There is NO raw trade journal — it was removed in v2.4.0.
-3. **Node.js** is at a custom path: `/Users/karthikkondajjividyaranya/bin/node-v20.11.1-darwin-arm64/bin/`. Always set `PATH` before running npm/node commands.
-4. **`.next` cache corruption** — if the frontend returns 500, `rm -rf web/.next` and restart.
-5. **Zoom locked on iOS/iPadOS** — `maximumScale=1, userScalable=no` is intentional (app-like feel).
-6. **schemas is a package, not a file** — `backend_api/schemas/` is a directory with `__init__.py`. Import from `backend_api.schemas` as before; do NOT create a new `schemas.py` file.
-7. **brokers/ folder is gone** — broker abstraction and order system removed in v2.4.0. Do not re-add.
+1. **Trades & Budget pages are split** — `trades/page.tsx` and `budget/page.tsx` are thin orchestrators. All logic lives in `web/components/trades/` (13 files) and `web/components/budget/` (5 files). Edit the component files, not the page files.
+2. **`StockHolding` uses `shares` + `cost_basis`** — not `quantity`. Any new code must use the correct field names.
+3. **Trades page is the weekly options portfolio** — covered calls, CSPs, option positions. There is NO raw trade journal — it was removed in v2.4.0.
+4. **Node.js** is at a custom path: `/Users/karthikkondajjividyaranya/bin/node-v20.11.1-darwin-arm64/bin/`. Always set `PATH` before running npm/node commands.
+5. **`.next` cache corruption** — if the frontend returns 500, `rm -rf web/.next` and restart.
+6. **Zoom locked on iOS/iPadOS** — `maximumScale=1, userScalable=no` is intentional (app-like feel).
+7. **schemas is a package, not a file** — `backend_api/schemas/` is a directory with `__init__.py`. Import from `backend_api.schemas` as before; do NOT create a new `schemas.py` file.
+8. **brokers/ folder is gone** — broker abstraction and order system removed in v2.4.0. Do not re-add.
 
 ---
 
