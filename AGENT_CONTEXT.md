@@ -170,6 +170,7 @@ source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_
 
 | Version | What |
 |---------|------|
+| v2.3.0 | 8 backend improvements: DB session bugs fixed, SQL pagination, async yfinance routes, typed Pydantic schemas for all portfolio routes, GET /trades/{id}, GET+POST /portfolio/value-history, new services (list_trades, get_trade, list_cash_flows, list_budget_entries, list_portfolio_snapshots, upsert_portfolio_snapshot) |
 | v2.2.0 | 448 passing tests, lifespan migration, /health DB ping, field-name fixes |
 | v2.1.0 | 18 audit fixes: state.py/utils.py, TTLCache, pagination, model_validate |
 | v2.0.0 | Split 1735-line main.py into 6 routers |
@@ -197,9 +198,9 @@ These are the highest-impact features in priority order:
 - Goes to `portfolio.db` (`stock_holdings` table)
 
 ### 🥉 3. Portfolio Value History chart
-- `portfolio_value_history` table exists but is empty
-- Weekly "net worth snapshot" entry: total account value, cash, stock value
-- Dashboard should render a line chart of this over time
+- `GET /portfolio/value-history` and `POST /portfolio/value-history` endpoints are live (v2.3.0)
+- `portfolio_value_history` table exists but is empty — need UI to enter weekly net-worth snapshots
+- Dashboard should render a line chart of this over time (connect to the new endpoints)
 
 ### 4. Budget — complete CC week flow
 - Credit card week tracker exists (1 row) but needs a proper "settle up" weekly flow
@@ -219,11 +220,10 @@ These are the highest-impact features in priority order:
 ## Known Issues / Gotchas
 
 1. **`StockHolding` uses `shares` + `cost_basis`** — not `quantity`. Any new code must use the correct field names.
-2. **`Account` is `TradesBase`** but `list_accounts` in services.py calls `_budget_session()` — this is a pre-existing bug. It only works in production because all DBs are on localhost and queries don't cross engines. Fix it when splitting services.py.
-3. **Trades page is the weekly options portfolio** — NOT a raw trade journal. The raw trade journal (buy/sell history) lives on the Dashboard.
-4. **Node.js** is at a custom path: `/Users/karthikkondajjividyaranya/bin/node-v20.11.1-darwin-arm64/bin/`. Always set `PATH` before running npm/node commands.
-5. **`.next` cache corruption** — if the frontend returns 500, `rm -rf web/.next` and restart.
-6. **Zoom locked on iOS/iPadOS** — `maximumScale=1, userScalable=no` is intentional (app-like feel).
+2. **Trades page is the weekly options portfolio** — NOT a raw trade journal. The raw trade journal (buy/sell history) lives on the Dashboard.
+3. **Node.js** is at a custom path: `/Users/karthikkondajjividyaranya/bin/node-v20.11.1-darwin-arm64/bin/`. Always set `PATH` before running npm/node commands.
+4. **`.next` cache corruption** — if the frontend returns 500, `rm -rf web/.next` and restart.
+5. **Zoom locked on iOS/iPadOS** — `maximumScale=1, userScalable=no` is intentional (app-like feel).
 
 ---
 
