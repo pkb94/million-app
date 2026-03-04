@@ -734,3 +734,14 @@ export const adminDeleteUser = async (user_id: number): Promise<void> => {
   await apiFetch<void>(`/admin/users/${user_id}`, { method: "DELETE" });
 };
 
+export interface MarketQuote {
+  symbol: string;
+  price: number | null;
+  prev_close: number | null;
+  change: number | null;
+  change_pct: number | null;
+}
+
+export const fetchMarketQuotes = (symbols: string[]) =>
+  api.get<MarketQuote[]>(`/market/quotes?symbols=${symbols.map(s => s.toUpperCase()).join(",")}`);
+

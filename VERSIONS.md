@@ -5,6 +5,42 @@
 
 ---
 
+## v1.8.4 — Live Moneyness (Real-Time ITM/ATM/OTM)
+**Released:** 2026-03-04
+**Tag:** `v1.8.4`
+**Branch:** `develop`
+
+### 📡 Live Moneyness on Positions
+- **Ported live moneyness from V1 to main** — positions now show real-time ITM/ATM/OTM instead of the static stored value
+- Polls `GET /market/quotes` every 30s for all **active** position symbols
+- Moneyness computed client-side: ATM band = ±0.5% of strike; CALL/PUT logic for ITM vs OTM
+- Falls back gracefully to `pos.moneyness` (stored value) when market data is unavailable
+- Pulse dot (●) indicator on badge when showing live data
+- Added `MarketQuote` interface + `fetchMarketQuotes` function to `lib/api.ts`
+
+---
+
+## v1.8.3 — Carried-Forward Table Cleanup & Weekly Basis Card
+**Released:** 2026-03-04
+**Tag:** `v1.8.3`
+**Branch:** `main`
+
+### 🧹 Prior Week (Carried-Forward) Table
+- **Removed 4 columns** from carried-forward rows: `Prem Out`, `Status`, `Margin`, `Actions`
+- Carried rows are now purely read-only — no editable fields or action buttons shown
+- Applies to both desktop table and mobile cards
+- Header trimmed from 14 → 10 columns; `colSpan` on expansion rows updated accordingly
+
+### 📊 New "Weekly Basis ↓" Stats Card
+- **Replaced** the misleading "Effective Prem" card (which used all-time cumulative `total_premium_sold`)
+- New metric: weighted average `(premium_in × contracts × 100) / shares` across all linked holdings for the **current week only**
+- Negative number = cost-basis reduction achieved this week per share
+
+### 🐛 Bug Fixes
+- **`Map.values()` TS iterator** — replaced `for...of byHolding.values()` with `.forEach()` to fix TypeScript target compatibility
+
+---
+
 ## v1.8.2 — Bug Fixes & Landing Page Polish
 **Released:** 2026-03-03
 **Tag:** `v1.8.2`

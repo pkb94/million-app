@@ -8,7 +8,7 @@ import {
   fetchPortfolioSummary, fetchSymbolSummary, fetchStockHistory,
   fetchHoldings, createHolding, updateHolding, deleteHolding, fetchHoldingEvents,
   seedHoldingsFromPositions, recalculateHoldings, syncPremiumLedger,
-  fetchPremiumDashboard, updateWeek,
+  fetchPremiumDashboard, updateWeek, fetchMarketQuotes,
   WeeklySnapshot, OptionPosition, StockAssignment, PositionStatus, WeekBreakdown,
   StockHolding, HoldingEvent, PremiumDashboard, PremiumSymbolRow, PremiumWeekRow,
   getTokens,
@@ -647,13 +647,23 @@ function AssignmentPanel({ pos }: { pos: OptionPosition }) {
 
 // ── Position Row ──────────────────────────────────────────────────────────────
 
-function PositionRow({ pos, onEdit, onDelete }: { pos: OptionPosition; onEdit: () => void; onDelete: () => void }) {
+function PositionRow({ pos, onEdit, onDelete, liveSpot }: { pos: OptionPosition; onEdit: () => void; onDelete: () => void; liveSpot?: number | null }) {
   const [expanded, setExpanded] = useState(false);
   const [showAi, setShowAi] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const isCarried = pos.carried_from_id != null;
   const isCarriedForward = pos.carried === true;
+
+  // Live moneyness: computed from liveSpot if available, otherwise fall back to stored pos.moneyness
+  const liveMoneyness = useMemo(() => {
+    if (liveSpot == null || liveSpot <= 0 || !pos.strike) return null;
+    const atmBand = pos.strike * 0.005;
+    if (Math.abs(liveSpot - pos.strike) <= atmBand) return "ATM";
+    if (pos.option_type === "CALL") return liveSpot > pos.strike ? "ITM" : "OTM";
+    return liveSpot < pos.strike ? "ITM" : "OTM";
+  }, [liveSpot, pos.strike, pos.option_type]);
+  const displayMoneyness = liveMoneyness ?? pos.moneyness;
+  const isLive = liveMoneyness != null;
 
   const premOutCell = (() => {
     const isClosed = ["CLOSED", "EXPIRED", "ASSIGNED", "ROLLED"].includes(pos.status);
@@ -752,28 +762,27 @@ What do you think of this position? Should I roll, close early, or hold to expir
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${pos.option_type === "PUT" ? "bg-red-100 dark:bg-red-900/30 text-red-500" : "bg-green-100 dark:bg-green-900/30 text-green-600"}`}>
                 {pos.option_type}
               </span>
-              {pos.moneyness && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${
-                  pos.moneyness === "ITM" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 border-orange-300 dark:border-orange-700"
-                  : pos.moneyness === "ATM" ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
+              {displayMoneyness && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border flex items-center gap-0.5 ${
+                  displayMoneyness === "ITM" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 border-orange-300 dark:border-orange-700"
+                  : displayMoneyness === "ATM" ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
                   : "bg-green-100 dark:bg-green-900/30 text-green-700 border-green-300 dark:border-green-700"
                 }`}>
-                  {pos.moneyness}
+                  {isLive && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
+                  {displayMoneyness}
                 </span>
               )}
               {isCarriedForward && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-semibold">↳ {pos.origin_week_label ?? "prior wk"}</span>
               )}
-              {!isCarriedForward && isCarried && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-500 font-semibold">↩ rolled</span>
-              )}
+
             </div>
             <div className="text-sm text-foreground/70">
               ${pos.strike.toFixed(2)} · {pos.contracts} ct{pos.contracts !== 1 ? "s" : ""}
             </div>
           </div>
-          {/* Status select — right side */}
-          <StatusSelect pos={pos} />
+          {/* Status select — right side (hidden for carried-forward rows; week is closed) */}
+          {!isCarriedForward && <StatusSelect pos={pos} />}
         </div>
 
         {/* Row 2: Dates + DTE */}
@@ -796,7 +805,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
               <span className="text-[10px] text-orange-500 block">θ ${pos.extrinsic_value.toFixed(2)}</span>
             )}
           </div>
-          {premOutCell && (
+          {premOutCell && !isCarriedForward && (
             <div>
               <span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Prem Out</span>
               <div className="flex flex-col gap-0.5">
@@ -813,7 +822,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
               </div>
             </div>
           )}
-          {pos.margin != null && (
+          {pos.margin != null && !isCarriedForward && (
             <div>
               <span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Margin</span>
               <span className="text-sm text-foreground/60">${pos.margin.toFixed(0)}</span>
@@ -834,7 +843,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
         </div>
 
         {/* Row 4: Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {!isCarriedForward && (<div className="flex items-center gap-2 flex-wrap">
           {pos.status === "ASSIGNED" && (
             <button
               onClick={() => setExpanded((v) => !v)}
@@ -854,7 +863,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
           >
             ✨ {showAi ? "Hide" : "Analyze"}
           </button>
-        </div>
+        </div>)}
 
         {/* Assignment panel (mobile) */}
         {expanded && pos.status === "ASSIGNED" && (
@@ -891,9 +900,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
           {isCarriedForward && (
             <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 font-semibold">↳ {pos.origin_week_label ?? "prior wk"}</span>
           )}
-          {!isCarriedForward && isCarried && (
-            <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-500 font-semibold">↩ rolled</span>
-          )}
+
         </td>
         <td className="px-3 py-2.5 text-foreground/80 text-sm text-center">{pos.contracts}</td>
         <td className="px-3 py-2.5 text-foreground text-sm">${pos.strike.toFixed(2)}</td>
@@ -902,13 +909,14 @@ What do you think of this position? Should I roll, close early, or hold to expir
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${pos.option_type === "PUT" ? "bg-red-100 dark:bg-red-900/30 text-red-500" : "bg-green-100 dark:bg-green-900/30 text-green-600"}`}>
               {pos.option_type}
             </span>
-            {pos.moneyness && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${
-                pos.moneyness === "ITM" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 border-orange-300 dark:border-orange-700"
-                : pos.moneyness === "ATM" ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
+            {displayMoneyness && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border flex items-center gap-0.5 ${
+                displayMoneyness === "ITM" ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 border-orange-300 dark:border-orange-700"
+                : displayMoneyness === "ATM" ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
                 : "bg-green-100 dark:bg-green-900/30 text-green-700 border-green-300 dark:border-green-700"
               }`}>
-                {pos.moneyness}
+                {isLive && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
+                {displayMoneyness}
               </span>
             )}
           </div>
@@ -926,7 +934,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
             <div className="text-[10px] text-orange-500 font-normal">θ ${pos.extrinsic_value.toFixed(2)}</div>
           )}
         </td>
-        <td className="px-3 py-2.5 text-sm">
+        {!isCarriedForward && (<td className="px-3 py-2.5 text-sm">
           {(() => {
             const isClosed = ["CLOSED", "EXPIRED", "ASSIGNED", "ROLLED"].includes(pos.status);
             const showPremOut = pos.premium_out != null && (isClosed || pos.is_roll);
@@ -954,7 +962,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
               </div>
             );
           })()}
-        </td>
+        </td>)}
         <td className="px-3 py-2.5 text-sm">
           {premPerK != null
             ? <span className="font-semibold text-blue-500">${premPerK.toFixed(2)}</span>
@@ -965,13 +973,13 @@ What do you think of this position? Should I roll, close early, or hold to expir
             ? <span className={`font-semibold ${roi >= 0 ? "text-green-500" : "text-red-500"}`}>{roi.toFixed(2)}%</span>
             : <span className="text-foreground/30">—</span>}
         </td>
-        <td className="px-3 py-2.5">
+        {!isCarriedForward && (<td className="px-3 py-2.5">
           <StatusSelect pos={pos} />
-        </td>
-        <td className="px-3 py-2.5 text-foreground/70 text-xs">
+        </td>)}
+        {!isCarriedForward && (<td className="px-3 py-2.5 text-foreground/70 text-xs">
           {pos.margin != null ? `$${pos.margin.toFixed(0)}` : "—"}
-        </td>
-        <td className="px-3 py-2.5">
+        </td>)}
+        {!isCarriedForward && (<td className="px-3 py-2.5">
           <div className="flex items-center gap-1.5">
             {pos.status === "ASSIGNED" && (
               <button
@@ -992,18 +1000,18 @@ What do you think of this position? Should I roll, close early, or hold to expir
               className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
             >Del</button>
           </div>
-        </td>
+        </td>)}
       </tr>
       {expanded && pos.status === "ASSIGNED" && (
         <tr className="hidden sm:table-row border-b border-[var(--border)] bg-yellow-50/30 dark:bg-yellow-900/5">
-          <td colSpan={14} className="px-4 pb-3">
+          <td colSpan={10} className="px-4 pb-3">
             <AssignmentPanel pos={pos} />
           </td>
         </tr>
       )}
       {showAi && (
         <tr className="hidden sm:table-row border-b border-[var(--border)] bg-purple-50/30 dark:bg-purple-900/5">
-          <td colSpan={14} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <div className="flex items-start gap-2">
               <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 shrink-0 mt-0.5">✨ AI Analysis</span>
               {aiLoading && !aiAnalysis && (
@@ -1081,18 +1089,58 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
   }, [carriedPositions]);
 
   const totalPremium = thisWeekPositions.reduce((s, p) => s + (p.total_premium ?? 0), 0);
-  // Effective premium = (strike − avg_cost) + pre_collected_premium_per_share, summed across contracts
-  // i.e. total economic gain per share if called away: intrinsic upside + all premium collected to date
-  const effectivePrem = thisWeekPositions.reduce((s, p) => {
-    const contrib = p.contracts * 100;
-    const holding = holdings.find(h => h.id === p.holding_id);
-    const avgCost = holding?.cost_basis ?? 0;
-    const preCollected = holding ? (holding.total_premium_sold / (holding.shares || 1)) : 0;
-    const effPerShare = (p.strike - avgCost) + preCollected;
-    return s + effPerShare * contrib;
-  }, 0);
+  // Weekly basis reduction = this week's premium_in / shares covered, per linked holding
+  // Answers: "by how much did this week's selling reduce my cost basis per share?"
+  const weeklyBasisReduction = useMemo(() => {
+    // Group positions by holding_id, sum premium_in × contracts × 100
+    const byHolding = new Map<number, { totalPremDollars: number; shares: number }>();
+    for (const p of thisWeekPositions) {
+      if (p.holding_id == null || p.premium_in == null) continue;
+      const holding = holdings.find(h => h.id === p.holding_id);
+      if (!holding) continue;
+      const existing = byHolding.get(p.holding_id) ?? { totalPremDollars: 0, shares: holding.shares };
+      existing.totalPremDollars += p.premium_in * p.contracts * 100;
+      byHolding.set(p.holding_id, existing);
+    }
+    if (byHolding.size === 0) return null;
+    // Weighted average: total premium dollars / total shares covered
+    let totalDollars = 0;
+    let totalShares = 0;
+    byHolding.forEach(({ totalPremDollars, shares }) => {
+      totalDollars += totalPremDollars;
+      totalShares += shares;
+    });
+    return totalShares > 0 ? totalDollars / totalShares : null;
+  }, [thisWeekPositions, holdings]);
   const hasAnyMoneyness = thisWeekPositions.some(p => p.moneyness != null);
-  const activeCount  = positions.filter((p) => p.status === "ACTIVE").length;
+  const activeCount  = thisWeekPositions.filter((p) => p.status === "ACTIVE").length;
+
+  // ── Live spot prices — poll every 30 s for all active position symbols ──────
+  const activeSymbols = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const p of positions) {
+      if (p.status === "ACTIVE" && !seen.has(p.symbol)) {
+        seen.add(p.symbol);
+        result.push(p.symbol);
+      }
+    }
+    return result;
+  }, [positions]);
+  const { data: liveQuotes } = useQuery({
+    queryKey: ["liveQuotes", activeSymbols.join(",")],
+    queryFn: () => fetchMarketQuotes(activeSymbols),
+    enabled: activeSymbols.length > 0,
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+  });
+  const liveSpotMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const q of liveQuotes ?? []) {
+      if (q.price != null) map.set(q.symbol, q.price);
+    }
+    return map;
+  }, [liveQuotes]);
 
   return (
     <div>
@@ -1126,16 +1174,16 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
               <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">This Week Premium</p>
               <p className="text-base font-black text-green-500">${totalPremium.toFixed(2)}</p>
             </div>
-            {hasAnyMoneyness && (
+            {weeklyBasisReduction != null && (
               <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
-                <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Effective Prem</p>
-                <p className="text-base font-black text-emerald-400">${effectivePrem.toFixed(2)}</p>
-                <p className="text-[10px] text-foreground/40 mt-0.5">θ income only · excl. intrinsic</p>
+                <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Weekly Basis ↓</p>
+                <p className="text-base font-black text-emerald-400">-${weeklyBasisReduction.toFixed(2)}<span className="text-xs font-normal text-foreground/40">/sh</span></p>
+                <p className="text-[10px] text-foreground/40 mt-0.5">this week's premium ÷ shares</p>
               </div>
             )}
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
               <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Active Positions</p>
-              <p className="text-base font-black text-blue-500">{activeCount} <span className="text-xs font-normal text-foreground/40">/ {positions.length}</span></p>
+              <p className="text-base font-black text-blue-500">{activeCount} <span className="text-xs font-normal text-foreground/40">/ {thisWeekPositions.length}</span></p>
             </div>
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
               <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-1">Avg Prem / $1K</p>
@@ -1262,6 +1310,7 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
                     <PositionRow
                       key={p.id}
                       pos={p}
+                      liveSpot={liveSpotMap.get(p.symbol)}
                       onEdit={() => { setEditing(p); setShowForm(false); }}
                       onDelete={() => deleteMut.mutate(p.id)}
                     />
@@ -1284,6 +1333,7 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
                         <PositionRow
                           key={p.id}
                           pos={p}
+                          liveSpot={liveSpotMap.get(p.symbol)}
                           onEdit={() => { setEditing(p); setShowForm(false); }}
                           onDelete={() => deleteMut.mutate(p.id)}
                         />
@@ -1310,6 +1360,7 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
                       <PositionRow
                         key={p.id}
                         pos={p}
+                        liveSpot={liveSpotMap.get(p.symbol)}
                         onEdit={() => { setEditing(p); setShowForm(false); }}
                         onDelete={() => deleteMut.mutate(p.id)}
                       />
@@ -1321,7 +1372,7 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-amber-50/60 dark:bg-amber-900/10">
-                        {["Symbol", "Cts", "Strike", "P/C", "Sold", "Expiry", "DTE", "Prem In", "Prem Out", "/$1K", "ROI", "Status", "Margin", "Actions"].map((h) => (
+                        {["Symbol", "Cts", "Strike", "P/C", "Sold", "Expiry", "DTE", "Prem In", "/$1K", "ROI"].map((h) => (
                           <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -1332,6 +1383,7 @@ function PositionsTab({ week }: { week: WeeklySnapshot }) {
                           <PositionRow
                             key={p.id}
                             pos={p}
+                            liveSpot={liveSpotMap.get(p.symbol)}
                             onEdit={() => { setEditing(p); setShowForm(false); }}
                             onDelete={() => deleteMut.mutate(p.id)}
                           />
