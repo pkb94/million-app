@@ -5,6 +5,53 @@
 
 ---
 
+## v2.5.3 — Budget UI Overhaul: Income Sources, Type Removal, Layout & New Charts
+**Released:** 2026-03-04
+**Branch:** `develop → main`
+
+### 🎨 UI Improvements
+
+#### Budget — Income Section
+- Replaced **Category dropdown** on income rows with a **Source dropdown** (`Salary` / `Stock Market`) stored in `draft.category`
+- Removed **Merchant** field from income rows entirely
+- Removed **Type** column from income rows (always Income — redundant)
+- Added `INCOME_SOURCES = ["Salary", "Stock Market"] as const` to `BudgetHelpers.ts`
+- Column header now reads **Source** (not Category) for income rows
+
+#### Budget — Type Column Removal
+- Removed Type column from **Recurring** and **One-off** sections as well — covered by table heading
+- `EditableRow`: type select cell gone entirely
+- `ReadRow`: type badge cell gone entirely
+- `Section`: type `<th>` header gone entirely
+
+#### Budget — Page Layout
+- **2-column layout** at `lg`: left half = Income + One-off, right half = Recurring + Credit Cards
+- **Robinhood Gold** CCSection remains full-width below the 2-column section
+
+#### Budget — Robinhood Gold / CC Section Redesign
+- Week entries redesigned from `<table>` to **React card rows** using CSS grid (`grid-cols-[1fr_80px_80px_32px]`)
+- Each week row: label + status pill (Paid/Partial/Unpaid) + rose charged input + emerald paid input + action button + mini per-week progress bar
+- Right panel: flush stat tiles (`grid grid-cols-2 sm:grid-cols-4`) + progress bar + bar chart stacked vertically
+- Header bar shows labeled totals: `Charged: $X · Paid: $X · Due: $X`
+- Non-fixedWeeks table `min-w` reduced from `520px` to `420px`
+
+#### Budget — New Charts
+- **Cash Flow Waterfall** (`CashFlowWaterfall`): floating bar chart — Income stepping down through top 6 expense categories → CC Spend → Net. Bars use absolute positioning for correct waterfall offset. Hover tooltips per bar. Net label in header turns green/red.
+- **Spending Breakdown Donut** (`FixedVsVariableDonut`): donut chart splitting income into Fixed / Variable / CC Spend / Savings segments. Center shows savings rate % color-coded green/amber/red. Custom legend with per-segment dollar amount + mini progress bar.
+- Both new charts appear in a dedicated **50/50 row** (`grid-cols-1 md:grid-cols-2`) below the existing 3-chart row
+- Charts grid condition widened: `pieData.length > 0 || stats.income > 0`
+
+### 📦 Files Changed
+| File | Change |
+|------|--------|
+| `web/components/budget/BudgetHelpers.ts` | Added `INCOME_SOURCES` constant |
+| `web/components/budget/BudgetSection.tsx` | Source dropdown for income, removed Merchant + Type from income rows, removed Type from all sections |
+| `web/components/budget/CCSection.tsx` | Week cards redesign, flush stat tiles, labeled header, reduced min-w |
+| `web/components/budget/BudgetCharts.tsx` | Added `CashFlowWaterfall` + `FixedVsVariableDonut` exports |
+| `web/app/(app)/budget/page.tsx` | 2-column layout, new chart imports, split chart rows |
+
+---
+
 ## v2.5.2 — UI Polish: Dashboard, Performance Tab & Budget Charts
 **Released:** 2026-03-04
 **Branch:** `develop`

@@ -306,8 +306,8 @@ export function CCSection({
         <div className="flex items-center gap-2 sm:gap-4">
           {totalCharged > 0 && (
             <div className="flex items-center gap-2 sm:gap-3 text-xs">
-              <span className="text-foreground/40"><span className="font-bold text-rose-400">{fmt$(totalCharged)}</span></span>
-              <span className="text-foreground/40"><span className="font-bold text-emerald-400">{fmt$(totalPaid)}</span></span>
+              <span className="text-foreground/40">Charged: <span className="font-bold text-rose-400">{fmt$(totalCharged)}</span></span>
+              <span className="text-foreground/40">Paid: <span className="font-bold text-emerald-400">{fmt$(totalPaid)}</span></span>
               {totalCharged - totalPaid > 0 && (
                 <span className="text-foreground/40">Due: <span className="font-bold text-amber-400">{fmt$(totalCharged - totalPaid)}</span></span>
               )}
@@ -328,7 +328,7 @@ export function CCSection({
 
       {!fixedWeeks && (
         <div className="overflow-x-auto -mx-px">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[420px] text-sm">
             <thead>
               <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
                 <th className="px-3 py-2 text-left w-[150px]">Date</th>
@@ -376,106 +376,155 @@ export function CCSection({
 
       {fixedWeeks && (
         <div className="flex flex-col md:flex-row border-t border-[var(--border)]">
-          <div className="md:w-[320px] lg:w-[360px] shrink-0 overflow-x-auto border-b md:border-b-0 md:border-r border-[var(--border)]">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
-                  <th className="px-3 py-2 text-left">Week</th>
-                  <th className="px-3 py-2 text-right w-[90px]">Amount</th>
-                  <th className="px-3 py-2 text-right w-[90px]">Paid</th>
-                  <th className="px-3 py-2 w-[50px]"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={4} className="px-3 py-6 text-center text-xs text-foreground/30">Loading…</td></tr>
-                ) : weekSlotList.map(({ sunday, saturday, isoSunday }) => {
+
+          {/* Left: week cards */}
+          <div className="md:w-[320px] lg:w-[360px] shrink-0 border-b md:border-b-0 md:border-r border-[var(--border)] flex flex-col">
+            {/* Column headers */}
+            <div className="grid grid-cols-[1fr_80px_80px_32px] gap-1 px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-2)]/60">
+              <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">Week</span>
+              <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider text-right">Charged</span>
+              <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider text-right">Paid</span>
+              <span />
+            </div>
+
+            {isLoading ? (
+              <div className="flex-1 flex items-center justify-center py-8 text-xs text-foreground/30">Loading…</div>
+            ) : (
+              <div className="flex flex-col divide-y divide-[var(--border)]">
+                {weekSlotList.map(({ sunday, saturday, isoSunday }) => {
                   const existing = rowByDate[isoSunday];
                   const local = getWeekLocal(isoSunday);
                   const isDirty = !!weekEdits[isoSunday];
-                  const ic = cellCls + " text-right text-xs";
+                  const charged = parseFloat(local.balance) || 0;
+                  const paid    = parseFloat(local.paid_amount) || 0;
+                  const pct     = charged > 0 ? Math.min(100, (paid / charged) * 100) : 0;
+                  const isPaid  = charged > 0 && paid >= charged;
+                  const isPartial = charged > 0 && paid > 0 && paid < charged;
+                  const isEmpty = charged === 0;
+
                   return (
-                    <tr key={isoSunday} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors group">
-                      <td className="px-3 py-1.5 text-xs text-foreground/60 whitespace-nowrap">{fmtWeekLabel(sunday, saturday)}</td>
-                      <td className="px-2 py-1">
-                        <input type="number" step="0.01" min="0" value={local.balance} placeholder="0.00"
+                    <div key={isoSunday}
+                      className={"group px-3 py-2 transition-colors hover:bg-[var(--surface-2)] " + (isDirty ? "bg-blue-500/5" : "")}
+                    >
+                      {/* Row: label + inputs + action */}
+                      <div className="grid grid-cols-[1fr_80px_80px_32px] gap-1 items-center">
+                        {/* Week label + status pill */}
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-xs font-medium text-foreground/70 whitespace-nowrap truncate">
+                            {fmtWeekLabel(sunday, saturday)}
+                          </span>
+                          {!isEmpty && (
+                            <span className={"text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full self-start " + (
+                              isPaid    ? "bg-emerald-500/15 text-emerald-400" :
+                              isPartial ? "bg-amber-500/15 text-amber-400" :
+                                          "bg-rose-500/15 text-rose-400"
+                            )}>
+                              {isPaid ? "Paid" : isPartial ? "Partial" : "Unpaid"}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Charged input */}
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={local.balance} placeholder="0.00"
                           onChange={(e) => setWeekEdits((p) => ({ ...p, [isoSunday]: { ...getWeekLocal(isoSunday), balance: e.target.value } }))}
                           onBlur={() => isDirty && commitWeekRow(isoSunday)}
                           onKeyDown={(e) => e.key === "Enter" && commitWeekRow(isoSunday)}
-                          className={ic} />
-                      </td>
-                      <td className="px-2 py-1">
-                        <input type="number" step="0.01" min="0" value={local.paid_amount} placeholder="0.00"
+                          className="w-full bg-transparent text-xs text-right text-rose-400 font-semibold tabular-nums outline-none focus:bg-rose-500/10 rounded px-1 py-0.5 placeholder:text-foreground/20"
+                        />
+
+                        {/* Paid input */}
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={local.paid_amount} placeholder="0.00"
                           onChange={(e) => setWeekEdits((p) => ({ ...p, [isoSunday]: { ...getWeekLocal(isoSunday), paid_amount: e.target.value } }))}
                           onBlur={() => isDirty && commitWeekRow(isoSunday)}
                           onKeyDown={(e) => e.key === "Enter" && commitWeekRow(isoSunday)}
-                          className={ic} />
-                      </td>
-                      <td className="px-1 py-1 w-[50px]">
-                        <div className="flex items-center gap-0.5">
-                          {isDirty && (
+                          className="w-full bg-transparent text-xs text-right text-emerald-400 font-semibold tabular-nums outline-none focus:bg-emerald-500/10 rounded px-1 py-0.5 placeholder:text-foreground/20"
+                        />
+
+                        {/* Action button */}
+                        <div className="flex justify-center">
+                          {isDirty ? (
                             <button onClick={() => commitWeekRow(isoSunday)}
                               className="p-1 rounded bg-green-500/20 text-green-400 hover:bg-green-500/40 transition">
                               <Check size={11} />
                             </button>
-                          )}
-                          {existing?.id && !isDirty && (
+                          ) : existing?.id ? (
                             <button onClick={() => delMut.mutate(existing.id!)}
                               className="p-1 rounded text-foreground/20 hover:text-red-400 hover:bg-red-500/10 transition opacity-0 group-hover:opacity-100">
                               <Trash2 size={11} />
                             </button>
-                          )}
+                          ) : null}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+
+                      {/* Mini progress bar (only when there's data) */}
+                      {!isEmpty && (
+                        <div className="mt-1.5 h-1 rounded-full bg-foreground/10 overflow-hidden">
+                          <div
+                            className={"h-full rounded-full transition-all duration-300 " + (isPaid ? "bg-emerald-500" : isPartial ? "bg-amber-400" : "bg-rose-500")}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
 
+          {/* Right: stats + progress + chart */}
           {totalCharged > 0 ? (
-            <div className="flex-1 min-w-0 px-3 sm:px-4 py-3 sm:py-4 flex flex-col gap-3 sm:gap-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="flex-1 min-w-0 flex flex-col divide-y divide-[var(--border)]">
+
+              {/* 4 stat tiles — flush grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-[var(--border)]">
                 {[
                   { label: "Total Charged", value: fmt$(totalCharged), cls: "text-rose-400" },
-                  { label: "Total Paid",     value: fmt$(totalPaid),    cls: "text-emerald-400" },
-                  { label: "Net Unpaid",     value: fmt$(Math.max(0, totalCharged - totalPaid)), cls: totalCharged - totalPaid > 0 ? "text-amber-400" : "text-emerald-400" },
-                  { label: "Pay Rate",       value: (Math.min(100, (totalPaid / totalCharged) * 100)).toFixed(1) + "%",
+                  { label: "Total Paid",    value: fmt$(totalPaid),    cls: "text-emerald-400" },
+                  { label: "Net Unpaid",    value: fmt$(Math.max(0, totalCharged - totalPaid)),
+                    cls: totalCharged - totalPaid > 0 ? "text-amber-400" : "text-emerald-400" },
+                  { label: "Pay Rate",
+                    value: (Math.min(100, (totalPaid / totalCharged) * 100)).toFixed(1) + "%",
                     cls: totalPaid >= totalCharged ? "text-emerald-400" : totalPaid / totalCharged >= 0.5 ? "text-amber-400" : "text-rose-400" },
                 ].map(({ label, value, cls }) => (
-                  <div key={label} className="bg-[var(--surface-2)] border border-[var(--border)] rounded-xl p-3">
-                    <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wide mb-0.5">{label}</p>
-                    <p className={"text-lg font-black tabular-nums " + cls}>{value}</p>
+                  <div key={label} className="bg-[var(--surface)] px-4 py-3 flex flex-col gap-0.5">
+                    <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wide">{label}</p>
+                    <p className={"text-xl font-black tabular-nums " + cls}>{value}</p>
                   </div>
                 ))}
               </div>
 
+              {/* Pay coverage bar */}
               {(() => {
                 const rate = Math.min(100, (totalPaid / totalCharged) * 100);
                 return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between text-[10px] text-foreground/40">
-                      <span>Pay Coverage</span><span>{rate.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-foreground/10 overflow-hidden">
+                  <div className="px-4 py-2.5 flex items-center gap-3">
+                    <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wide shrink-0">Pay Coverage</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
                       <div className={"h-full rounded-full transition-all duration-500 " + (rate >= 100 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-400" : "bg-rose-500")}
                         style={{ width: `${rate}%` }} />
                     </div>
+                    <span className={"text-xs font-bold tabular-nums " + (rate >= 100 ? "text-emerald-400" : rate >= 50 ? "text-amber-400" : "text-rose-400")}>
+                      {rate.toFixed(1)}%
+                    </span>
                   </div>
                 );
               })()}
 
-              <div className="flex-1">
-                <p className="text-[10px] font-semibold text-foreground/40 uppercase tracking-wide mb-2">Week-by-Week</p>
-                <ResponsiveContainer width="100%" height={140}>
+              {/* Chart */}
+              <div className="flex-1 px-3 pt-3 pb-2">
+                <ResponsiveContainer width="100%" height={150}>
                   <BarChart
                     data={weekSlotList.map(({ sunday, saturday, isoSunday }) => ({
                       week: fmtWeekLabel(sunday, saturday).replace(/ – /g, "–"),
                       Charged: rowByDate[isoSunday]?.balance ?? 0,
                       Paid: rowByDate[isoSunday]?.paid_amount ?? 0,
                     }))}
-                    barCategoryGap="30%" margin={{ top: 2, right: 4, left: -16, bottom: 0 }}
+                    barCategoryGap="30%" margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="week" tick={{ fill: "var(--foreground)", opacity: 0.4, fontSize: 8 }} tickLine={false} axisLine={false} />
@@ -488,12 +537,14 @@ export function CCSection({
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-foreground/25 py-8">
+            <div className="flex-1 flex items-center justify-center text-sm text-foreground/25 py-10">
               Enter amounts to see metrics
             </div>
           )}
+
         </div>
       )}
     </div>

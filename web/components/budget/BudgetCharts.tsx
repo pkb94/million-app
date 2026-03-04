@@ -225,6 +225,177 @@ export function ExpensePieChart({ pieData }: { pieData: { name: string; value: n
   );
 }
 
+// ── CashFlowWaterfall ─────────────────────────────────────────────────────────
+
+export function CashFlowWaterfall({
+  income,
+  pieData,
+  ccTotal,
+}: {
+  income: number;
+  pieData: { name: string; value: number }[];
+  ccTotal: number;
+}) {
+  const { items, net } = useMemo(() => {
+    const items: { name: string; value: number; start: number; isIncome: boolean; isNet: boolean }[] = [];
+    let running = income;
+    items.push({ name: "Income", value: income, start: 0, isIncome: true, isNet: false });
+    const top = pieData.slice(0, 6);
+    for (const { name, value } of top) {
+      const start = running - value;
+      items.push({ name, value, start, isIncome: false, isNet: false });
+      running -= value;
+    }
+    if (ccTotal > 0) {
+      const start = running - ccTotal;
+      items.push({ name: "CC Spend", value: ccTotal, start, isIncome: false, isNet: false });
+      running -= ccTotal;
+    }
+    items.push({ name: "Net", value: Math.abs(running), start: running >= 0 ? 0 : running, isIncome: false, isNet: true });
+    return { items, net: running };
+  }, [income, pieData, ccTotal]);
+
+  const maxVal = income > 0 ? income : 1;
+  const hasData = income > 0 || pieData.length > 0;
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide">Cash Flow Waterfall</p>
+        <span className={"text-xs font-bold tabular-nums " + (net >= 0 ? "text-emerald-400" : "text-red-400")}>
+          Net {net >= 0 ? "+" : ""}{fmt(net)}
+        </span>
+      </div>
+      {!hasData ? (
+        <div className="h-[200px] flex items-center justify-center text-sm text-foreground/30">No data yet</div>
+      ) : (
+        <div className="flex gap-1">
+          {items.map(({ name, value, start, isIncome, isNet }, i) => {
+            const heightPct = (value / maxVal) * 100;
+            const startPct  = ((start < 0 ? 0 : start) / maxVal) * 100;
+            const barColor = isIncome ? "#10b981"
+              : isNet ? (net >= 0 ? "#10b981" : "#ef4444")
+              : PIE_COLORS[i % PIE_COLORS.length];
+            return (
+              <div key={name} className="flex-1 flex flex-col items-center group">
+                {/* Bar area */}
+                <div className="relative w-full" style={{ height: 150 }}>
+                  <div
+                    className="absolute left-0 right-0 rounded-sm transition-all duration-300"
+                    style={{
+                      bottom: `${startPct}%`,
+                      height: `${Math.max(heightPct, 1)}%`,
+                      background: barColor,
+                      opacity: isNet ? 1 : 0.82,
+                    }}
+                  />
+                  {/* connector line to next bar (except last) */}
+                  {!isNet && i < items.length - 1 && (
+                    <div
+                      className="absolute right-0 w-px bg-foreground/15"
+                      style={{ bottom: `${startPct + heightPct}%`, height: "2px" }}
+                    />
+                  )}
+                  {/* Hover tooltip */}
+                  <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-2 py-1 text-[10px] font-semibold text-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10 shadow-lg">
+                    {name}: {fmt(value)}
+                  </div>
+                </div>
+                {/* Label below bar */}
+                <span className="text-[9px] text-foreground/40 text-center truncate w-full px-0.5 mt-1.5 leading-tight">
+                  {name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FixedVsVariableDonut ──────────────────────────────────────────────────────
+
+export function FixedVsVariableDonut({
+  income,
+  fixedExp,
+  floatExp,
+  ccTotal,
+  net,
+}: {
+  income: number;
+  fixedExp: number;
+  floatExp: number;
+  ccTotal: number;
+  net: number;
+}) {
+  const segments = useMemo(() => [
+    { name: "Fixed",    value: Math.round(fixedExp),                   fill: "#8b5cf6" },
+    { name: "Variable", value: Math.round(floatExp),                   fill: "#f59e0b" },
+    { name: "CC Spend", value: Math.round(ccTotal),                    fill: "#f43f5e" },
+    { name: "Savings",  value: Math.round(Math.max(0, net - ccTotal)), fill: "#10b981" },
+  ].filter((s) => s.value > 0), [fixedExp, floatExp, ccTotal, net]);
+
+  const hasData = segments.length > 0 && income > 0;
+  const savingsRate = income > 0 ? Math.round((Math.max(0, net) / income) * 100) : 0;
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">Spending Breakdown</p>
+      {!hasData ? (
+        <div className="h-[180px] flex items-center justify-center text-sm text-foreground/30">No data yet</div>
+      ) : (
+        <div className="flex items-center gap-5">
+          <div className="relative shrink-0" style={{ width: 150, height: 150 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={segments} dataKey="value" nameKey="name"
+                  cx="50%" cy="50%" innerRadius={46} outerRadius={68}
+                  paddingAngle={2} strokeWidth={0} startAngle={90} endAngle={-270}>
+                  {segments.map((s, i) => <Cell key={i} fill={s.fill} />)}
+                </Pie>
+                <Tooltip
+                  formatter={(v: unknown) => [fmt(Number(v)), ""]}
+                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--foreground)" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className={"text-lg font-black tabular-nums leading-none " +
+                (savingsRate >= 20 ? "text-emerald-400" : savingsRate >= 10 ? "text-amber-400" : "text-red-400")}>
+                {savingsRate}%
+              </span>
+              <span className="text-[9px] text-foreground/40 uppercase tracking-wide mt-0.5">saved</span>
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col gap-3 min-w-0">
+            {segments.map((s) => {
+              const pct = income > 0 ? Math.round((s.value / income) * 100) : 0;
+              return (
+                <div key={s.name} className="flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: s.fill }} />
+                      <span className="text-xs text-foreground/70">{s.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-foreground/80 tabular-nums">{fmt(s.value)}</span>
+                      <span className="text-[10px] text-foreground/35 w-7 text-right">{pct}%</span>
+                    </div>
+                  </div>
+                  <div className="h-1 rounded-full bg-foreground/10 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: pct + "%", background: s.fill }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── CategoryAnnualCards ──────────────────────────────────────────────────────
 
 export function CategoryAnnualCards({ entries, year }: { entries: BudgetEntry[]; year: number }) {

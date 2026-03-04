@@ -16,6 +16,8 @@ export const CATEGORIES = [
   "Entertainment","Subscriptions","Travel","Gifts","Other",
 ];
 
+export const INCOME_SOURCES = ["Salary", "Stock Market"] as const;
+
 export const RECURRENCE_MONTHS: Record<BudgetRecurrence, number> = {
   MONTHLY: 1, SEMI_ANNUAL: 6, ANNUAL: 12,
 };

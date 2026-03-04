@@ -7,17 +7,18 @@ import {
 } from "@/lib/api";
 import { Plus, Check, X, Trash2, PencilLine } from "lucide-react";
 import {
-  CATEGORIES, RECURRENCE_LABEL, RECURRENCE_MONTHS,
+  CATEGORIES, INCOME_SOURCES, RECURRENCE_LABEL, RECURRENCE_MONTHS,
   fmt, DraftRow, blankDraft, cellCls, selCls,
 } from "./BudgetHelpers";
 
 // ── EditableRow ───────────────────────────────────────────────────────────────
 
 export function EditableRow({
-  draft, isRecurring, onChange, onSave, onCancel, saving,
+  draft, isRecurring, isIncome, onChange, onSave, onCancel, saving,
 }: {
   draft: DraftRow;
   isRecurring: boolean;
+  isIncome?: boolean;
   onChange: (d: DraftRow) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -44,12 +45,19 @@ export function EditableRow({
         />
       </td>
       <td className="px-2 py-1.5">
-        <select value={draft.category} onChange={(e) => set("category", e.target.value)} className={selCls}>
-          <option value="">— category —</option>
-          {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-        </select>
+        {isIncome ? (
+          <select value={draft.category} onChange={(e) => set("category", e.target.value)} className={selCls}>
+            <option value="">— source —</option>
+            {INCOME_SOURCES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        ) : (
+          <select value={draft.category} onChange={(e) => set("category", e.target.value)} className={selCls}>
+            <option value="">— category —</option>
+            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        )}
       </td>
-      {!isRecurring && (
+      {!isRecurring && !isIncome && (
         <td className="px-2 py-1.5">
           <input
             value={draft.merchant}
@@ -59,13 +67,7 @@ export function EditableRow({
           />
         </td>
       )}
-      <td className="px-2 py-1.5 w-[110px]">
-        <select value={draft.type} onChange={(e) => set("type", e.target.value as DraftRow["type"])} className={selCls}>
-          <option value="EXPENSE">Expense</option>
-          <option value="INCOME">Income</option>
-          <option value="ASSET">Asset</option>
-        </select>
-      </td>
+
       {isRecurring && (
         <td className="px-2 py-1.5 w-[120px]">
           <select
@@ -165,11 +167,12 @@ export function EditableRow({
 // ── ReadRow ───────────────────────────────────────────────────────────────────
 
 export function ReadRow({
-  entry, displayAmount, isRecurring, onEdit, override, onResetOverride,
+  entry, displayAmount, isRecurring, isIncome, onEdit, override, onResetOverride,
 }: {
   entry: BudgetEntry;
   displayAmount: number;
   isRecurring: boolean;
+  isIncome?: boolean;
   onEdit: () => void;
   override?: BudgetOverride;
   onResetOverride?: () => void;
@@ -182,9 +185,9 @@ export function ReadRow({
   });
 
   const typeUp = entry.type?.toUpperCase();
-  const isExpense = typeUp === "EXPENSE";
-  const isIncome  = typeUp === "INCOME";
-  const amtCls = isExpense ? "text-red-400" : isIncome ? "text-emerald-400" : "text-blue-400";
+  const isExpense   = typeUp === "EXPENSE";
+  const isIncomeType = typeUp === "INCOME";
+  const amtCls = isExpense ? "text-red-400" : isIncomeType ? "text-emerald-400" : "text-blue-400";
 
   return (
     <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors group">
@@ -194,7 +197,7 @@ export function ReadRow({
       <td className="px-3 py-2.5 text-sm font-medium text-foreground">
         {entry.category || "---"}
       </td>
-      {!isRecurring && (
+      {!isRecurring && !isIncome && (
         <td className="px-3 py-2.5 text-sm text-foreground/70">
           {entry.merchant ? (
             <span className="inline-flex items-center gap-1 text-xs bg-[var(--surface-2)] border border-[var(--border)] rounded-full px-2 py-0.5">
@@ -205,15 +208,7 @@ export function ReadRow({
           )}
         </td>
       )}
-      <td className="px-3 py-2.5">
-        <span className={"inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full " + (
-          isExpense ? "bg-red-500/15 text-red-400"
-          : isIncome ? "bg-emerald-500/15 text-emerald-400"
-          : "bg-blue-500/15 text-blue-400"
-        )}>
-          {entry.type}
-        </span>
-      </td>
+
       {isRecurring && (
         <td className="px-3 py-2.5 text-xs text-foreground/50">
           {RECURRENCE_LABEL[(entry.recurrence ?? "ANNUAL") as BudgetRecurrence]}
@@ -307,6 +302,7 @@ export function Section({
   overrides: BudgetOverride[];
   typeFilter?: "INCOME" | "EXPENSE";
 }) {
+  const isIncome = typeFilter === "INCOME";
   const qc = useQueryClient();
   const [drafts, setDrafts]       = useState<DraftRow[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -424,9 +420,8 @@ export function Section({
           <thead>
             <tr className="text-[11px] font-semibold text-foreground/40 uppercase tracking-wider border-b border-[var(--border)]">
               <th className="px-3 py-2 text-left w-[115px]">Date</th>
-              <th className="px-3 py-2 text-left">Category</th>
-              {!isRecurring && <th className="px-3 py-2 text-left w-[140px]">Merchant</th>}
-              <th className="px-3 py-2 text-left w-[110px]">Type</th>
+              <th className="px-3 py-2 text-left">{isIncome ? "Source" : "Category"}</th>
+              {!isRecurring && !isIncome && <th className="px-3 py-2 text-left w-[140px]">Merchant</th>}
               {isRecurring && <th className="px-3 py-2 text-left w-[120px]">Frequency</th>}
               {isRecurring && <th className="px-3 py-2 text-left w-[110px]" title="Leave blank for indefinite">Ends</th>}
               <th className="px-3 py-2 text-right w-[120px]">Amount</th>
@@ -441,6 +436,7 @@ export function Section({
                   key={entry.id}
                   draft={editDraft}
                   isRecurring={isRecurring}
+                  isIncome={isIncome}
                   onChange={setEditDraft}
                   onSave={saveEdit}
                   onCancel={() => { setEditingId(null); setEditDraft(null); }}
@@ -452,6 +448,7 @@ export function Section({
                   entry={entry}
                   displayAmount={displayAmount}
                   isRecurring={isRecurring}
+                  isIncome={isIncome}
                   onEdit={() => startEdit(entry)}
                   override={override}
                   onResetOverride={override?.id ? () => resetOverrideMut.mutate(override.id!) : undefined}
@@ -464,6 +461,7 @@ export function Section({
                 key={"new-" + idx}
                 draft={d}
                 isRecurring={isRecurring}
+                isIncome={isIncome}
                 onChange={(nd) => setDrafts((p) => p.map((r, i) => i === idx ? nd : r))}
                 onSave={() => saveDraft(idx)}
                 onCancel={() => setDrafts((p) => p.filter((_, i) => i !== idx))}

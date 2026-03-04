@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, TrendingUp, Zap, Repeat } from "lucide-react
 import { Section } from "@/components/budget/BudgetSection";
 import {
   SavingsRate, TopCategoriesBar, IncomeExpenseSplit, ExpensePieChart, TrendChart,
+  CashFlowWaterfall, FixedVsVariableDonut,
 } from "@/components/budget/BudgetCharts";
 import { AnnualSummary } from "@/components/budget/BudgetAnnualSummary";
 import { CCSection, StatCard } from "@/components/budget/CCSection";
@@ -193,70 +194,93 @@ export default function BudgetPage() {
           </div>
 
           {/* Charts */}
-          {pieData.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
-              <ExpensePieChart pieData={pieData} />
-              <TopCategoriesBar pieData={pieData} />
-              <IncomeExpenseSplit
-                income={stats.income}
-                expense={stats.expense + ccMonthTotal}
-                fixedExp={stats.fixedExp}
-                floatExp={stats.expense - stats.fixedExp + ccMonthTotal}
-              />
-            </div>
+          {(pieData.length > 0 || stats.income > 0) && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <ExpensePieChart pieData={pieData} />
+                <TopCategoriesBar pieData={pieData} />
+                <IncomeExpenseSplit
+                  income={stats.income}
+                  expense={stats.expense + ccMonthTotal}
+                  fixedExp={stats.fixedExp}
+                  floatExp={stats.expense - stats.fixedExp + ccMonthTotal}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                <CashFlowWaterfall
+                  income={stats.income}
+                  pieData={pieData}
+                  ccTotal={ccMonthTotal}
+                />
+                <FixedVsVariableDonut
+                  income={stats.income}
+                  fixedExp={stats.fixedExp}
+                  floatExp={stats.expense - stats.fixedExp}
+                  ccTotal={ccMonthTotal}
+                  net={stats.income - stats.expense - ccMonthTotal}
+                />
+              </div>
+            </>
           )}
 
-          {/* Budget sections */}
-          <div className="flex flex-col gap-5">
-            <Section
-              title="Income"
-              icon={<TrendingUp size={14} />}
-              accentCls="text-emerald-400"
-              rows={incomeRows}
-              isRecurring={false}
-              currentMonth={currentMonth}
-              overrides={allOverrides}
-              typeFilter="INCOME"
-            />
-            <Section
-              title="One-off / Floating"
-              icon={<Zap size={14} />}
-              accentCls="text-amber-400"
-              rows={floating}
-              isRecurring={false}
-              currentMonth={currentMonth}
-              overrides={allOverrides}
-            />
-            <Section
-              title="Recurring / Fixed"
-              icon={<Repeat size={14} />}
-              accentCls="text-purple-400"
-              rows={recurring}
-              isRecurring={true}
-              currentMonth={currentMonth}
-              overrides={allOverrides}
-            />
+          {/* Budget sections — 2-column layout at lg: left = Income + One-off, right = Recurring + CC */}
+          <div className="flex flex-col lg:flex-row gap-5 items-start mb-5">
+
+            {/* Left column */}
+            <div className="w-full lg:w-1/2 flex flex-col gap-5">
+              <Section
+                title="Income"
+                icon={<TrendingUp size={14} />}
+                accentCls="text-emerald-400"
+                rows={incomeRows}
+                isRecurring={false}
+                currentMonth={currentMonth}
+                overrides={allOverrides}
+                typeFilter="INCOME"
+              />
+              <Section
+                title="One-off / Floating"
+                icon={<Zap size={14} />}
+                accentCls="text-amber-400"
+                rows={floating}
+                isRecurring={false}
+                currentMonth={currentMonth}
+                overrides={allOverrides}
+              />
+            </div>
+
+            {/* Right column */}
+            <div className="w-full lg:w-1/2 flex flex-col gap-5">
+              <Section
+                title="Recurring / Fixed"
+                icon={<Repeat size={14} />}
+                accentCls="text-purple-400"
+                rows={recurring}
+                isRecurring={true}
+                currentMonth={currentMonth}
+                overrides={allOverrides}
+              />
+              <CCSection
+                currentMonth={currentMonth}
+                title="Credit Cards"
+                accentColor="text-blue-400"
+                cardFilter={(r) => !!r.card_name && !r.card_name.toLowerCase().startsWith("robinhood")}
+                datalistId="cc-other-names"
+              />
+            </div>
+
           </div>
 
-          {/* CC sections */}
-          <div className="flex flex-col gap-5 mt-5">
-            <CCSection
-              currentMonth={currentMonth}
-              title="Robinhood Gold"
-              accentColor="text-rose-400"
-              cardFilter={(r) => !r.card_name || r.card_name.toLowerCase().startsWith("robinhood")}
-              defaultCard="Robinhood Gold"
-              datalistId="cc-rh-names"
-              fixedWeeks
-            />
-            <CCSection
-              currentMonth={currentMonth}
-              title="Credit Cards"
-              accentColor="text-blue-400"
-              cardFilter={(r) => !!r.card_name && !r.card_name.toLowerCase().startsWith("robinhood")}
-              datalistId="cc-other-names"
-            />
-          </div>
+          {/* Robinhood Gold — full width below */}
+          <CCSection
+            currentMonth={currentMonth}
+            title="Robinhood Gold"
+            accentColor="text-rose-400"
+            cardFilter={(r) => !r.card_name || r.card_name.toLowerCase().startsWith("robinhood")}
+            defaultCard="Robinhood Gold"
+            datalistId="cc-rh-names"
+            fixedWeeks
+          />
         </>
       )}
 

@@ -166,7 +166,7 @@ web/components/
   budget/        # 5 component files split from budget/page.tsx (v2.5.0)
     BudgetHelpers.ts        # Constants, formatters, monthKey/Label, recurringAppliesToMonth
     BudgetSection.tsx       # EditableRow, ReadRow, Section (override/mutation logic)
-    BudgetCharts.tsx        # TrendChart, SavingsRate, TopCategoriesBar, IncomeExpenseSplit, ExpensePieChart, CategoryAnnualCards
+    BudgetCharts.tsx        # TrendChart, SavingsRate, TopCategoriesBar, IncomeExpenseSplit, ExpensePieChart, CashFlowWaterfall, FixedVsVariableDonut, CategoryAnnualCards
     BudgetAnnualSummary.tsx # AnnualSummary (12-month table)
     CCSection.tsx           # CCSection, StatCard, CCEditRow, CCReadRow
 web/lib/
@@ -209,6 +209,7 @@ source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_
 
 | Version | What |
 |---------|------|
+| v2.5.3 | Budget: Income rows → Source dropdown (Salary/Stock Market), no Merchant, no Type. Type column removed from all 3 budget sections. 2-column page layout (Income+One-off left, Recurring+CC right). Robinhood Gold week cards redesign + flush stat tiles. Two new charts: CashFlowWaterfall + FixedVsVariableDonut in 50/50 row. |
 | v2.5.2 | Dashboard: removed portfolio balance chart. Performance tab: 52-Friday skeleton chart, vertical x-axis labels, side-by-side accumulation+projection, streak bar sparkline, compact week-by-week rows. Budget TrendChart rewritten as AreaChart with gradient fills + Net line. |
 | v2.5.1 | UI polish: recharts area+bar charts side-by-side in AccountTab (52-week scaffold, $1k Y ticks, newest-first table); Expense Mix pie redesign; dark-mode tooltip fix across all budget charts. |
 | v2.5.0 | Split trades/page.tsx (3612→134 lines) into 13 components; split budget/page.tsx (1679→272 lines) into 5 components. Fixed buy_date bug in PositionForm. |
