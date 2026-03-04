@@ -1,8 +1,11 @@
+"""backend_api/schemas.py — Pydantic v2 request/response models."""
 from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
 
 class AuthSignupRequest(BaseModel):
     username: str = Field(min_length=1)
@@ -21,52 +24,12 @@ class AuthResponse(BaseModel):
     user_id: int
     username: str
     role: str = "user"
-    role: str = "user"
 
 
 class AuthMeResponse(BaseModel):
     user_id: int
     username: str
     role: str = "user"
-
-
-class AdminUserOut(BaseModel):
-    user_id: int
-    username: str
-    role: str
-    is_active: bool
-    created_at: Optional[datetime] = None
-
-
-class AdminCreateUserRequest(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=6)
-    role: str = Field(default="user", pattern="^(admin|user)$")
-
-
-class AdminPatchUserRequest(BaseModel):
-    role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
-    is_active: Optional[bool] = None
-    role: str = "user"
-
-
-class AdminUserOut(BaseModel):
-    user_id: int
-    username: str
-    role: str
-    is_active: bool
-    created_at: Optional[datetime] = None
-
-
-class AdminCreateUserRequest(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=6)
-    role: str = Field(default="user", pattern="^(admin|user)$")
-
-
-class AdminPatchUserRequest(BaseModel):
-    role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
-    is_active: Optional[bool] = None
 
 
 class AuthChangePasswordRequest(BaseModel):
@@ -99,6 +62,31 @@ class AuthSessionOut(BaseModel):
     expires_at: Optional[datetime] = None
 
 
+# ── Admin ─────────────────────────────────────────────────────────────────────
+
+class AdminUserOut(BaseModel):
+    user_id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+
+class AdminCreateUserRequest(BaseModel):
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=6)
+    role: str = Field(default="user", pattern="^(admin|user)$")
+
+
+class AdminPatchUserRequest(BaseModel):
+    username: Optional[str] = Field(default=None, min_length=1)
+    password: Optional[str] = Field(default=None, min_length=6)
+    role: Optional[str] = Field(default=None, pattern="^(admin|user)$")
+    is_active: Optional[bool] = None
+
+
+# ── Accounts & Holdings ───────────────────────────────────────────────────────
+
 class AccountCreateRequest(BaseModel):
     name: str = Field(min_length=1)
     broker: Optional[str] = None
@@ -127,6 +115,8 @@ class HoldingOut(BaseModel):
     avg_cost: Optional[float] = None
     updated_at: Optional[datetime] = None
 
+
+# ── Orders ────────────────────────────────────────────────────────────────────
 
 class OrderCreateRequest(BaseModel):
     symbol: str = Field(min_length=1)
@@ -163,6 +153,8 @@ class OrderOut(BaseModel):
     last_synced_at: Optional[datetime] = None
 
 
+# ── Trades ────────────────────────────────────────────────────────────────────
+
 class TradeCreateRequest(BaseModel):
     symbol: str
     instrument: str
@@ -198,6 +190,8 @@ class TradeOut(BaseModel):
     entry_price: Optional[float] = None
     entry_date: Optional[datetime] = None
 
+
+# ── Cash & Budget ─────────────────────────────────────────────────────────────
 
 class CashCreateRequest(BaseModel):
     action: str
@@ -253,6 +247,8 @@ class BudgetOverrideOut(BaseModel):
     amount: float
     description: Optional[str] = None
 
+
+# ── Credit Cards ──────────────────────────────────────────────────────────────
 
 class CreditCardWeekRequest(BaseModel):
     week_start: datetime

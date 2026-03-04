@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import hashlib
 import hmac
@@ -6,6 +7,8 @@ import secrets
 from datetime import datetime, timezone
 from datetime import timedelta
 from sqlalchemy.orm import sessionmaker
+
+_logger = logging.getLogger("optionflow.services")
 
 from brokers import broker_enabled as _broker_enabled
 from brokers import get_broker
@@ -2085,7 +2088,7 @@ def close_trade(trade_id, exit_price, exit_date=None, user_id=None):
         return True
     except Exception as e:
         session.rollback()
-        print(f"Error closing trade: {e}")
+        _logger.error("Error closing trade: %s", e)
         return False
     finally:
         session.close()
@@ -2126,7 +2129,7 @@ def delete_trade(trade_id, user_id=None):
         return False
     except Exception as e:
         session.rollback()
-        print(f"Error deleting trade: {e}")
+        _logger.error("Error deleting trade: %s", e)
         return False
     finally:
         session.close()
@@ -2192,7 +2195,7 @@ def update_trade(trade_id, symbol, strategy, action, qty, price, date, user_id=N
         return False
     except Exception as e:
         session.rollback()
-        print(f"Error updating trade: {e}")
+        _logger.error("Error updating trade: %s", e)
         return False
     finally:
         session.close()

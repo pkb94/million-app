@@ -70,12 +70,19 @@ from .schemas import (
     OrderOut,
     BudgetCreateRequest,
     BudgetOut,
+    BudgetOverrideRequest,
+    BudgetOverrideOut,
+    CreditCardWeekRequest,
+    CreditCardWeekOut,
     CashCreateRequest,
     CashOut,
     TradeCloseRequest,
     TradeCreateRequest,
     TradeOut,
     TradeUpdateRequest,
+    AdminUserOut,
+    AdminCreateUserRequest,
+    AdminPatchUserRequest,
 )
 from .security import create_access_token, decode_token
 
@@ -293,12 +300,9 @@ def get_current_user(
         payload = decode_token(creds.credentials)
         if "sub" not in payload:
             raise ValueError("missing sub")
-        # Optional but recommended: check revocation list.
         jti = str(payload.get("jti") or "").strip()
         if jti and services.is_token_revoked(jti=jti):
             raise HTTPException(status_code=401, detail="Token has been revoked")
-
-        # Invalidate tokens issued before the user's cutoff (logout-everywhere / password change).
         token_iat = int(payload.get("iat") or 0)
         if not services.is_token_time_valid(user_id=int(payload["sub"]), token_iat=token_iat):
             raise HTTPException(status_code=401, detail="Token is no longer valid. Please sign in again.")
@@ -307,6 +311,12 @@ def get_current_user(
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def require_admin(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+    if str(user.get("role") or "user") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 @app.get("/health")
@@ -564,7 +574,6 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
     ip = getattr(getattr(request, "client", None), "host", None)
     ua = request.headers.get("user-agent")
 
-    # Throttle repeated failed logins per (username, ip).
     try:
         if services.is_login_rate_limited(username=username, ip=str(ip) if ip else None):
             services.log_auth_event(event_type="login_throttled", success=False, username=username, ip=str(ip) if ip else None, user_agent=ua)
@@ -572,11 +581,10 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
     except HTTPException:
         raise
     except Exception:
-        # Best-effort; never block login if limiter fails.
         pass
 
-    user_id = services.authenticate_user(username, req.password)
-    if not user_id:
+    auth_result = services.authenticate_user(username, req.password)
+    if not auth_result:
         services.log_auth_event(
             event_type="login",
             success=False,
@@ -586,10 +594,12 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
             detail="invalid credentials",
         )
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = create_access_token(subject=str(user_id), extra={"username": username})
+    user_id = auth_result["user_id"]
+    role = auth_result.get("role", "user")
+    token = create_access_token(subject=str(user_id), extra={"username": username, "role": role})
     refresh_token = services.create_refresh_token(user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
     services.log_auth_event(event_type="login", success=True, username=username, user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
-    return AuthResponse(access_token=token, refresh_token=refresh_token, user_id=int(user_id), username=username)
+    return AuthResponse(access_token=token, refresh_token=refresh_token, user_id=int(user_id), username=username, role=role)
 
 
 @app.post("/auth/refresh", response_model=AuthResponse)
@@ -612,13 +622,15 @@ def refresh(req: AuthRefreshRequest, request: Request) -> AuthResponse:
     user_id, new_refresh_token = rotated
     u = services.get_user(int(user_id))
     username = str(getattr(u, "username", "") or "") if u is not None else ""
-    token = create_access_token(subject=str(user_id), extra={"username": username})
+    role = str(getattr(u, "role", None) or "user") if u is not None else "user"
+    token = create_access_token(subject=str(user_id), extra={"username": username, "role": role})
     services.log_auth_event(event_type="refresh", success=True, username=username, user_id=int(user_id), ip=str(ip) if ip else None, user_agent=ua)
     return AuthResponse(
         access_token=token,
         refresh_token=new_refresh_token,
         user_id=int(user_id),
         username=username,
+        role=role,
     )
 
 
@@ -643,11 +655,12 @@ def auth_events(user=Depends(get_current_user)) -> List[AuthEventOut]:
 def me(user=Depends(get_current_user)) -> AuthMeResponse:
     user_id = int(user["sub"])
     username = str(user.get("username") or "")
-    # Prefer DB value if present.
+    role = str(user.get("role") or "user")
     u = services.get_user(user_id)
     if u is not None:
         username = str(getattr(u, "username", username) or username)
-    return AuthMeResponse(user_id=user_id, username=username)
+        role = str(getattr(u, "role", None) or role)
+    return AuthMeResponse(user_id=user_id, username=username, role=role)
 
 
 @app.post("/auth/logout")
@@ -1017,6 +1030,236 @@ def delete_trade(trade_id: int, user=Depends(get_current_user)) -> Dict[str, str
     return {"status": "ok"}
 
 
+# ── Weekly Options Portfolio ──────────────────────────────────────────────────
+
+@app.get("/portfolio/weeks", response_model=List[Dict[str, Any]])
+def list_weeks(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.portfolio import list_weeks as _list_weeks
+    return _list_weeks(user_id=int(user["sub"]))
+
+
+@app.post("/portfolio/weeks", response_model=Dict[str, Any])
+def get_or_create_week(body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Pass {"for_date": "YYYY-MM-DD"} or {} to get/create the current week."""
+    from logic.portfolio import get_or_create_week as _get_or_create, _parse_dt
+    for_date = _parse_dt(body.get("for_date"))
+    return _get_or_create(user_id=int(user["sub"]), for_date=for_date)
+
+
+@app.get("/portfolio/weeks/{week_id}", response_model=Dict[str, Any])
+def get_week(week_id: int, user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import get_week as _get_week
+    w = _get_week(user_id=int(user["sub"]), week_id=week_id)
+    if w is None:
+        raise HTTPException(status_code=404, detail="Week not found")
+    return w
+
+
+@app.patch("/portfolio/weeks/{week_id}", response_model=Dict[str, Any])
+def update_week(week_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import update_week as _update_week
+    try:
+        return _update_week(
+            user_id=int(user["sub"]),
+            week_id=week_id,
+            account_value=body.get("account_value"),
+            notes=body.get("notes"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/portfolio/weeks/{week_id}/complete", response_model=Dict[str, Any])
+def mark_week_complete(week_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import mark_week_complete as _complete
+    try:
+        return _complete(
+            user_id=int(user["sub"]),
+            week_id=week_id,
+            account_value=body.get("account_value"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/portfolio/weeks/{week_id}/reopen", response_model=Dict[str, Any])
+def reopen_week(week_id: int, user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import reopen_week as _reopen
+    try:
+        return _reopen(user_id=int(user["sub"]), week_id=week_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/portfolio/weeks/{week_id}/positions", response_model=List[Dict[str, Any]])
+def list_positions(week_id: int, user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.portfolio import list_positions as _list_positions
+    return _list_positions(user_id=int(user["sub"]), week_id=week_id)
+
+
+@app.post("/portfolio/weeks/{week_id}/positions", response_model=Dict[str, Any])
+def create_position(week_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import create_position as _create
+    try:
+        return _create(user_id=int(user["sub"]), week_id=week_id, data=body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/portfolio/positions/{position_id}", response_model=Dict[str, Any])
+def update_position(position_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import update_position as _update
+    from logic.holdings import apply_position_status_change as _apply_holding
+    try:
+        result = _update(user_id=int(user["sub"]), position_id=position_id, data=body)
+        # Fire holding trigger automatically when status changes
+        if "status" in body:
+            try:
+                _apply_holding(
+                    user_id=int(user["sub"]),
+                    position_id=position_id,
+                    new_status=body["status"],
+                )
+            except Exception:
+                pass  # holding trigger errors never break the position update
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/portfolio/positions/{position_id}")
+def delete_position(position_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
+    from logic.portfolio import delete_position as _delete
+    try:
+        _delete(user_id=int(user["sub"]), position_id=position_id)
+        return {"status": "ok"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/portfolio/positions/{position_id}/assign", response_model=Dict[str, Any])
+def create_assignment(position_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import create_assignment as _assign
+    try:
+        return _assign(user_id=int(user["sub"]), position_id=position_id, data=body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/portfolio/positions/{position_id}/assignment", response_model=Dict[str, Any])
+def get_assignment(position_id: int, user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import get_assignment_for_position as _get_assign
+    a = _get_assign(user_id=int(user["sub"]), position_id=position_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="No assignment found")
+    return a
+
+
+@app.patch("/portfolio/assignments/{assignment_id}", response_model=Dict[str, Any])
+def update_assignment(assignment_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import update_assignment as _update_assign
+    try:
+        return _update_assign(user_id=int(user["sub"]), assignment_id=assignment_id, data=body)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/portfolio/summary", response_model=Dict[str, Any])
+def portfolio_summary(user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.portfolio import portfolio_summary as _summary
+    return _summary(user_id=int(user["sub"]))
+
+
+@app.get("/portfolio/symbols", response_model=List[Dict[str, Any]])
+def symbol_summary(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.portfolio import symbol_summary as _sym_summary
+    return _sym_summary(user_id=int(user["sub"]))
+
+
+# ── Stock Holdings ────────────────────────────────────────────────────────────
+
+@app.get("/portfolio/holdings", response_model=List[Dict[str, Any]])
+def list_holdings(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.holdings import list_holdings as _list
+    return _list(user_id=int(user["sub"]))
+
+
+@app.post("/portfolio/holdings", response_model=Dict[str, Any])
+def create_holding(body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.holdings import create_holding as _create
+    try:
+        return _create(user_id=int(user["sub"]), data=body)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/portfolio/holdings/seed-from-positions", response_model=Dict[str, Any])
+def seed_holdings_from_positions(user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Create one StockHolding per unlinked symbol using strike as cost basis,
+    then link each position's holding_id back to the new (or existing) holding."""
+    from logic.holdings import seed_holdings_from_positions as _seed
+    return _seed(user_id=int(user["sub"]))
+
+
+@app.post("/portfolio/holdings/recalculate", response_model=Dict[str, Any])
+def recalculate_holdings(user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Repair adjusted_cost_basis for all holdings by replaying event history
+    from cost_basis. Safe to call repeatedly (idempotent)."""
+    from logic.holdings import recalculate_all_holdings as _recalc
+    return _recalc(user_id=int(user["sub"]))
+
+
+@app.post("/portfolio/holdings/sync-ledger", response_model=Dict[str, Any])
+def sync_premium_ledger(user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Rebuild all PremiumLedger rows from existing OptionPosition data.
+    Idempotent — safe to call anytime. Also re-syncs adj_basis on all holdings."""
+    from logic.premium_ledger import sync_ledger_from_positions as _sync
+    from logic.holdings import recalculate_all_holdings as _recalc
+    sync_result = _sync(user_id=int(user["sub"]))
+    recalc_result = _recalc(user_id=int(user["sub"]))
+    return {"synced_rows": sync_result["upserted"], "updated_holdings": recalc_result["updated"]}
+
+
+@app.get("/portfolio/premium-dashboard", response_model=Dict[str, Any])
+def get_premium_dashboard(user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Full premium dashboard: by-symbol + by-week breakdown of all collected premium."""
+    from logic.premium_ledger import get_premium_dashboard as _dash
+    return _dash(user_id=int(user["sub"]))
+
+
+@app.get("/portfolio/holdings/{holding_id}/premium-ledger", response_model=Dict[str, Any])
+def get_holding_premium_ledger(holding_id: int, user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Return the full premium ledger (all option positions) for a single holding."""
+    from logic.premium_ledger import get_premium_summary as _summary
+    return _summary(holding_id=holding_id)
+
+
+@app.patch("/portfolio/holdings/{holding_id}", response_model=Dict[str, Any])
+def update_holding(holding_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+    from logic.holdings import update_holding as _update
+    try:
+        return _update(user_id=int(user["sub"]), holding_id=holding_id, data=body)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+
+@app.delete("/portfolio/holdings/{holding_id}")
+def delete_holding(holding_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
+    from logic.holdings import delete_holding as _delete
+    try:
+        _delete(user_id=int(user["sub"]), holding_id=holding_id)
+        return {"status": "ok"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/portfolio/holdings/{holding_id}/events", response_model=List[Dict[str, Any]])
+def list_holding_events(holding_id: int, user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    from logic.holdings import list_holding_events as _events
+    return _events(user_id=int(user["sub"]), holding_id=holding_id)
+
+
 @app.get("/cash", response_model=List[Dict[str, Any]])
 def list_cash(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
     _, cash, _ = services.load_data(user_id=int(user["sub"]))
@@ -1044,7 +1287,105 @@ def list_budget(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
 
 @app.post("/budget")
 def create_budget(req: BudgetCreateRequest, user=Depends(get_current_user)) -> Dict[str, str]:
-    services.save_budget(req.category, req.type, req.amount, req.date, req.description, user_id=int(user["sub"]))
+    services.save_budget(
+        req.category, req.type, req.amount, req.date, req.description,
+        user_id=int(user["sub"]),
+        entry_type=req.entry_type,
+        recurrence=req.recurrence,
+        merchant=req.merchant,
+        active_until=req.active_until,
+    )
+    return {"status": "ok"}
+
+
+@app.patch("/budget/{budget_id}")
+def patch_budget(budget_id: int, req: BudgetCreateRequest, user=Depends(get_current_user)) -> Dict[str, str]:
+    services.update_budget(
+        budget_id, user_id=int(user["sub"]),
+        category=req.category,
+        type=req.type,
+        entry_type=req.entry_type,
+        recurrence=req.recurrence,
+        amount=req.amount,
+        date=req.date,
+        description=req.description,
+        merchant=req.merchant,
+        active_until=req.active_until,
+    )
+    return {"status": "ok"}
+
+
+@app.delete("/budget/{budget_id}")
+def remove_budget(budget_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
+    uid = int(user["sub"])
+    services.delete_budget_overrides_for_entry(budget_id, user_id=uid)
+    services.delete_budget(budget_id, user_id=uid)
+    return {"status": "ok"}
+
+
+# ── Budget Overrides ──────────────────────────────────────────────────────────
+
+@app.get("/budget-overrides", response_model=List[Dict[str, Any]])
+def list_overrides(user=Depends(get_current_user)):
+    return services.list_budget_overrides(user_id=int(user["sub"]))
+
+
+@app.post("/budget-overrides", response_model=Dict[str, Any])
+def upsert_override(req: BudgetOverrideRequest, user=Depends(get_current_user)):
+    oid = services.upsert_budget_override(
+        user_id=int(user["sub"]),
+        budget_id=req.budget_id,
+        month_key=req.month_key,
+        amount=req.amount,
+        description=req.description,
+    )
+    return {"id": oid}
+
+
+@app.delete("/budget-overrides/{override_id}")
+def delete_override(override_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
+    services.delete_budget_override(override_id, user_id=int(user["sub"]))
+    return {"status": "ok"}
+
+
+# ── Credit Card Weeks ─────────────────────────────────────────────────────────
+
+@app.get("/credit-card/weeks", response_model=List[Dict[str, Any]])
+def list_cc_weeks(user=Depends(get_current_user)):
+    return services.list_credit_card_weeks(user_id=int(user["sub"]))
+
+
+@app.post("/credit-card/weeks", response_model=Dict[str, Any])
+def create_cc_week(req: CreditCardWeekRequest, user=Depends(get_current_user)):
+    row_id = services.create_credit_card_week(
+        user_id=int(user["sub"]),
+        week_start=req.week_start,
+        balance=req.balance,
+        squared_off=req.squared_off,
+        paid_amount=req.paid_amount,
+        note=req.note,
+        card_name=req.card_name,
+    )
+    return {"id": row_id, "status": "ok"}
+
+
+@app.patch("/credit-card/weeks/{row_id}", response_model=Dict[str, str])
+def patch_cc_week(row_id: int, req: CreditCardWeekRequest, user=Depends(get_current_user)):
+    services.update_credit_card_week(
+        row_id, user_id=int(user["sub"]),
+        week_start=req.week_start,
+        balance=req.balance,
+        squared_off=req.squared_off,
+        paid_amount=req.paid_amount,
+        note=req.note,
+        card_name=req.card_name,
+    )
+    return {"status": "ok"}
+
+
+@app.delete("/credit-card/weeks/{row_id}", response_model=Dict[str, str])
+def delete_cc_week(row_id: int, user=Depends(get_current_user)):
+    services.delete_credit_card_week(row_id, user_id=int(user["sub"]))
     return {"status": "ok"}
 
 
@@ -1056,6 +1397,9 @@ def ledger_cash_balance(user=Depends(get_current_user)) -> Dict[str, Any]:
 
 _STOCK_INFO_CACHE: dict[str, tuple[float, Any]] = {}
 _STOCK_INFO_TTL = 300  # 5 minutes — fundamentals don't change quickly
+
+_QUOTE_CACHE: dict[str, tuple[float, float]] = {}  # sym -> (fetched_at, price)
+_QUOTE_TTL = 60  # 60 seconds — live price cache
 
 @app.get("/stocks/{symbol}/info", response_model=Dict[str, Any])
 def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
@@ -1164,6 +1508,33 @@ def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
     except Exception as exc:
         err: Dict[str, Any] = {"symbol": sym, "error": str(exc)}
         return err
+
+
+@app.get("/quote/{symbol}", response_model=Dict[str, Any])
+def get_live_quote(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
+    """Return the live/delayed price for a ticker via yfinance fast_info.
+    Cached for 60 seconds to avoid hammering the API on rapid form interactions.
+    """
+    import yfinance as yf
+    sym = symbol.strip().upper()
+    now = time.monotonic()
+    cached = _QUOTE_CACHE.get(sym)
+    if cached and (now - cached[0]) < _QUOTE_TTL:
+        return {"symbol": sym, "price": cached[1], "from_cache": True}
+    try:
+        ticker = yf.Ticker(sym)
+        fi = ticker.fast_info
+        price = float(getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None) or 0.0)
+        if price <= 0:
+            hist = ticker.history(period="1d", progress=False)
+            if not hist.empty:
+                price = float(hist["Close"].iloc[-1])
+        if price <= 0:
+            return {"symbol": sym, "price": None, "error": "Price unavailable"}
+        _QUOTE_CACHE[sym] = (now, price)
+        return {"symbol": sym, "price": round(price, 4), "from_cache": False}
+    except Exception as exc:
+        return {"symbol": sym, "price": None, "error": str(exc)}
 
 
 @app.get("/stocks/{symbol}/history", response_model=Dict[str, Any])
@@ -1287,3 +1658,77 @@ def ledger_entries(user=Depends(get_current_user), limit: int = 100) -> List[Dic
                 rec[k] = pd.to_datetime(v).to_pydatetime().isoformat()
         cleaned.append(rec)
     return cleaned
+
+
+# ── Admin endpoints ───────────────────────────────────────────────────────────
+
+@app.get("/admin/users", response_model=List[AdminUserOut])
+def admin_list_users(_admin=Depends(require_admin)) -> List[AdminUserOut]:
+    users = services.list_all_users()
+    return [
+        AdminUserOut(
+            user_id=int(u.id),
+            username=str(u.username or ""),
+            role=str(getattr(u, "role", None) or "user"),
+            is_active=bool(getattr(u, "is_active", True)),
+            created_at=getattr(u, "created_at", None),
+        )
+        for u in users
+    ]
+
+
+@app.post("/admin/users", response_model=AdminUserOut, status_code=201)
+def admin_create_user(req: AdminCreateUserRequest, _admin=Depends(require_admin)) -> AdminUserOut:
+    try:
+        user_id = services.create_user(req.username, req.password, role=req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    u = services.get_user(int(user_id))
+    return AdminUserOut(
+        user_id=int(user_id),
+        username=str(req.username).strip().lower(),
+        role=req.role,
+        is_active=True,
+        created_at=getattr(u, "created_at", None),
+    )
+
+
+@app.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: int, admin=Depends(require_admin)) -> None:
+    if int(admin["sub"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        services.delete_user_admin(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: int, admin=Depends(require_admin)) -> None:
+    if int(admin["sub"]) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    try:
+        services.delete_user_admin(user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.patch("/admin/users/{user_id}", response_model=AdminUserOut)
+def admin_patch_user(user_id: int, req: AdminPatchUserRequest, admin=Depends(require_admin)) -> AdminUserOut:
+    # Prevent admin from demoting themselves
+    if int(admin["sub"]) == user_id and req.role == "user":
+        raise HTTPException(status_code=400, detail="Cannot remove your own admin role")
+    try:
+        services.patch_user_admin(user_id, role=req.role, is_active=req.is_active)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    u = services.get_user(user_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return AdminUserOut(
+        user_id=int(u.id),
+        username=str(u.username or ""),
+        role=str(getattr(u, "role", None) or "user"),
+        is_active=bool(getattr(u, "is_active", True)),
+        created_at=getattr(u, "created_at", None),
+    )
