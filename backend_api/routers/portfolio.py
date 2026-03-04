@@ -32,7 +32,7 @@ from logic.portfolio import (
     update_assignment,
     update_position,
     update_week,
-    _parse_dt,
+    parse_dt,
 )
 from logic.premium_ledger import get_premium_dashboard, get_premium_summary, sync_ledger_from_positions
 from ..deps import get_current_user
@@ -50,7 +50,7 @@ def list_weeks_route(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
 
 @router.post("/weeks", response_model=Dict[str, Any])
 def get_or_create_week_route(body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
-    for_date = _parse_dt(body.get("for_date"))
+    for_date = parse_dt(body.get("for_date"))
     return get_or_create_week(user_id=int(user["sub"]), for_date=for_date)
 
 

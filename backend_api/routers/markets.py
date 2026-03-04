@@ -180,7 +180,7 @@ def net_flow_history(
     ]
 
 
-@router.get("/market/quotes")
+@router.get("/market/quotes")  # intentionally unauthenticated — used by Next.js server-side renders
 def market_quotes(symbols: str) -> List[Dict[str, Any]]:
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     if not syms or len(syms) > 25:

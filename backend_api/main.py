@@ -11,14 +11,17 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
-from database.models import init_db
+from database.models import init_db, get_users_session
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,12 +49,26 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# ── Lifespan ──────────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Run startup tasks before yield; shutdown tasks after."""
+    from .state import _init_flow_db, _background_poller
+
+    init_db()
+    _init_flow_db()
+    threading.Thread(target=_background_poller, daemon=True, name="gex-poller").start()
+    logger.info("OptionFlow API v2.2.0 started — GEX poller running")
+    yield
+    # (shutdown: nothing to clean up — poller is a daemon thread)
+
 
 app = FastAPI(
     title="OptionFlow API",
-    version="2.0.0",
+    version="2.2.0",
     description="Option flow, portfolio, budget and market data API.",
+    lifespan=_lifespan,
 )
 
 _cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "*")
@@ -102,19 +119,16 @@ app.include_router(markets.router)
 app.include_router(admin.router)
 
 
-# ── Startup ───────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-def _startup() -> None:
-    import threading
-    from .state import _init_flow_db, _background_poller
-
-    init_db()
-    _init_flow_db()
-    threading.Thread(target=_background_poller, daemon=True, name="gex-poller").start()
-    logger.info("OptionFlow API v2 started — GEX poller running")
-
-
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/health", tags=["meta"])
 def health() -> Dict[str, Any]:
-    return {"status": "ok"}
+    """Liveness + readiness probe: pings the users DB."""
+    session = get_users_session()
+    try:
+        session.execute(text("SELECT 1"))
+        return {"status": "ok", "db": "ok"}
+    except Exception as exc:
+        logger.error("Health check DB ping failed: %s", exc)
+        return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
+    finally:
+        session.close()

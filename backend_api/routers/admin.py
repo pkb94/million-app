@@ -13,9 +13,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/users", response_model=List[schemas.AdminUserOut])
-def admin_list_users(_admin=Depends(require_admin)) -> List[Dict[str, Any]]:
+def admin_list_users(_admin=Depends(require_admin)) -> List[schemas.AdminUserOut]:
     """Return all users (admin only)."""
-    return services.list_users()
+    return [schemas.AdminUserOut.model_validate(u) for u in services.list_users()]
 
 
 @router.post("/users", response_model=schemas.AdminUserOut, status_code=201)
@@ -32,7 +32,7 @@ def admin_create_user(
         password=body.password,
         role=body.role or "user",
     )
-    return user
+    return schemas.AdminUserOut.model_validate(user)
 
 
 @router.delete("/users/{user_id}", status_code=204)
@@ -64,4 +64,4 @@ def admin_patch_user(
     user = services.update_user(user_id=user_id, **updates)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return schemas.AdminUserOut.model_validate(user)

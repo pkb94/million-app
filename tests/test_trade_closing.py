@@ -1,16 +1,22 @@
 from logic import services
 
 
+def _uid():
+    """Create a fresh user and return their user_id for trade tests."""
+    return services.create_user("trade_tester", "GoodPassword12")
+
+
 def test_close_trade_records_exit_and_realized_pnl(db_engine_and_session):
+    uid = _uid()
     # Open a BUY position
-    services.save_trade('AAPL', 'Stock', 'Swing', 'Buy', 10, 100.0, '2025-01-01')
-    trades, _, _ = services.load_data()
+    services.save_trade('AAPL', 'Stock', 'Swing', 'Buy', 10, 100.0, '2025-01-01', user_id=uid)
+    trades, _, _ = services.load_data(user_id=uid)
     tid = int(trades.iloc[0]['id'])
 
     # Close at a higher price
-    assert services.close_trade(tid, 110.0, '2025-01-02') is True
+    assert services.close_trade(tid, 110.0, '2025-01-02', user_id=uid) is True
 
-    trades2, _, _ = services.load_data()
+    trades2, _, _ = services.load_data(user_id=uid)
     row = trades2[trades2['id'] == tid].iloc[0]
 
     assert float(row['exit_price']) == 110.0
@@ -19,15 +25,16 @@ def test_close_trade_records_exit_and_realized_pnl(db_engine_and_session):
 
 
 def test_close_trade_sell_direction(db_engine_and_session):
+    uid = _uid()
     # Open a SELL position (short)
-    services.save_trade('TSLA', 'Stock', 'Swing', 'Sell', 2, 200.0, '2025-01-01')
-    trades, _, _ = services.load_data()
+    services.save_trade('TSLA', 'Stock', 'Swing', 'Sell', 2, 200.0, '2025-01-01', user_id=uid)
+    trades, _, _ = services.load_data(user_id=uid)
     tid = int(trades.iloc[0]['id'])
 
     # Close at a lower price => profit
-    assert services.close_trade(tid, 150.0, '2025-01-02') is True
+    assert services.close_trade(tid, 150.0, '2025-01-02', user_id=uid) is True
 
-    trades2, _, _ = services.load_data()
+    trades2, _, _ = services.load_data(user_id=uid)
     row = trades2[trades2['id'] == tid].iloc[0]
 
     assert float(row['exit_price']) == 150.0
@@ -36,10 +43,11 @@ def test_close_trade_sell_direction(db_engine_and_session):
 
 
 def test_close_trade_idempotent(db_engine_and_session):
-    services.save_trade('NVDA', 'Stock', 'Swing', 'Buy', 1, 100.0, '2025-01-01')
-    trades, _, _ = services.load_data()
+    uid = _uid()
+    services.save_trade('NVDA', 'Stock', 'Swing', 'Buy', 1, 100.0, '2025-01-01', user_id=uid)
+    trades, _, _ = services.load_data(user_id=uid)
     tid = int(trades.iloc[0]['id'])
 
-    assert services.close_trade(tid, 120.0, '2025-01-02') is True
+    assert services.close_trade(tid, 120.0, '2025-01-02', user_id=uid) is True
     # Closing again should fail
-    assert services.close_trade(tid, 130.0, '2025-01-03') is False
+    assert services.close_trade(tid, 130.0, '2025-01-03', user_id=uid) is False

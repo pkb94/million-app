@@ -441,16 +441,39 @@ def list_positions(*, user_id: int, week_id: int) -> list[dict]:
         # When viewing a closed week, those positions already moved to the next week —
         # showing them here would double-count them and misrepresent the closed week's state.
         if snap and not snap.is_complete:
-            carried = (
+            # Find completed prior weeks for this user so we only show truly "carried"
+            # positions (from weeks that are done), not positions in other open weeks.
+            completed_week_ids_q = (
+                session.query(WeeklySnapshot.id)
+                .filter(
+                    WeeklySnapshot.user_id == user_id,
+                    WeeklySnapshot.is_complete == True,  # noqa: E712
+                    WeeklySnapshot.id != week_id,
+                )
+            )
+            completed_ids = [r[0] for r in completed_week_ids_q.all()]
+
+            # IDs of positions already carried into this week (to avoid showing
+            # the original again when its copy already lives in the current week)
+            already_carried_ids = {
+                p.carried_from_id
+                for p in this_week
+                if p.carried_from_id is not None
+            }
+
+            carried_all = (
                 session.query(OptionPosition)
                 .filter(
                     OptionPosition.user_id == user_id,
-                    OptionPosition.week_id != week_id,
+                    OptionPosition.week_id.in_(completed_ids) if completed_ids else False,
                     OptionPosition.status == OptionPositionStatus.ACTIVE,
                 )
                 .order_by(OptionPosition.symbol, OptionPosition.sold_date)
                 .all()
-            )
+            ) if completed_ids else []
+
+            # Exclude positions whose carry-forward copy is already in this week
+            carried = [p for p in carried_all if p.id not in already_carried_ids]
 
             # Build a lookup of week labels for carried positions
             carried_week_ids = {p.week_id for p in carried}
@@ -501,9 +524,9 @@ def create_position(*, user_id: int, week_id: int, data: dict) -> dict:
             contracts   = int(data.get("contracts", 1)),
             strike      = float(data["strike"]),
             option_type = data["option_type"].upper(),
-            sold_date   = _parse_dt(data.get("sold_date")),
-            buy_date    = _parse_dt(data.get("buy_date")),
-            expiry_date = _parse_dt(data.get("expiry_date")),
+            sold_date   = parse_dt(data.get("sold_date")),
+            buy_date    = parse_dt(data.get("buy_date")),
+            expiry_date = parse_dt(data.get("expiry_date")),
             premium_in  = _float_or_none(data.get("premium_in")),
             premium_out = _float_or_none(data.get("premium_out")),
             spot_price  = _float_or_none(data.get("spot_price")),
@@ -542,7 +565,7 @@ def update_position(*, user_id: int, position_id: int, data: dict) -> dict:
                 continue
             val = data[field]
             if field in ("sold_date", "buy_date", "expiry_date"):
-                val = _parse_dt(val)
+                val = parse_dt(val)
             elif field in ("premium_in", "premium_out", "spot_price", "margin", "strike"):
                 val = _float_or_none(val)
             elif field == "contracts":
@@ -866,7 +889,7 @@ def symbol_summary(*, user_id: int) -> list[dict]:
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
-def _parse_dt(val: Any) -> datetime | None:
+def parse_dt(val: Any) -> datetime | None:
     if val is None:
         return None
     if isinstance(val, datetime):

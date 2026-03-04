@@ -201,14 +201,16 @@ def _apply_holding_delta(
             user_id=int(user_id),
             account_id=int(acct.id),
             symbol=sym,
-            quantity=0.0,
+            shares=0.0,
+            cost_basis=0.0,
+            adjusted_cost_basis=0.0,
             avg_cost=None,
             updated_at=now,
         )
         session.add(h)
         session.flush()
 
-    old_qty = float(getattr(h, "quantity", 0.0) or 0.0)
+    old_qty = float(getattr(h, "shares", 0.0) or 0.0)
     old_avg = getattr(h, "avg_cost", None)
     new_qty = old_qty + dq
 
@@ -237,7 +239,9 @@ def _apply_holding_delta(
             if px is not None and old_qty != 0.0 and (old_qty * new_qty) < 0.0:
                 new_avg = px
 
-    h.quantity = float(new_qty)
+    h.shares = float(new_qty)
+    h.cost_basis = float(new_qty * (float(new_avg) if new_avg is not None else 0.0))
+    h.adjusted_cost_basis = h.cost_basis
     h.avg_cost = (float(new_avg) if new_avg is not None else None)
     h.updated_at = now
     session.add(h)
@@ -1903,7 +1907,7 @@ def list_holdings(*, user_id: int, account_id: int) -> list[dict]:
                     "id": int(getattr(h, "id")),
                     "account_id": int(getattr(h, "account_id")),
                     "symbol": str(getattr(h, "symbol", "") or ""),
-                    "quantity": float(getattr(h, "quantity", 0.0) or 0.0),
+                    "quantity": float(getattr(h, "shares", 0.0) or 0.0),
                     "avg_cost": (float(getattr(h, "avg_cost", 0.0)) if getattr(h, "avg_cost", None) is not None else None),
                     "updated_at": getattr(h, "updated_at", None),
                 }
@@ -1944,19 +1948,25 @@ def upsert_holding(
             .first()
         )
         now = datetime.now(timezone.utc).replace(tzinfo=None)
+        qty = float(quantity)
+        cost = qty * (float(avg_cost) if avg_cost is not None else 0.0)
         if h is None:
             h = StockHolding(
                 user_id=int(user_id),
                 account_id=int(account_id),
                 symbol=sym,
-                quantity=float(quantity),
+                shares=qty,
+                cost_basis=cost,
+                adjusted_cost_basis=cost,
                 avg_cost=(float(avg_cost) if avg_cost is not None else None),
                 updated_at=now,
             )
             session.add(h)
             session.commit()
         else:
-            h.quantity = float(quantity)
+            h.shares = qty
+            h.cost_basis = cost
+            h.adjusted_cost_basis = cost
             h.avg_cost = (float(avg_cost) if avg_cost is not None else None)
             h.updated_at = now
             session.add(h)
@@ -1966,7 +1976,7 @@ def upsert_holding(
             "id": int(getattr(h, "id")),
             "account_id": int(getattr(h, "account_id")),
             "symbol": str(getattr(h, "symbol", "") or ""),
-            "quantity": float(getattr(h, "quantity", 0.0) or 0.0),
+            "quantity": float(getattr(h, "shares", 0.0) or 0.0),
             "avg_cost": (float(getattr(h, "avg_cost", 0.0)) if getattr(h, "avg_cost", None) is not None else None),
             "updated_at": getattr(h, "updated_at", None),
         }

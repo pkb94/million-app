@@ -18,7 +18,6 @@ from ..schemas import (
     OrderOut,
     TradeCloseRequest,
     TradeCreateRequest,
-    TradeOut,
     TradeUpdateRequest,
 )
 from ..deps import get_current_user
@@ -195,7 +194,7 @@ def list_trades(
     return records[offset: offset + limit]
 
 
-@router.post("/trades")
+@router.post("/trades", response_model=Dict[str, str])
 def create_trade(req: TradeCreateRequest, user=Depends(get_current_user)) -> Dict[str, str]:
     services.save_trade(
         req.symbol, req.instrument, req.strategy, req.action,
@@ -206,7 +205,7 @@ def create_trade(req: TradeCreateRequest, user=Depends(get_current_user)) -> Dic
     return {"status": "ok"}
 
 
-@router.put("/trades/{trade_id}")
+@router.put("/trades/{trade_id}", response_model=Dict[str, str])
 def update_trade(
     trade_id: int, req: TradeUpdateRequest, user=Depends(get_current_user)
 ) -> Dict[str, str]:
@@ -219,7 +218,7 @@ def update_trade(
     return {"status": "ok"}
 
 
-@router.post("/trades/{trade_id}/close")
+@router.post("/trades/{trade_id}/close", response_model=Dict[str, str])
 def close_trade(
     trade_id: int, req: TradeCloseRequest, user=Depends(get_current_user)
 ) -> Dict[str, str]:
@@ -231,7 +230,7 @@ def close_trade(
     return {"status": "ok"}
 
 
-@router.delete("/trades/{trade_id}")
+@router.delete("/trades/{trade_id}", response_model=Dict[str, str])
 def delete_trade(trade_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
     ok = services.delete_trade(trade_id, user_id=int(user["sub"]))
     if not ok:
