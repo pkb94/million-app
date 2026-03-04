@@ -5,6 +5,46 @@
 
 ---
 
+## v2.0.0 — Backend Modularisation & Hardening
+**Released:** 2026-03-04
+**Branch:** `develop`
+
+### 🏗️ Architecture — Router Split
+- **`backend_api/main.py`** reduced from 1,735 → 301 lines (thin app factory only)
+- Route logic split into 6 focused routers under `backend_api/routers/`:
+  - `auth.py` — signup, login, refresh, logout, sessions, change-password (10 routes)
+  - `trades.py` — accounts, holdings, orders, trades (21 routes)
+  - `portfolio.py` — weeks, positions, assignments, stock holdings, premium ledger (25 routes)
+  - `budget.py` — cash, budget, overrides, credit-card weeks, ledger (20 routes)
+  - `markets.py` — GEX, net-flow history, stock info, quotes, history, ticker search (10 routes)
+  - `admin.py` — admin user CRUD (4 routes)
+- **`backend_api/deps.py`** — shared `get_current_user` + `require_admin` FastAPI dependencies
+
+### 📋 Structured Logging
+- `logging.basicConfig` configured in `main.py`; every module has its own named logger
+- HTTP request timing middleware logs every request: method, path, status, milliseconds (`optionflow.requests` logger)
+- `logic/services.py`: replaced 3 `print(f"Error...")` calls with `_logger.error()`
+
+### 🔧 Bug Fixes
+- **`backend_api/schemas.py`**: removed duplicate `AdminUserOut`, `AdminPatchUserRequest` class definitions and duplicate `role` field in `AuthResponse`
+- `AdminPatchUserRequest` now correctly supports optional `username`, `password`, `role`, `is_active` fields
+- Duplicate `DELETE /admin/users/{user_id}` route registration eliminated
+
+### 📄 Pagination
+- `limit` / `offset` query params added to `/trades`, `/orders`, `/cash`, `/budget`, `/ledger/entries`
+
+### 🗄️ Alembic — Multi-DB Support
+- `alembic/env.py` rewritten to support all 5 domain databases
+- Select target DB via `ALEMBIC_DB=users|trades|portfolio|budget|markets` env var
+- `DATABASE_URL` env var still works as full override (e.g. Postgres)
+- `alembic.ini` updated: default URL points to `users.db` (was broken `trading_journal.db`)
+
+### 📦 Dependencies
+- `requirements.txt` cleaned: removed `streamlit`, `streamlit-cookies-manager`, `plotly`
+- Added: `httpx`, `python-multipart`, `python-dotenv`, `uvicorn[standard]`
+
+---
+
 ## v1.9.1 — Automated DB Backups
 **Released:** 2026-03-04
 **Branch:** `develop`
