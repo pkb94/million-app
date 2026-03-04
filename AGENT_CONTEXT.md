@@ -67,8 +67,8 @@ To restart: `launchctl unload ~/Library/LaunchAgents/com.optflw.X.plist && launc
 | File | Domain | Key tables |
 |------|--------|-----------|
 | `users.db` | Auth & users | `users`, `refresh_tokens`, `revoked_tokens`, `auth_events` |
-| `trades.db` | Trade journal | `trades`, `orders`, `order_events`, `accounts` |
-| `portfolio.db` | Holdings & options | `stock_holdings`, `option_positions`, `weekly_snapshots`, `premium_ledger`, `portfolio_value_history` |
+| `trades.db` | Accounts & holdings | `accounts`, `stock_holdings` |
+| `portfolio.db` | Options portfolio | `option_positions`, `weekly_option_portfolio`, `premium_ledger`, `portfolio_value_history` |
 | `budget.db` | Personal finance | `budget`, `budget_overrides`, `credit_card_weeks`, `cash_flow`, `ledger_*` |
 | `markets.db` | Market data | `net_flow_snapshots`, `price_snapshots` |
 
@@ -93,18 +93,37 @@ from database.models import (
 
 ```
 backend_api/
-  main.py          # thin app factory — CORS, middleware, lifespan, health
+  main.py          # thin app factory — CORS, middleware, lifespan, health, /health (all 5 DBs)
   state.py         # shared GEX cache, background poller, flow-DB helpers
   utils.py         # df_records() — single canonical dict serialiser
   deps.py          # FastAPI Depends: get_current_user, require_admin
-  schemas.py       # All Pydantic v2 request/response models
+  schemas/         # Pydantic v2 models — split by domain
+    __init__.py    # re-exports everything (backward compat)
+    auth.py        # auth schemas
+    trades.py      # account + holding schemas
+    budget.py      # cash, budget, CC week schemas
+    portfolio.py   # option position, weekly portfolio, snapshot schemas
   routers/
     auth.py        # /auth/* — login, refresh, sessions, change-password
-    trades.py      # /trades, /orders, /accounts
+    trades.py      # /accounts, /holdings  (raw trade journal removed)
     portfolio.py   # /portfolio/weeks, /portfolio/positions, /portfolio/summary
     budget.py      # /budget, /cash, /credit-card-weeks, /budget/ledger/*
-    markets.py     # /search, /stock/info, /market/quotes, /options/gamma-exposure/*
+    markets.py     # /stock/info, /market/quotes, /options/gamma-exposure/*
     admin.py       # /admin/users
+```
+
+**logic/ service layer (split from monolith):**
+```
+logic/
+  auth_services.py      # auth, users, tokens, rate-limiting
+  trade_services.py     # accounts, holdings (no raw trade journal)
+  budget_services.py    # cash, budget, overrides, CC weeks, ledger
+  portfolio_services.py # portfolio value history snapshots
+  portfolio.py          # option positions, weekly portfolio, premium ledger
+  holdings.py           # stock holding helpers
+  gamma.py              # GEX calculations (core product)
+  services.py           # thin re-export shim (backward compat)
+  premium_ledger.py     # premium ledger helpers
 ```
 
 **Rules:**
@@ -156,7 +175,7 @@ Daily cron at midnight backs up all 6 DB files to `OptionFlow_main/backups/`.
 # Run all tests (except GEX integration test)
 source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_gex.py
 
-# All tests should pass: currently 448 passing, 0 failing
+# All tests should pass: currently 428 passing, 0 failing
 ```
 
 **Conftest pattern:** `tests/conftest.py` provides `db_engine_and_session` fixture.
@@ -170,13 +189,13 @@ source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_
 
 | Version | What |
 |---------|------|
-| v2.3.0 | 8 backend improvements: DB session bugs fixed, SQL pagination, async yfinance routes, typed Pydantic schemas for all portfolio routes, GET /trades/{id}, GET+POST /portfolio/value-history, new services (list_trades, get_trade, list_cash_flows, list_budget_entries, list_portfolio_snapshots, upsert_portfolio_snapshot) |
+| v2.4.0 | Removed broker layer, order system, raw trade journal, dead frontend pages (orders/accounts/search/stocks). 428 passing tests. |
+| v2.3.1 | Split schemas.py into domain package (auth/trades/budget/portfolio). Fixed npm PATH in dev.sh. |
+| v2.3.0 | Split services.py monolith into auth_services, trade_services, budget_services, portfolio_services. /health probes all 5 DBs. Backend API improvements (GET /trades filters, PATCH/DELETE /cash, GET /budget/summary, enum validation). |
 | v2.2.0 | 448 passing tests, lifespan migration, /health DB ping, field-name fixes |
 | v2.1.0 | 18 audit fixes: state.py/utils.py, TTLCache, pagination, model_validate |
 | v2.0.0 | Split 1735-line main.py into 6 routers |
-| v1.9.1 | Automated DB backups (cron + retention) |
 | v1.9.0 | Split monolithic DB into 5 domain DBs |
-| v1.8.4 | Migration from V1 to OptionFlow_main |
 
 See `VERSIONS.md` for full changelog.
 
@@ -186,44 +205,35 @@ See `VERSIONS.md` for full changelog.
 
 These are the highest-impact features in priority order:
 
-### 🥇 1. Trade Entry UI
-- `trades.db` is empty — no trades entered yet
-- Need a clean **Add Trade** form: symbol, BUY/SELL, qty, price, date, notes, optional option fields
-- CSV import from broker statements would be very valuable
-- All trades go to `POST /trades` → `trades.db`
-
-### 🥈 2. Stock Holdings → Portfolio page
-- `/trades` page (Options Flow portfolio) needs holdings to show covered call opportunities
-- Flow: Add stock holding (symbol, shares, cost basis) → app shows current covered call strikes
-- Goes to `portfolio.db` (`stock_holdings` table)
-
-### 🥉 3. Portfolio Value History chart
-- `GET /portfolio/value-history` and `POST /portfolio/value-history` endpoints are live (v2.3.0)
+### 🥇 1. Portfolio Value History chart
+- `GET /portfolio/value-history` and `POST /portfolio/value-history` endpoints are live
 - `portfolio_value_history` table exists but is empty — need UI to enter weekly net-worth snapshots
-- Dashboard should render a line chart of this over time (connect to the new endpoints)
+- Dashboard should render a line chart of this over time
 
-### 4. Budget — complete CC week flow
-- Credit card week tracker exists (1 row) but needs a proper "settle up" weekly flow
+### 🥈 2. Budget — complete CC week flow
+- Credit card week tracker exists but needs a proper "settle up" weekly flow
 - Enter card spend for the week → mark as paid
 
-### 5. Alembic multi-DB migrations
-- alembic/env.py is fixed to support all 5 DBs via `ALEMBIC_DB=users|trades|portfolio|budget|markets`
-- No migration files have been created yet for the new schema
-- Run `alembic revision --autogenerate -m "description"` per DB to generate them
+### 🥉 3. GEX caching / faster Options Flow load
+- yfinance fetch is slow (~3–8s) on first load
+- Consider persisting last GEX result to markets.db so the page loads from cache instantly
+- Background refresh every N minutes via the existing poller in state.py
 
-### 6. Split `logic/services.py` (2295 lines)
-- The last single large file
-- Split into: `logic/auth.py`, `logic/trades.py`, `logic/budget.py`, `logic/portfolio_services.py`
+### 4. Alembic multi-DB migrations
+- alembic/env.py supports all 5 DBs via `ALEMBIC_DB=users|trades|portfolio|budget|markets`
+- No autogenerated migration files yet — run per-DB to capture current schema
 
 ---
 
 ## Known Issues / Gotchas
 
 1. **`StockHolding` uses `shares` + `cost_basis`** — not `quantity`. Any new code must use the correct field names.
-2. **Trades page is the weekly options portfolio** — NOT a raw trade journal. The raw trade journal (buy/sell history) lives on the Dashboard.
+2. **Trades page is the weekly options portfolio** — covered calls, CSPs, option positions. There is NO raw trade journal — it was removed in v2.4.0.
 3. **Node.js** is at a custom path: `/Users/karthikkondajjividyaranya/bin/node-v20.11.1-darwin-arm64/bin/`. Always set `PATH` before running npm/node commands.
 4. **`.next` cache corruption** — if the frontend returns 500, `rm -rf web/.next` and restart.
 5. **Zoom locked on iOS/iPadOS** — `maximumScale=1, userScalable=no` is intentional (app-like feel).
+6. **schemas is a package, not a file** — `backend_api/schemas/` is a directory with `__init__.py`. Import from `backend_api.schemas` as before; do NOT create a new `schemas.py` file.
+7. **brokers/ folder is gone** — broker abstraction and order system removed in v2.4.0. Do not re-add.
 
 ---
 

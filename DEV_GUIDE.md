@@ -142,18 +142,16 @@ OptionFlow_main/            ← repo root (branch: develop)
 │   ├── components/         ← React components
 │   └── lib/                ← API client, auth, hooks
 ├── database/               ← SQLAlchemy models (5-DB architecture)
-├── logic/                  ← Business logic (services, portfolio, holdings, gamma)
-├── brokers/                ← Paper broker / order execution adapters
+├── logic/                  ← Domain service modules (auth, budget, portfolio, gamma)
 ├── alembic/                ← DB migrations
-├── scripts/                ← Utility scripts (backup_dbs.py, migrate_to_split_dbs.py)
+├── scripts/                ← Utility scripts (backup_dbs.py)
 ├── backups/                ← Auto-generated DB snapshots (gitignored)
 ├── users.db                ← Auth database
-├── trades.db               ← Trades database
-├── portfolio.db            ← Portfolio database
+├── trades.db               ← Accounts & holdings database
+├── portfolio.db            ← Options portfolio database
 ├── budget.db               ← Budget database
-├── markets.db              ← Markets database
+├── markets.db              ← Market data database
 ├── requirements.txt        ← Python dependencies
-├── vercel.json             ← Vercel frontend deploy config
 ├── VERSIONS.md             ← Release history
 └── DEV_GUIDE.md            ← this file
 ```
@@ -336,6 +334,69 @@ git tag --sort=-version:refname | head -5
 ```bash
 git log --oneline --graph --all --decorate -10
 ```
+
+---
+
+## 🔮 Future Product Roadmap (If Launching as SaaS)
+
+> **Current status:** Personal tool running on SQLite. The architecture is sound for personal use.
+> These are the steps required **if / when** the goal shifts to a paid multi-user product.
+
+### Phase 1 — Infrastructure (Required before any public users)
+
+| Task | Why | Effort |
+|------|-----|--------|
+| **PostgreSQL migration** | SQLite can’t handle concurrent writes from multiple users | ~1 week |
+| **Alembic migrations per DB** | Without migration history, schema changes in prod are risky | ~2 days |
+| **Docker + docker-compose** | Reproducible local + prod environment | ~1 day |
+| **Environment config** | `.env` files / secrets management for prod DB URL, JWT secret, Tradier token | ~1 day |
+
+**PostgreSQL migration notes:**
+- 5 SQLite DBs → 5 PostgreSQL schemas (or one Postgres DB with 5 schemas)
+- SQLAlchemy already abstracts the driver — mostly a DB URL swap + asyncpg driver
+- Alembic handles the schema migration once URL is updated
+- Session factories in `database/models.py` are the only code that needs changing
+
+### Phase 2 — Monetisation
+
+| Task | Why | Effort |
+|------|-----|--------|
+| **Stripe integration** | Subscription billing + webhook for entitlement | ~2 days |
+| **Subscription tier on `users` table** | `tier: free│pro│lifetime` field + middleware enforcement | ~1 day |
+| **Paywall middleware** | FastAPI dependency that checks `user.tier` before serving gated routes | ~1 day |
+| **Free tier limits** | e.g. 1 symbol GEX lookup/day free, unlimited for Pro | ~1 day |
+
+### Phase 3 — Reliability / Observability
+
+| Task | Why | Effort |
+|------|-----|--------|
+| **Structured logging** | JSON logs to a file/service — currently just `logging.getLogger` | ~1 day |
+| **Sentry error tracking** | Catch unhandled exceptions in prod silently | ~2 hours |
+| **CI/CD (GitHub Actions)** | Run 428 tests on every push to `develop` | ~1 day |
+| **Health check alerting** | Alert if `/health` returns 503 (e.g. UptimeRobot free tier) | ~1 hour |
+
+### Phase 4 — Product Differentiation (what makes it worth paying for)
+
+| Feature | Value | Notes |
+|---------|-------|-------|
+| **GEX caching + faster page load** | Options Flow page loads in <1s instead of 3–8s | Persist last result to markets.db, background refresh |
+| **Tradier real-time data** | 15-min delay → real-time OPRA feed | Requires paid Tradier account |
+| **FIFO/LIFO P&L tax reporting** | Export realized P&L CSV for tax software | Builds on existing ledger |
+| **Multi-symbol GEX watchlist** | Watch SPY, QQQ, AAPL simultaneously | State already supports it |
+| **Email / push alerts** | Alert when spot crosses zero-gamma level | New infra needed |
+
+### Recommended Sequencing
+
+```
+Today (personal tool):  SQLite → Keep as-is
+
+When ready to launch:   PostgreSQL + Alembic → Docker → Stripe → Paywall middleware
+                        (estimate: 2–3 weeks of focused work)
+
+Post-launch:            Observability → GEX caching → Tradier real-time → Tax engine
+```
+
+> **Key decision point:** The moment you want a second person to use this app, PostgreSQL becomes non-optional. Everything else can wait.
 
 ---
 
