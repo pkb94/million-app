@@ -209,6 +209,7 @@ source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_
 
 | Version | What |
 |---------|------|
+| v2.5.2 | Dashboard: removed portfolio balance chart. Performance tab: 52-Friday skeleton chart, vertical x-axis labels, side-by-side accumulation+projection, streak bar sparkline, compact week-by-week rows. Budget TrendChart rewritten as AreaChart with gradient fills + Net line. |
 | v2.5.1 | UI polish: recharts area+bar charts side-by-side in AccountTab (52-week scaffold, $1k Y ticks, newest-first table); Expense Mix pie redesign; dark-mode tooltip fix across all budget charts. |
 | v2.5.0 | Split trades/page.tsx (3612→134 lines) into 13 components; split budget/page.tsx (1679→272 lines) into 5 components. Fixed buy_date bug in PositionForm. |
 | v2.4.0 | Removed broker layer, order system, raw trade journal, dead frontend pages (orders/accounts/search/stocks). 428 passing tests. |

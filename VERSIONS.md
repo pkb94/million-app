@@ -5,6 +5,40 @@
 
 ---
 
+## v2.5.2 — UI Polish: Dashboard, Performance Tab & Budget Charts
+**Released:** 2026-03-04
+**Branch:** `develop`
+
+### 🎨 UI Improvements
+
+#### Dashboard
+- **Removed Portfolio Balance Chart** from dashboard page — the widget with the area chart and running balance total has been removed to simplify the dashboard
+- Removed related imports (`recharts`, `fetchPortfolioSummary`, `useQuery`, `Link`, `ArrowRight`, `RefreshButton`) that were only used by the chart
+- Dashboard now flows: header → ticker search → market cards → VIX → economic calendar → quick actions
+
+#### Trades — Performance Tab (`YearTab.tsx`)
+- **Premium Accumulation chart**: now plots all 52 Fridays of the current year as a fixed skeleton — weeks without data render as a flat baseline, so the full year shape is always visible; actual data merged in by `week_end` date
+- **X-axis labels**: rotated vertical (`writing-mode: vertical-lr`) with tick marks; shows every 4th Friday (monthly cadence) to avoid crowding — labels sit below the chart in their own row with no overlap
+- **Chart width**: constrained to `w-full sm:w-1/2`
+- **Annual Projection** moved **next to** Premium Accumulation in a side-by-side `flex` row (`sm:flex-row`); both cards use `items-stretch` + `flex flex-col` so they share equal height
+- **Streak card**: replaced flat equal-height color bars with a proportional bar sparkline — bar height = that week's premium magnitude; yellow = profitable, red = loss; shows last 12 complete weeks
+- **Week-by-Week**: replaced the dual mobile-card / desktop-table layout with a single compact sparkline row list that works on all screen sizes — each row shows date, position count, inline proportional bar (dark green = above avg, light green = positive, red = negative), premium value + % vs avg, and status pill
+
+#### Budget — `TrendChart`
+- Replaced grouped bar chart with an **overlapping AreaChart** — Income (green fill), Expenses (red fill), Net surplus/deficit (dashed blue line)
+- Gradient fills make the surplus/deficit gap between income and expenses visually obvious at a glance
+- Added legend in the chart header (Income / Expenses / Net)
+- Added `<ReferenceLine y={0}>` for the break-even baseline
+
+### 📦 Files Changed
+| File | Change |
+|------|--------|
+| `web/app/(app)/dashboard/page.tsx` | Removed Portfolio Balance Chart section + all related imports/state |
+| `web/components/trades/YearTab.tsx` | 52-Friday skeleton, vertical x-axis, side-by-side layout, streak sparkline, week-by-week compact rows |
+| `web/components/budget/BudgetCharts.tsx` | TrendChart rewritten as AreaChart with gradient fills + Net line |
+
+---
+
 ## v2.5.1 — UI Polish: Charts & Account Tab
 **Released:** 2026-03-04
 **Branch:** `develop`

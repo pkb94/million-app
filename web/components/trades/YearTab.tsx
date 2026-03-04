@@ -66,13 +66,38 @@ export function YearTab() {
     "07": "Jul", "08": "Aug", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
   };
 
+  // Build a full 52-Friday skeleton for the current year, filled with actual data where available
+  const currentYear = new Date().getFullYear();
+  const allFridaysOfYear: CumEntry[] = (() => {
+    // Find first Friday of the year
+    const jan1 = new Date(currentYear, 0, 1);
+    const dayOfWeek = jan1.getDay(); // 0=Sun … 6=Sat
+    const daysToFirstFri = dayOfWeek <= 5 ? 5 - dayOfWeek : 6; // days until first Friday
+    const firstFriday = new Date(currentYear, 0, 1 + daysToFirstFri);
+
+    // Build a lookup: week_end date string → premium
+    const weekByDate: Record<string, number> = {};
+    for (const w of weeksBreakdown) {
+      weekByDate[w.week_end] = (weekByDate[w.week_end] ?? 0) + w.premium;
+    }
+
+    const entries: CumEntry[] = [];
+    let cumulative = 0;
+    for (let i = 0; i < 52; i++) {
+      const d = new Date(firstFriday);
+      d.setDate(firstFriday.getDate() + i * 7);
+      if (d.getFullYear() !== currentYear) break;
+      const iso = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const weekly = weekByDate[iso] ?? 0;
+      cumulative += weekly;
+      entries.push({ label, cumulative, weekly });
+    }
+    return entries;
+  })();
+
+  const cumulativeData = allFridaysOfYear;
   const chronoWeeks   = [...weeksBreakdown].reverse();
-  const cumulativeData = chronoWeeks.reduce((acc, w) => {
-    const prev  = acc[acc.length - 1]?.cumulative ?? 0;
-    const label = new Date(w.week_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    acc.push({ label, cumulative: prev + w.premium, weekly: w.premium });
-    return acc;
-  }, [] as CumEntry[]);
 
   const activePremWeeks  = chronoWeeks.filter((w) => w.premium > 0);
   const avgWeeklyPremium = activePremWeeks.length > 0
@@ -178,114 +203,137 @@ export function YearTab() {
         </div>
       </div>
 
-      {/* ── Cumulative premium curve ── */}
-      {cumulativeData.length > 0 && (
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={14} className="text-green-500" />
-              <h3 className="text-sm font-bold text-foreground">Premium Accumulation</h3>
-            </div>
-            <div className="flex items-center gap-4 text-[10px] text-foreground/50">
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-500 rounded" />Weekly</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-blue-400 rounded" />Cumulative</span>
-            </div>
-          </div>
-          <div className="relative h-40">
-            <div className="absolute inset-0 flex items-end gap-1 px-1">
-              {cumulativeData.map((d, i) => {
-                const barPct = Math.max(2, Math.round((d.weekly / maxWeekly) * 75));
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                    <div className="w-full rounded-t bg-green-500/30 border border-green-500/50" style={{ height: `${barPct}%` }} />
-                  </div>
-                );
-              })}
-            </div>
-            <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-              {(() => {
-                const maxCum = Math.max(...cumulativeData.map((d) => d.cumulative), 1);
-                const n = cumulativeData.length;
-                if (n < 2) return null;
-                const pts = cumulativeData.map((d, i) => {
-                  const x = (i / (n - 1)) * 100;
-                  const y = 100 - (d.cumulative / maxCum) * 85;
-                  return `${x},${y}`;
-                });
-                const areaPath = `M${pts[0]} L${pts.join(" L")} L100,100 L0,100 Z`;
-                return (
-                  <>
-                    <defs>
-                      <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#60a5fa" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path d={areaPath} fill="url(#cumGrad)" />
-                    <polyline points={pts.join(" ")} fill="none" stroke="#60a5fa" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                    {cumulativeData.map((d, i) => {
+      {/* ── Premium Accumulation + Annual Projection side by side ── */}
+      {(cumulativeData.length > 0 || avgWeeklyPremium > 0) && (
+        <div className="flex flex-col sm:flex-row gap-4 items-stretch">
+
+          {/* Cumulative premium curve */}
+          {cumulativeData.length > 0 && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 w-full sm:w-1/2 shrink-0 flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={14} className="text-green-500" />
+                  <h3 className="text-sm font-bold text-foreground">Premium Accumulation</h3>
+                </div>
+                <div className="flex items-center gap-4 text-[10px] text-foreground/50">
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-500 rounded" />Weekly</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-blue-400 rounded" />Cumulative</span>
+                </div>
+              </div>
+              <div className="relative h-40">
+                <div className="absolute inset-0 flex items-end px-1" style={{ gap: "1px" }}>
+                  {cumulativeData.map((d, i) => {
+                    const barPct = d.weekly > 0 ? Math.max(2, Math.round((d.weekly / maxWeekly) * 75)) : 0;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center" style={{ minWidth: 0 }}>
+                        {barPct > 0
+                          ? <div className="w-full rounded-t bg-green-500/40 border-t border-x border-green-500/60" style={{ height: `${barPct}%` }} />
+                          : <div className="w-full" style={{ height: "2px", background: "var(--border)" }} />
+                        }
+                      </div>
+                    );
+                  })}
+                </div>
+                <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                  {(() => {
+                    const maxCum = Math.max(...cumulativeData.map((d) => d.cumulative), 1);
+                    const n = cumulativeData.length;
+                    if (n < 2) return null;
+                    const pts = cumulativeData.map((d, i) => {
                       const x = (i / (n - 1)) * 100;
                       const y = 100 - (d.cumulative / maxCum) * 85;
-                      return <circle key={i} cx={`${x}%`} cy={`${y}%`} r="3" fill="#60a5fa" />;
-                    })}
-                  </>
-                );
-              })()}
-            </svg>
-          </div>
-          <div className="flex mt-2 px-1">
-            {cumulativeData.map((d, i) => (
-              <div key={i} className="flex-1 text-center">
-                <span className="text-[9px] text-foreground/50">{d.label}</span>
+                      return `${x},${y}`;
+                    });
+                    const areaPath = `M${pts[0]} L${pts.join(" L")} L100,100 L0,100 Z`;
+                    return (
+                      <>
+                        <defs>
+                          <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#60a5fa" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <path d={areaPath} fill="url(#cumGrad)" />
+                        <polyline points={pts.join(" ")} fill="none" stroke="#60a5fa" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                        {cumulativeData.map((d, i) => {
+                          if (d.weekly === 0) return null;
+                          const x = (i / (n - 1)) * 100;
+                          const y = 100 - (d.cumulative / maxCum) * 85;
+                          return <circle key={i} cx={`${x}%`} cy={`${y}%`} r="2.5" fill="#60a5fa" />;
+                        })}
+                      </>
+                    );
+                  })()}
+                </svg>
               </div>
-            ))}
-          </div>
-          <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between">
-            <span className="text-xs text-foreground/50">Running total</span>
-            <span className="text-sm font-black text-blue-400">
-              ${(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0).toFixed(2)}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Annual projection ── */}
-      {avgWeeklyPremium > 0 && (
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={14} className="text-purple-500" />
-            <h3 className="text-sm font-bold text-foreground">Annual Projection</h3>
-            <span className="ml-auto text-[10px] text-foreground/40">based on ${avgWeeklyPremium.toFixed(2)}/wk avg</span>
-          </div>
-          <div className="space-y-2">
-            {[3, 6, 9, 12].map((months) => {
-              const proj = avgWeeklyPremium * months * 4.33;
-              const pct  = Math.min(100, (proj / (annualProjection * 1.1)) * 100);
-              const label = months === 12 ? "12 mo (full year)" : `${months} mo`;
-              return (
-                <div key={months} className="flex items-center gap-3">
-                  <span className="text-[11px] text-foreground/60 w-24 shrink-0">{label}</span>
-                  <div className="flex-1 h-5 bg-[var(--surface-2)] rounded-lg overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500/70 rounded-lg flex items-center px-2 transition-all"
-                      style={{ width: `${pct}%` }}
-                    >
-                      {pct > 20 && <span className="text-[10px] font-bold text-white">${proj.toFixed(0)}</span>}
+              {/* X-axis labels: vertical, sitting below the chart with a 1px tick line */}
+              <div className="flex px-1 mt-0" style={{ gap: "1px" }}>
+                {cumulativeData.map((d, i) => {
+                  const show = i % 4 === 0 || i === cumulativeData.length - 1;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center" style={{ minWidth: 0 }}>
+                      <div style={{ width: "1px", height: show ? "4px" : "2px", background: show ? "var(--foreground)" : "var(--border)", opacity: show ? 0.3 : 0.15 }} />
+                      {show ? (
+                        <span
+                          className="text-[8px] text-foreground/40"
+                          style={{ writingMode: "vertical-lr", transform: "rotate(180deg)", lineHeight: 1, whiteSpace: "nowrap", marginTop: "1px" }}
+                        >
+                          {d.label}
+                        </span>
+                      ) : null}
                     </div>
-                  </div>
-                  {pct <= 20 && <span className="text-[11px] font-bold text-purple-400">${proj.toFixed(0)}</span>}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-            {[["Monthly", monthlyProjection], ["Quarterly", monthlyProjection * 3], ["Annual", annualProjection]].map(([label, val]) => (
-              <div key={label as string} className="bg-[var(--surface-2)] rounded-lg p-2">
-                <p className="text-[9px] text-foreground/50 uppercase tracking-wide">{label}</p>
-                <p className="text-sm font-black text-purple-400">${(val as number).toFixed(0)}</p>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+              <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between">
+                <span className="text-xs text-foreground/50">Running total · {currentYear}</span>
+                <span className="text-sm font-black text-blue-400">
+                  ${(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Annual projection */}
+          {avgWeeklyPremium > 0 && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 w-full sm:flex-1 sm:min-w-0 flex flex-col">
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp size={14} className="text-purple-500" />
+                <h3 className="text-sm font-bold text-foreground">Annual Projection</h3>
+                <span className="ml-auto text-[10px] text-foreground/40">based on ${avgWeeklyPremium.toFixed(2)}/wk avg</span>
+              </div>
+              <div className="space-y-2">
+                {[3, 6, 9, 12].map((months) => {
+                  const proj = avgWeeklyPremium * months * 4.33;
+                  const pct  = Math.min(100, (proj / (annualProjection * 1.1)) * 100);
+                  const label = months === 12 ? "12 mo (full year)" : `${months} mo`;
+                  return (
+                    <div key={months} className="flex items-center gap-3">
+                      <span className="text-[11px] text-foreground/60 w-24 shrink-0">{label}</span>
+                      <div className="flex-1 h-5 bg-[var(--surface-2)] rounded-lg overflow-hidden">
+                        <div
+                          className="h-full bg-purple-500/70 rounded-lg flex items-center px-2 transition-all"
+                          style={{ width: `${pct}%` }}
+                        >
+                          {pct > 20 && <span className="text-[10px] font-bold text-white">${proj.toFixed(0)}</span>}
+                        </div>
+                      </div>
+                      {pct <= 20 && <span className="text-[11px] font-bold text-purple-400">${proj.toFixed(0)}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                {[["Monthly", monthlyProjection], ["Quarterly", monthlyProjection * 3], ["Annual", annualProjection]].map(([label, val]) => (
+                  <div key={label as string} className="bg-[var(--surface-2)] rounded-lg p-2">
+                    <p className="text-[9px] text-foreground/50 uppercase tracking-wide">{label}</p>
+                    <p className="text-sm font-black text-purple-400">${(val as number).toFixed(0)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -355,12 +403,27 @@ export function YearTab() {
             <p className="text-3xl font-black text-yellow-400">{currentStreak}<span className="text-lg font-semibold text-foreground/40"> wks</span></p>
             <p className="text-xs text-foreground/50 mt-1">consecutive profitable weeks</p>
           </div>
-          <div className="mt-3 flex gap-1">
-            {Array.from({ length: Math.min(8, completeWeeks) }).map((_, i) => {
-              const w = [...weeksBreakdown].filter((w) => w.is_complete)[i];
-              return <div key={i} className="flex-1 h-2 rounded-full" style={{ background: w ? (w.premium > 0 ? "#facc15" : "#ef4444") : "var(--surface-2)" }} />;
-            })}
-          </div>
+          {/* Dot sparkline — last 12 complete weeks, newest on right */}
+          {(() => {
+            const last12 = [...weeksBreakdown].filter((w) => w.is_complete).slice(0, 12).reverse();
+            const maxPrem = Math.max(...last12.map((w) => Math.abs(w.premium)), 1);
+            return (
+              <div className="mt-3 flex items-end gap-0.5 h-8">
+                {last12.map((w, i) => {
+                  const h = Math.max(4, Math.round((Math.abs(w.premium) / maxPrem) * 28));
+                  const color = w.premium > 0 ? "#facc15" : "#ef4444";
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center justify-end">
+                      <div className="w-full rounded-sm" style={{ height: h, background: color, opacity: 0.85 }} />
+                    </div>
+                  );
+                })}
+                {last12.length === 0 && (
+                  <span className="text-[10px] text-foreground/30">No complete weeks yet</span>
+                )}
+              </div>
+            );
+          })()}
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 flex flex-col justify-between">
           <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-2">Avg Positions / Week</p>
@@ -488,69 +551,60 @@ export function YearTab() {
 
           {weeksBreakdown.length > 0 && (
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden w-full sm:flex-1 sm:min-w-0">
-              <div className="px-4 py-3 border-b border-[var(--border)]">
+              <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">Week-by-Week</h3>
+                <span className="text-[10px] text-foreground/40">{weeksBreakdown.length} weeks</span>
               </div>
-              <div className="sm:hidden divide-y divide-[var(--border)]">
+              <div className="divide-y divide-[var(--border)]">
                 {weeksBreakdown.map((w) => {
                   const vsAvg = avgWeeklyPremium > 0 ? ((w.premium - avgWeeklyPremium) / avgWeeklyPremium) * 100 : null;
+                  const barPct = maxWeekly > 0 ? Math.max(0, Math.min(100, (w.premium / maxWeekly) * 100)) : 0;
+                  const dateShort = new Date(w.week_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
                   return (
-                    <div key={w.id} className="px-4 py-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-foreground">{w.week_end}</span>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${w.is_complete ? "bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-300" : "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300"}`}>
-                          {w.is_complete ? "Complete" : "Active"}
+                    <div key={w.id} className="px-4 py-2.5 hover:bg-[var(--surface-2)] transition-colors">
+                      <div className="flex items-center gap-3">
+                        {/* Date + status dot */}
+                        <div className="w-20 shrink-0">
+                          <p className="text-[11px] font-semibold text-foreground">{dateShort}</p>
+                          <p className="text-[9px] text-foreground/40">{w.position_count} pos</p>
+                        </div>
+                        {/* Sparkline bar */}
+                        <div className="flex-1 h-5 bg-[var(--surface-2)] rounded-md overflow-hidden">
+                          <div
+                            className="h-full rounded-md transition-all"
+                            style={{
+                              width: `${barPct}%`,
+                              background: w.premium > avgWeeklyPremium * 1.1
+                                ? "#22c55e"
+                                : w.premium > 0
+                                ? "#86efac"
+                                : "#ef4444",
+                            }}
+                          />
+                        </div>
+                        {/* Premium value */}
+                        <div className="w-20 shrink-0 text-right">
+                          <p className={`text-[12px] font-black tabular-nums ${
+                            w.premium > 0 ? "text-green-500" : w.premium < 0 ? "text-red-500" : "text-foreground/40"
+                          }`}>{fmt$(w.premium)}</p>
+                          {vsAvg !== null && w.is_complete && (
+                            <p className={`text-[9px] font-semibold ${
+                              vsAvg >= 0 ? "text-green-400" : "text-red-400"
+                            }`}>{vsAvg >= 0 ? "▲" : "▼"}{Math.abs(vsAvg).toFixed(0)}%</p>
+                          )}
+                        </div>
+                        {/* Status pill */}
+                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          w.is_complete
+                            ? "bg-green-500/15 text-green-400"
+                            : "bg-blue-500/15 text-blue-400"
+                        }`}>
+                          {w.is_complete ? "✓" : "•"}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm flex-wrap">
-                        <span className={`font-semibold ${w.premium >= 0 ? "text-green-500" : "text-red-500"}`}>{fmt$(w.premium)}</span>
-                        {vsAvg !== null && w.is_complete && (
-                          <span className={`text-xs font-semibold ${vsAvg >= 0 ? "text-green-500" : "text-red-400"}`}>
-                            {vsAvg >= 0 ? "▲" : "▼"} {Math.abs(vsAvg).toFixed(0)}% vs avg
-                          </span>
-                        )}
-                        <span className={`text-xs font-semibold ${w.realized_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>{fmt$(w.realized_pnl)}</span>
-                        <span className="text-xs text-foreground/50">{w.position_count} pos</span>
                       </div>
                     </div>
                   );
                 })}
-              </div>
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
-                      {["Week Ending", "Status", "Positions", "Premium", "vs Avg", "Realized P/L", "Account Value"].map((h) => (
-                        <th key={h} className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {weeksBreakdown.map((w) => {
-                      const vsAvg = avgWeeklyPremium > 0 ? ((w.premium - avgWeeklyPremium) / avgWeeklyPremium) * 100 : null;
-                      return (
-                        <tr key={w.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                          <td className="px-4 py-2.5 font-semibold text-foreground">{w.week_end}</td>
-                          <td className="px-4 py-2.5">
-                            {w.is_complete
-                              ? <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-300 px-2 py-0.5 rounded-full font-semibold">Complete</span>
-                              : <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">Active</span>
-                            }
-                          </td>
-                          <td className="px-4 py-2.5 text-foreground/70">{w.position_count}</td>
-                          <td className={`px-4 py-2.5 font-semibold ${w.premium >= 0 ? "text-green-500" : "text-red-500"}`}>{fmt$(w.premium)}</td>
-                          <td className="px-4 py-2.5">
-                            {vsAvg !== null && w.is_complete
-                              ? <span className={`text-xs font-semibold ${vsAvg >= 0 ? "text-green-500" : "text-red-400"}`}>{vsAvg >= 0 ? "▲" : "▼"} {Math.abs(vsAvg).toFixed(0)}%</span>
-                              : <span className="text-foreground/30">—</span>}
-                          </td>
-                          <td className={`px-4 py-2.5 font-semibold ${w.realized_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>{fmt$(w.realized_pnl)}</td>
-                          <td className="px-4 py-2.5 text-foreground/70">{w.account_value != null ? `$${w.account_value.toLocaleString()}` : "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               </div>
             </div>
           )}

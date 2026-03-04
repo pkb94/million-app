@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, AreaChart, Area, ReferenceLine,
 } from "recharts";
 import { BudgetEntry, BudgetRecurrence } from "@/lib/api";
 import {
@@ -25,26 +25,52 @@ export function TrendChart({ entries }: { entries: BudgetEntry[] }) {
 
   const hasData = data.some((d) => d.Income > 0 || d.Expenses > 0);
 
+  // Compute net surplus per month for the area fill
+  const chartData = data.map((d) => ({ ...d, Net: d.Income - d.Expenses }));
+
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
-      <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide mb-3">12-Month Trend</p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-foreground/50 uppercase tracking-wide">12-Month Trend</p>
+        <div className="flex items-center gap-3 text-[10px] text-foreground/40">
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-emerald-500" />Income</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-red-500" />Expenses</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 rounded bg-blue-400" />Net</span>
+        </div>
+      </div>
       {!hasData ? (
-        <div className="h-[180px] flex items-center justify-center text-sm text-foreground/30">
+        <div className="h-[200px] flex items-center justify-center text-sm text-foreground/30">
           No data yet — add entries to see trends
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data} barGap={2} barCategoryGap="30%">
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#10b981" stopOpacity={0.03} />
+              </linearGradient>
+              <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0.03} />
+              </linearGradient>
+              <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.2} />
+                <stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} />
             <YAxis tickFormatter={fmtK} tick={{ fontSize: 11, fill: "var(--foreground)", opacity: 0.5 }} axisLine={false} tickLine={false} width={44} />
             <Tooltip
               formatter={(v: unknown, name: string | undefined) => [fmt(Number(v)), name ?? ""]}
-              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }}
             />
-            <Bar dataKey="Income"   fill="#10b981" radius={[3,3,0,0]} />
-            <Bar dataKey="Expenses" fill="#ef4444" radius={[3,3,0,0]} />
-          </BarChart>
+            <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="3 3" />
+            <Area type="monotone" dataKey="Income"   stroke="#10b981" fill="url(#incGrad)" strokeWidth={2} dot={false} />
+            <Area type="monotone" dataKey="Expenses" stroke="#ef4444" fill="url(#expGrad)" strokeWidth={2} dot={false} />
+            <Area type="monotone" dataKey="Net"      stroke="#60a5fa" fill="url(#netGrad)" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+          </AreaChart>
         </ResponsiveContainer>
       )}
     </div>
