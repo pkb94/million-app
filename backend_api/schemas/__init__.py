@@ -28,10 +28,6 @@ from backend_api.schemas.trades import (  # noqa: F401
     AccountOut,
     HoldingOut,
     HoldingUpsertRequest,
-    TradeCloseRequest,
-    TradeCreateRequest,
-    TradeOut,
-    TradeUpdateRequest,
 )
 
 from backend_api.schemas.budget import (  # noqa: F401

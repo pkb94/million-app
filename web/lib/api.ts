@@ -299,36 +299,6 @@ export interface FlowSnapshot {
 export const fetchNetFlowHistory = (symbol: string, days = 1) =>
   api.get<FlowSnapshot[]>(`/options/net-flow-history/${symbol.toUpperCase()}?days=${days}`);
 
-// ── Trades ───────────────────────────────────────────────────────────────────
-
-export interface Trade {
-  id: number;
-  symbol: string;
-  instrument: string;
-  strategy: string;
-  action: string;
-  quantity: number;
-  entry_price: number;
-  entry_date: string;
-  exit_price?: number | null;
-  exit_date?: string | null;
-  realized_pnl?: number | null;
-  is_closed?: boolean;
-  option_type?: string | null;
-  strike_price?: number | null;
-  expiry_date?: string | null;
-  // legacy aliases for backwards compat
-  qty?: number;
-  price?: number;
-  date?: string;
-  pnl?: number | null;
-}
-
-export const fetchTrades = () => api.get<Trade[]>("/trades");
-export const createTrade = (body: Omit<Trade, "id">) => api.post("/trades", body);
-export const updateTrade = (id: number, body: Partial<Trade>) => api.put(`/trades/${id}`, body);
-export const deleteTrade = (id: number) => api.del(`/trades/${id}`);
-
 // ── Weekly Options Portfolio ──────────────────────────────────────────────────
 
 export interface WeeklySnapshot {

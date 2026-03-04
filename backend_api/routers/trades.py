@@ -1,11 +1,10 @@
-"""backend_api/routers/trades.py — Trade journal & order management routes."""
+"""backend_api/routers/trades.py — Accounts and account-linked holdings."""
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
 from logic import services
 from ..schemas import (
@@ -13,10 +12,6 @@ from ..schemas import (
     AccountOut,
     HoldingOut,
     HoldingUpsertRequest,
-    TradeCloseRequest,
-    TradeCreateRequest,
-    TradeOut,
-    TradeUpdateRequest,
 )
 from ..deps import get_current_user
 
@@ -82,90 +77,3 @@ def delete_account_holding(holding_id: int, user=Depends(get_current_user)) -> D
         raise HTTPException(status_code=404, detail="Holding not found")
     return {"status": "ok"}
 
-
-# ── Trades ────────────────────────────────────────────────────────────────────
-
-@router.get("/trades", response_model=List[TradeOut])
-def list_trades(
-    user=Depends(get_current_user),
-    limit: int = Query(default=200, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-    symbol: Optional[str] = Query(default=None, description="Filter by ticker symbol (case-insensitive)"),
-    is_closed: Optional[bool] = Query(default=None, description="Filter by open/closed status"),
-    date_from: Optional[datetime] = Query(default=None, description="Filter trades on or after this date"),
-    date_to: Optional[datetime] = Query(default=None, description="Filter trades on or before this date"),
-    instrument: Optional[str] = Query(default=None, description="Filter by instrument: STOCK or OPTION"),
-) -> List[TradeOut]:
-    rows = services.list_trades(
-        user_id=int(user["sub"]),
-        limit=limit,
-        offset=offset,
-        symbol=symbol,
-        is_closed=is_closed,
-        date_from=date_from,
-        date_to=date_to,
-        instrument=instrument,
-    )
-    return [TradeOut.model_validate(r) for r in rows]
-
-
-@router.get("/trades/{trade_id}", response_model=TradeOut)
-def get_trade(trade_id: int, user=Depends(get_current_user)) -> TradeOut:
-    row = services.get_trade(trade_id, user_id=int(user["sub"]))
-    if row is None:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    return TradeOut.model_validate(row)
-
-
-@router.post("/trades", response_model=Dict[str, Any])
-def create_trade(req: TradeCreateRequest, user=Depends(get_current_user)) -> Dict[str, Any]:
-    trade_id = services.save_trade(
-        req.symbol, req.instrument, req.strategy, req.action,
-        req.qty, req.price, req.date,
-        o_type=req.option_type,
-        strike=req.strike,
-        expiry=req.expiry,
-        notes=req.notes,
-        user_id=int(user["sub"]),
-        client_order_id=req.client_order_id,
-        account_id=req.account_id,
-    )
-    return {"status": "ok", "trade_id": int(trade_id)}
-
-
-@router.put("/trades/{trade_id}", response_model=Dict[str, str])
-def update_trade(
-    trade_id: int, req: TradeUpdateRequest, user=Depends(get_current_user)
-) -> Dict[str, str]:
-    ok = services.update_trade(
-        trade_id, req.symbol, req.strategy, req.action,
-        req.qty, req.price, req.date,
-        user_id=int(user["sub"]),
-        notes=req.notes,
-        option_type=req.option_type,
-        strike=req.strike,
-        expiry=req.expiry,
-    )
-    if not ok:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    return {"status": "ok"}
-
-
-@router.post("/trades/{trade_id}/close", response_model=Dict[str, str])
-def close_trade(
-    trade_id: int, req: TradeCloseRequest, user=Depends(get_current_user)
-) -> Dict[str, str]:
-    ok = services.close_trade(
-        trade_id, req.exit_price, exit_date=req.exit_date, user_id=int(user["sub"])
-    )
-    if not ok:
-        raise HTTPException(status_code=400, detail="Trade not found or already closed")
-    return {"status": "ok"}
-
-
-@router.delete("/trades/{trade_id}", response_model=Dict[str, str])
-def delete_trade(trade_id: int, user=Depends(get_current_user)) -> Dict[str, str]:
-    ok = services.delete_trade(trade_id, user_id=int(user["sub"]))
-    if not ok:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    return {"status": "ok"}

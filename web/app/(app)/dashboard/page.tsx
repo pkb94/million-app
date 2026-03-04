@@ -1,16 +1,14 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
-import { fetchTrades, fetchCashBalance, fetchPortfolioSummary, Trade } from "@/lib/api";
+import { fetchPortfolioSummary } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import TickerSearchInput from "@/components/TickerSearchInput";
-import {
-  TrendingUp, TrendingDown, DollarSign, Activity, Clock, ArrowRight,
-} from "lucide-react";
-import { PageHeader, SectionLabel, SkeletonStatGrid, Badge, RefreshButton } from "@/components/ui";
+import { ArrowRight } from "lucide-react";
+import { PageHeader, SectionLabel, RefreshButton } from "@/components/ui";
 import MarketCards from "@/components/dashboard/MarketCards";
 import VixPanel from "@/components/dashboard/VixPanel";
 import EconomicCalendar from "@/components/dashboard/EconomicCalendar";
@@ -22,30 +20,10 @@ const QUICK = [
   { href: "/budget",       label: "Budget",      sub: "Track expenses",       color: "from-orange-500 to-orange-600" },
 ];
 
-function calcPnl(trades: Trade[]) {
-  let pnl = 0; let open = 0; let closed = 0;
-  for (const t of trades) {
-    const entryPrice = t.entry_price ?? t.price ?? 0;
-    const qty = t.quantity ?? t.qty ?? 0;
-    if (t.exit_price == null) { open++; continue; }
-    closed++;
-    if (t.realized_pnl != null) {
-      pnl += t.realized_pnl;
-    } else {
-      const d = t.action?.toUpperCase() === "SELL" ? entryPrice - t.exit_price : t.exit_price - entryPrice;
-      pnl += d * qty;
-    }
-  }
-  return { pnl, openCount: open, closedCount: closed };
-}
-
-const fmt = (v: number) => "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [lookupQuery, setLookupQuery] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,35 +31,12 @@ export default function DashboardPage() {
     if (t) router.push(`/stocks/${t}`);
   };
 
-  const tradesQ   = useQuery({ queryKey: ["trades"],            queryFn: fetchTrades,             staleTime: 30_000 });
-  const cashQ     = useQuery({ queryKey: ["cash-balance"],      queryFn: () => fetchCashBalance(), staleTime: 30_000 });
   const summaryQ  = useQuery({ queryKey: ["portfolioSummary"],  queryFn: fetchPortfolioSummary,   staleTime: 60_000 });
 
   const handleRefresh = () => {
-    tradesQ.refetch();
-    cashQ.refetch();
     summaryQ.refetch();
   };
-  const isRefreshing = tradesQ.isFetching || cashQ.isFetching || summaryQ.isFetching;
-
-  const trades = tradesQ.data ?? [];
-  const { pnl, openCount, closedCount } = calcPnl(trades);
-  const cash = cashQ.data?.balance ?? null;
-  const pnlUp = pnl >= 0;
-
-  const sparkData = trades
-    .filter((t) => t.exit_price != null)
-    .slice(-14)
-    .map((t, i) => {
-      const entryPrice = t.entry_price ?? t.price ?? 0;
-      const qty = t.quantity ?? t.qty ?? 0;
-      const v = t.realized_pnl != null
-        ? t.realized_pnl
-        : (t.action?.toUpperCase() === "SELL" ? entryPrice - (t.exit_price ?? 0) : (t.exit_price ?? 0) - entryPrice) * qty;
-      return { i, v };
-    });
-
-  const isLoading = tradesQ.isLoading && cashQ.isLoading;
+  const isRefreshing = summaryQ.isFetching;
 
   return (
     <div className="p-4 sm:p-6 w-full overflow-x-hidden">
@@ -221,90 +176,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Recent trades */}
-      {tradesQ.isLoading ? (
-        <>
-          <SectionLabel>Recent Trades</SectionLabel>
-          <div className="space-y-2">
-            {[1,2,3].map(i => <div key={i} className="skeleton h-14 rounded-xl" />)}
-          </div>
-        </>
-      ) : trades.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <SectionLabel>Recent Trades</SectionLabel>
-            <Link href="/trades" className="text-xs text-blue-500 hover:underline flex items-center gap-1 -mt-3">
-              View all <ArrowRight size={11} />
-            </Link>
-          </div>
-
-          {/* Mobile card list */}
-          <div className="flex flex-col gap-2 sm:hidden divide-y divide-[var(--border)]">
-            {[...trades].reverse().slice(0, 6).map((t) => {
-              const ep = t.exit_price;
-              const entryPrice = t.entry_price ?? t.price ?? 0;
-              const qty = t.quantity ?? t.qty ?? 0;
-              const rowPnl = ep != null
-                ? t.realized_pnl != null ? t.realized_pnl
-                : (t.action?.toUpperCase() === "SELL" ? entryPrice - ep : ep - entryPrice) * qty
-                : null;
-              return (
-                <div key={t.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-foreground text-sm">{t.symbol}</span>
-                      <Badge variant={t.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{t.action}</Badge>
-                    </div>
-                    <p className="text-xs text-foreground/70 mt-0.5">{qty} × ${entryPrice?.toFixed(2)} · {String(t.entry_date ?? t.date ?? "").slice(0, 10)}</p>
-                  </div>
-                  <div className={`text-sm font-bold ${rowPnl == null ? "text-foreground/60" : rowPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
-                    {rowPnl == null ? <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">Open</span> : `${rowPnl >= 0 ? "+" : ""}${fmt(rowPnl)}`}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] text-foreground uppercase tracking-wide bg-[var(--surface-2)]">
-                  {["Date", "Ticker", "Action", "Qty", "Entry", "Exit", "P/L"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[...trades].reverse().slice(0, 8).map((t) => {
-                  const ep = t.exit_price;
-                  const entryPrice = t.entry_price ?? t.price ?? 0;
-                  const qty = t.quantity ?? t.qty ?? 0;
-                  const rowPnl = ep != null
-                    ? t.realized_pnl != null ? t.realized_pnl
-                    : (t.action?.toUpperCase() === "SELL" ? entryPrice - ep : ep - entryPrice) * qty
-                    : null;
-                  return (
-                    <tr key={t.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                      <td className="px-4 py-3 text-foreground/70 text-xs">{String(t.entry_date ?? t.date ?? "").slice(0, 10)}</td>
-                      <td className="px-4 py-3 font-bold text-foreground">{t.symbol}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={t.action?.toUpperCase() === "BUY" ? "success" : "danger"}>{t.action}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-foreground">{qty}</td>
-                      <td className="px-4 py-3 text-foreground">${entryPrice?.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-foreground/70">{ep != null ? `$${ep.toFixed(2)}` : "—"}</td>
-                      <td className={`px-4 py-3 font-bold ${rowPnl == null ? "text-foreground/60" : rowPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
-                        {rowPnl == null ? "—" : `${rowPnl >= 0 ? "+" : ""}${fmt(rowPnl)}`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 The business logic now lives in:
   - logic/auth_services.py      (auth, users, tokens, rate-limiting)
-  - logic/trade_services.py     (trades, accounts, holdings, load_data)
+  - logic/trade_services.py     (accounts, holdings)
   - logic/budget_services.py    (cash, budget, overrides, CC weeks, ledger)
   - logic/portfolio_services.py (portfolio value history)
 
@@ -45,12 +45,6 @@ from logic.trade_services import get_session, _get_portfolio_session     # noqa:
 from logic.budget_services import _budget_session                        # noqa: F401, E402
 from logic.portfolio_services import _portfolio_session                  # noqa: F401, E402
 
-# Re-export normalizers explicitly (used across routers).
-from logic.trade_services import (                                        # noqa: F401, E402
-    normalize_instrument,
-    normalize_action,
-    normalize_option_type,
-)
 from logic.budget_services import (                                       # noqa: F401, E402
     normalize_cash_action,
     normalize_budget_type,

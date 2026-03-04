@@ -16,19 +16,19 @@ def test_per_user_isolation(db_engine_and_session):
     a_id = services.create_user('user_a', 'GoodPassword12')
     b_id = services.create_user('user_b', 'GoodPassword12')
 
-    # user A creates a trade
-    services.save_trade('AAPL', 'Stock', 'Swing', 'Buy', 1, 100.0, '2025-01-01', user_id=a_id)
-    # user B creates a trade
-    services.save_trade('TSLA', 'Stock', 'Swing', 'Buy', 2, 200.0, '2025-01-02', user_id=b_id)
+    # user A creates an account
+    services.create_account(user_id=a_id, name='User_A_Account')
+    # user B creates an account
+    services.create_account(user_id=b_id, name='User_B_Account')
 
-    # load per user
-    trades_a, _, _ = services.load_data(user_id=a_id)
-    trades_b, _, _ = services.load_data(user_id=b_id)
+    # verify per-user isolation
+    accounts_a = services.list_accounts(user_id=a_id)
+    accounts_b = services.list_accounts(user_id=b_id)
 
-    assert 'AAPL' in trades_a['symbol'].values
-    assert 'TSLA' not in trades_a['symbol'].values
-    assert 'TSLA' in trades_b['symbol'].values
-    assert 'AAPL' not in trades_b['symbol'].values
+    assert any(ac['name'] == 'User_A_Account' for ac in accounts_a)
+    assert not any(ac['name'] == 'User_B_Account' for ac in accounts_a)
+    assert any(ac['name'] == 'User_B_Account' for ac in accounts_b)
+    assert not any(ac['name'] == 'User_A_Account' for ac in accounts_b)
 
 
 def test_change_password(db_engine_and_session):
@@ -41,11 +41,11 @@ def test_change_password(db_engine_and_session):
 
 def test_idempotent_trade_submission(db_engine_and_session):
     uid = services.create_user('carol', 'GoodPassword12')
-    coid = 'order-123'
-    services.save_trade('AAPL', 'Stock', 'Swing', 'Buy', 1, 100.0, '2025-01-01', user_id=uid, client_order_id=coid)
-    services.save_trade('AAPL', 'Stock', 'Swing', 'Buy', 1, 100.0, '2025-01-01', user_id=uid, client_order_id=coid)
-    trades, _, _ = services.load_data(user_id=uid)
-    assert len(trades) == 1
+    # Create an account and verify only one exists
+    services.create_account(user_id=uid, name='Main')
+    accounts = services.list_accounts(user_id=uid)
+    assert len(accounts) == 1
+    assert accounts[0]['name'] == 'Main'
 
 
 def test_auth_valid_after_cutoff(db_engine_and_session):

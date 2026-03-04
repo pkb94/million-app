@@ -35,18 +35,6 @@ MarketsBase   = declarative_base()
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
-class InstrumentType(enum.Enum):
-    STOCK  = "STOCK"
-    OPTION = "OPTION"
-
-class Action(enum.Enum):
-    BUY  = "BUY"
-    SELL = "SELL"
-
-class OptionType(enum.Enum):
-    CALL = "CALL"
-    PUT  = "PUT"
-
 class CashAction(enum.Enum):
     DEPOSIT  = "DEPOSIT"
     WITHDRAW = "WITHDRAW"
@@ -143,32 +131,6 @@ class Account(TradesBase):
     broker     = Column(String, nullable=True)
     currency   = Column(String, nullable=False, default="USD")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-class Trade(TradesBase):
-    __tablename__ = "trades"
-    id              = Column(Integer, primary_key=True)
-    user_id         = Column(Integer, nullable=False, index=True)
-    account_id      = Column(Integer, nullable=True, index=True)
-    symbol          = Column(String, nullable=False, index=True)
-    quantity        = Column(Integer, nullable=False)
-    instrument      = Column(Enum(InstrumentType), nullable=True)
-    strategy        = Column(String, nullable=True)
-    action          = Column(Enum(Action), nullable=False)
-    entry_date      = Column(DateTime, nullable=False, index=True)
-    entry_price     = Column(Float, nullable=False)
-    is_closed       = Column(Boolean, nullable=False, default=False)
-    exit_date       = Column(DateTime, nullable=True)
-    exit_price      = Column(Float, nullable=True)
-    realized_pnl    = Column(Float, nullable=True)
-    option_type     = Column(Enum(OptionType), nullable=True)
-    strike_price    = Column(Float, nullable=True)
-    expiry_date     = Column(DateTime, nullable=True)
-    client_order_id = Column(String, nullable=True)
-    notes           = Column(Text, nullable=True)
-    created_at      = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at      = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-Index("ux_trades_user_client_order_id", Trade.user_id, Trade.client_order_id, unique=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PORTFOLIO DATABASE  (portfolio.db)
