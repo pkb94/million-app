@@ -1,6 +1,7 @@
 """backend_api/routers/auth.py — Authentication & session management routes."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -18,6 +19,8 @@ from ..schemas import (
     AuthSessionOut,
     AuthSignupRequest,
 )
+
+logger = logging.getLogger("optionflow.auth")
 from ..security import create_access_token
 from ..deps import get_current_user
 
@@ -45,8 +48,8 @@ def login(req: AuthLoginRequest, request: Request) -> AuthResponse:
             raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Rate-limit check failed for login (%s): %s", username, exc)
 
     auth_result = services.authenticate_user(username, req.password)
     if not auth_result:
@@ -86,8 +89,8 @@ def refresh(req: AuthRefreshRequest, request: Request) -> AuthResponse:
             raise HTTPException(status_code=429, detail="Too many refresh attempts. Please try again later.")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Rate-limit check failed for refresh: %s", exc)
 
     rotated = services.rotate_refresh_token(
         refresh_token=req.refresh_token, ip=str(ip) if ip else None, user_agent=ua
@@ -117,16 +120,7 @@ def refresh(req: AuthRefreshRequest, request: Request) -> AuthResponse:
 @router.get("/events", response_model=List[AuthEventOut])
 def auth_events(user=Depends(get_current_user)) -> List[AuthEventOut]:
     rows = services.list_auth_events(user_id=int(user["sub"]), limit=25)
-    return [
-        AuthEventOut(
-            created_at=r.get("created_at"),
-            event_type=str(r.get("event_type") or ""),
-            success=bool(r.get("success")),
-            ip=str(r.get("ip") or "") or None,
-            detail=str(r.get("detail") or "") or None,
-        )
-        for r in rows
-    ]
+    return [AuthEventOut.model_validate(r) for r in rows]
 
 
 @router.get("/me", response_model=AuthMeResponse)
@@ -155,8 +149,8 @@ def logout(req: AuthLogoutRequest | None = None, user=Depends(get_current_user))
     try:
         if req is not None and getattr(req, "refresh_token", None):
             services.revoke_refresh_token(user_id=user_id, refresh_token=str(req.refresh_token))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to revoke refresh token on logout for user %s: %s", user_id, exc)
     services.log_auth_event(
         event_type="logout", success=True,
         username=str(user.get("username") or ""), user_id=user_id,
@@ -171,8 +165,8 @@ def logout_all(user=Depends(get_current_user)) -> Dict[str, str]:
     services.set_auth_valid_after_epoch(user_id=user_id, epoch_seconds=int(token_iat) + 1)
     try:
         services.revoke_all_refresh_tokens(user_id=user_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("revoke_all_refresh_tokens failed on logout_all for user %s: %s", user_id, exc)
     jti = str(user.get("jti") or "").strip()
     exp_raw = user.get("exp")
     try:
@@ -203,8 +197,8 @@ def change_password(req: AuthChangePasswordRequest, user=Depends(get_current_use
         raise HTTPException(status_code=400, detail=str(e))
     try:
         services.revoke_all_refresh_tokens(user_id=user_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("revoke_all_refresh_tokens failed on change_password for user %s: %s", user_id, exc)
     services.log_auth_event(
         event_type="change_password", success=True,
         username=str(user.get("username") or ""), user_id=user_id,
@@ -223,17 +217,7 @@ def change_password(req: AuthChangePasswordRequest, user=Depends(get_current_use
 @router.get("/sessions", response_model=List[AuthSessionOut])
 def auth_sessions(user=Depends(get_current_user)) -> List[AuthSessionOut]:
     rows = services.list_refresh_sessions(user_id=int(user["sub"]), limit=25)
-    return [
-        AuthSessionOut(
-            id=int(r.get("id")),
-            created_at=r.get("created_at"),
-            last_used_at=r.get("last_used_at"),
-            ip=r.get("ip"),
-            user_agent=r.get("user_agent"),
-            expires_at=r.get("expires_at"),
-        )
-        for r in rows
-    ]
+    return [AuthSessionOut.model_validate(r) for r in rows]
 
 
 @router.post("/sessions/{session_id}/revoke")

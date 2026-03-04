@@ -1,37 +1,37 @@
 """backend_api/routers/markets.py — Market data, GEX, options flow & stock info routes."""
 from __future__ import annotations
 
-import re
-import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta as _td
-from typing import Any, Dict, List, Optional
-import sqlite3 as _sqlite3
-from pathlib import Path as _Path
+from datetime import datetime, timedelta as _td
 from datetime import timezone as _tz
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yfinance as yf
-from fastapi import APIRouter, Depends, HTTPException
+from cachetools import TTLCache
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..deps import get_current_user
+from ..state import (
+    _RANGE_INTERVAL,
+    _backfill_history,
+    _flow_db,
+    _gex_cache,
+    _GEX_CACHE_TTL,
+    _record_flow_snapshot,
+    _watched,
+    _watched_lock,
+    _watched_ttl,
+)
 
 router = APIRouter(tags=["markets"])
 
-# ── Module-level caches (shared with background poller in main.py) ─────────────
-_SEARCH_CACHE_TTL = 60
-_search_cache: dict[str, tuple[float, list]] = {}
-
-_STOCK_INFO_CACHE: dict[str, tuple[float, Any]] = {}
-_STOCK_INFO_TTL = 300  # 5 minutes
-
-_QUOTE_CACHE: dict[str, tuple[float, float]] = {}
-_QUOTE_TTL = 60  # 60 seconds
-
-_FLOW_DB = _Path(__file__).parent.parent.parent / "markets.db"
-
-_RANGE_INTERVAL: dict[int, str] = {1: "1m", 2: "5m", 3: "5m", 7: "30m", 14: "30m", 30: "1d"}
+# ── Bounded TTL caches ─────────────────────────────────────────────────────────────
+# maxsize caps memory; ttl in seconds controls freshness
+_search_cache: TTLCache = TTLCache(maxsize=256, ttl=60)
+_STOCK_INFO_CACHE: TTLCache = TTLCache(maxsize=512, ttl=300)
+_QUOTE_CACHE: TTLCache = TTLCache(maxsize=512, ttl=60)
 
 
 def _flow_db() -> _sqlite3.Connection:
@@ -74,9 +74,8 @@ def search_tickers(q: str = "", limit: int = 8) -> List[Dict[str, Any]]:
         return []
     key = q.lower()
     cached = _search_cache.get(key)
-    now = time.monotonic()
-    if cached and (now - cached[0]) < _SEARCH_CACHE_TTL:
-        return cached[1][:limit]
+    if cached is not None:
+        return cached[:limit]
     try:
         res = yf.Search(q, max_results=min(limit, 20), enable_fuzzy_query=True)
         quotes = res.quotes or []
@@ -102,7 +101,7 @@ def search_tickers(q: str = "", limit: int = 8) -> List[Dict[str, Any]]:
                 "type":     (q_item.get("typeDisp") or q_item.get("quoteType") or "").strip(),
                 "exchange": (q_item.get("exchDisp") or q_item.get("exchange") or "").strip(),
             })
-        _search_cache[key] = (now, results)
+        _search_cache[key] = results
         return results[:limit]
     except Exception:
         return []
@@ -113,7 +112,7 @@ def search_tickers(q: str = "", limit: int = 8) -> List[Dict[str, Any]]:
 @router.post("/options/watch", status_code=204)
 def watch_symbols(body: Dict[str, Any], _user=Depends(get_current_user)) -> None:
     """Register symbols being watched by frontend (heartbeat to keep GEX poller alive)."""
-    from ..main import _watched, _watched_lock, _watched_ttl, _backfill_history, _RANGE_INTERVAL as _RI
+    import threading
     symbols: list[str] = [s.strip().upper() for s in body.get("symbols", []) if s]
     now = time.monotonic()
     new_symbols: list[str] = []
@@ -124,7 +123,7 @@ def watch_symbols(body: Dict[str, Any], _user=Depends(get_current_user)) -> None
             _watched.add(s)
             _watched_ttl[s] = now
     for s in new_symbols:
-        for d in _RI:
+        for d in _RANGE_INTERVAL:
             threading.Thread(
                 target=_backfill_history, args=(s, d), daemon=True,
                 name=f"backfill-{s}-{d}d"
@@ -208,7 +207,6 @@ def market_quotes(symbols: str) -> List[Dict[str, Any]]:
 @router.get("/options/gamma-exposure/{symbol}", response_model=Dict[str, Any])
 def gamma_exposure(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
     from logic.gamma import compute_gamma_exposure
-    from ..main import _gex_cache, _GEX_CACHE_TTL, _record_flow_snapshot
 
     sym = symbol.upper()
     now = time.monotonic()
@@ -259,10 +257,9 @@ def gamma_exposure(symbol: str, _user=Depends(get_current_user)) -> Dict[str, An
 @router.get("/stocks/{symbol}/info", response_model=Dict[str, Any])
 def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
     sym = symbol.strip().upper()
-    now = time.monotonic()
     cached = _STOCK_INFO_CACHE.get(sym)
-    if cached and (now - cached[0]) < _STOCK_INFO_TTL:
-        return cached[1]
+    if cached is not None:
+        return cached
 
     def _sf(v: Any) -> Optional[float]:
         try:
@@ -345,7 +342,7 @@ def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
             "earnings_date": info.get("earningsTimestamp"),
             "error": None,
         }
-        _STOCK_INFO_CACHE[sym] = (now, result)
+        _STOCK_INFO_CACHE[sym] = result
         return result
     except Exception as exc:
         return {"symbol": sym, "error": str(exc)}
@@ -354,10 +351,9 @@ def stock_info(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
 @router.get("/quote/{symbol}", response_model=Dict[str, Any])
 def get_live_quote(symbol: str, _user=Depends(get_current_user)) -> Dict[str, Any]:
     sym = symbol.strip().upper()
-    now = time.monotonic()
     cached = _QUOTE_CACHE.get(sym)
-    if cached and (now - cached[0]) < _QUOTE_TTL:
-        return {"symbol": sym, "price": cached[1], "from_cache": True}
+    if cached is not None:
+        return {"symbol": sym, "price": cached, "from_cache": True}
     try:
         ticker = yf.Ticker(sym)
         fi = ticker.fast_info
@@ -370,7 +366,7 @@ def get_live_quote(symbol: str, _user=Depends(get_current_user)) -> Dict[str, An
                 price = float(hist["Close"].iloc[-1])
         if price <= 0:
             return {"symbol": sym, "price": None, "error": "Price unavailable"}
-        _QUOTE_CACHE[sym] = (now, price)
+        _QUOTE_CACHE[sym] = round(price, 4)
         return {"symbol": sym, "price": round(price, 4), "from_cache": False}
     except Exception as exc:
         return {"symbol": sym, "price": None, "error": str(exc)}

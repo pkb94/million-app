@@ -1633,13 +1633,14 @@ def get_cash_balance(*, user_id: int, currency: str = "USD") -> float:
     return get_cash_balance_ledger(user_id=int(user_id), currency=str(currency or "USD"))
 
 
-def list_ledger_entries(*, user_id: int, limit: int = 100) -> list[dict]:
+def list_ledger_entries(*, user_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
     session = _budget_session()
     try:
         es = (
             session.query(LedgerEntry)
             .filter(LedgerEntry.user_id == int(user_id))
             .order_by(LedgerEntry.created_at.desc())
+            .offset(int(offset))
             .limit(int(limit))
             .all()
         )

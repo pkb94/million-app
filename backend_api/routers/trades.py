@@ -1,11 +1,11 @@
 """backend_api/routers/trades.py — Trade journal & order management routes."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from logic import services
 from ..schemas import (
@@ -22,23 +22,9 @@ from ..schemas import (
     TradeUpdateRequest,
 )
 from ..deps import get_current_user
+from ..utils import df_records as _df_records
 
 router = APIRouter(tags=["trades"])
-
-
-def _df_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    if df is None or df.empty:
-        return []
-    out: List[Dict[str, Any]] = []
-    for rec in df.to_dict(orient="records"):
-        cleaned: Dict[str, Any] = {}
-        for k, v in rec.items():
-            if isinstance(v, (pd.Timestamp, datetime)):
-                cleaned[k] = pd.to_datetime(v).to_pydatetime().isoformat()
-            else:
-                cleaned[k] = v
-        out.append(cleaned)
-    return out
 
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
@@ -46,16 +32,7 @@ def _df_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
 @router.get("/accounts", response_model=List[AccountOut])
 def list_accounts(user=Depends(get_current_user)) -> List[AccountOut]:
     rows = services.list_accounts(user_id=int(user["sub"]))
-    return [
-        AccountOut(
-            id=int(r.get("id")),
-            name=str(r.get("name") or ""),
-            broker=(str(r.get("broker") or "") or None),
-            currency=str(r.get("currency") or "USD"),
-            created_at=r.get("created_at"),
-        )
-        for r in rows
-    ]
+    return [AccountOut.model_validate(r) for r in rows]
 
 
 @router.post("/accounts", response_model=AccountOut)
@@ -70,7 +47,7 @@ def create_account(req: AccountCreateRequest, user=Depends(get_current_user)) ->
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return AccountOut(
-        id=int(account_id), name=str(req.name),
+        id=int(account_id), name=req.name,
         broker=req.broker, currency=str(req.currency).upper(),
     )
 
@@ -81,17 +58,7 @@ def list_account_holdings(account_id: int, user=Depends(get_current_user)) -> Li
         rows = services.list_holdings(user_id=int(user["sub"]), account_id=int(account_id))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return [
-        HoldingOut(
-            id=int(r.get("id")),
-            account_id=int(r.get("account_id")),
-            symbol=str(r.get("symbol") or ""),
-            quantity=float(r.get("quantity") or 0.0),
-            avg_cost=r.get("avg_cost"),
-            updated_at=r.get("updated_at"),
-        )
-        for r in rows
-    ]
+    return [HoldingOut.model_validate(r) for r in rows]
 
 
 @router.put("/accounts/{account_id}/holdings", response_model=HoldingOut)
@@ -108,14 +75,7 @@ def upsert_account_holding(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return HoldingOut(
-        id=int(r.get("id")),
-        account_id=int(r.get("account_id")),
-        symbol=str(r.get("symbol") or ""),
-        quantity=float(r.get("quantity") or 0.0),
-        avg_cost=r.get("avg_cost"),
-        updated_at=r.get("updated_at"),
-    )
+    return HoldingOut.model_validate(r)
 
 
 @router.delete("/holdings/{holding_id}")
@@ -131,33 +91,12 @@ def delete_account_holding(holding_id: int, user=Depends(get_current_user)) -> D
 @router.get("/orders", response_model=List[OrderOut])
 def list_orders(
     user=Depends(get_current_user),
-    limit: int = 200,
-    offset: int = 0,
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> List[OrderOut]:
     rows = services.list_orders(user_id=int(user["sub"]))
     paginated = rows[offset: offset + limit]
-    return [
-        OrderOut(
-            id=int(r.get("id")),
-            symbol=str(r.get("symbol") or ""),
-            instrument=str(r.get("instrument") or ""),
-            action=str(r.get("action") or ""),
-            strategy=(str(r.get("strategy") or "") or None),
-            quantity=int(r.get("quantity") or 0),
-            limit_price=r.get("limit_price"),
-            status=str(r.get("status") or ""),
-            created_at=r.get("created_at"),
-            filled_at=r.get("filled_at"),
-            filled_price=r.get("filled_price"),
-            trade_id=(int(r.get("trade_id")) if r.get("trade_id") is not None else None),
-            client_order_id=(str(r.get("client_order_id") or "") or None),
-            external_order_id=(str(r.get("external_order_id") or "") or None),
-            venue=(str(r.get("venue") or "") or None),
-            external_status=(str(r.get("external_status") or "") or None),
-            last_synced_at=r.get("last_synced_at"),
-        )
-        for r in paginated
-    ]
+    return [OrderOut.model_validate(r) for r in paginated]
 
 
 @router.post("/orders", response_model=Dict[str, Any])
@@ -234,19 +173,13 @@ def fill_order_external(
 def order_events(
     order_id: int,
     user=Depends(get_current_user),
-    limit: int = 200,
+    limit: int = Query(default=200, ge=1, le=1000),
 ) -> List[Dict[str, Any]]:
+    import pandas as pd
     rows = services.list_order_events(
         user_id=int(user["sub"]), order_id=int(order_id), limit=int(limit)
     )
-    cleaned: List[Dict[str, Any]] = []
-    for r in rows:
-        rec: Dict[str, Any] = dict(r)
-        v = rec.get("created_at")
-        if isinstance(v, (pd.Timestamp, datetime)):
-            rec["created_at"] = pd.to_datetime(v).to_pydatetime().isoformat()
-        cleaned.append(rec)
-    return cleaned
+    return _df_records(pd.DataFrame(rows) if rows else pd.DataFrame())
 
 
 # ── Trades ────────────────────────────────────────────────────────────────────
@@ -254,8 +187,8 @@ def order_events(
 @router.get("/trades", response_model=List[Dict[str, Any]])
 def list_trades(
     user=Depends(get_current_user),
-    limit: int = 200,
-    offset: int = 0,
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> List[Dict[str, Any]]:
     trades, _, _ = services.load_data(user_id=int(user["sub"]))
     records = _df_records(trades)

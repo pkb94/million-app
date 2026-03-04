@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-import pandas as pd
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from logic import services
 from ..schemas import (
@@ -19,23 +17,9 @@ from ..schemas import (
     CreditCardWeekRequest,
 )
 from ..deps import get_current_user
+from ..utils import df_records as _df_records
 
 router = APIRouter(tags=["budget"])
-
-
-def _df_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    if df is None or df.empty:
-        return []
-    out: List[Dict[str, Any]] = []
-    for rec in df.to_dict(orient="records"):
-        cleaned: Dict[str, Any] = {}
-        for k, v in rec.items():
-            if isinstance(v, (pd.Timestamp, datetime)):
-                cleaned[k] = pd.to_datetime(v).to_pydatetime().isoformat()
-            else:
-                cleaned[k] = v
-        out.append(cleaned)
-    return out
 
 
 # ── Cash ──────────────────────────────────────────────────────────────────────
@@ -43,8 +27,8 @@ def _df_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
 @router.get("/cash", response_model=List[Dict[str, Any]])
 def list_cash(
     user=Depends(get_current_user),
-    limit: int = 200,
-    offset: int = 0,
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> List[Dict[str, Any]]:
     _, cash, _ = services.load_data(user_id=int(user["sub"]))
     records = _df_records(cash)
@@ -69,8 +53,8 @@ def create_cash(req: CashCreateRequest, user=Depends(get_current_user)) -> Dict[
 @router.get("/budget", response_model=List[Dict[str, Any]])
 def list_budget(
     user=Depends(get_current_user),
-    limit: int = 500,
-    offset: int = 0,
+    limit: int = Query(default=500, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
 ) -> List[Dict[str, Any]]:
     _, _, budget = services.load_data(user_id=int(user["sub"]))
     records = _df_records(budget)
@@ -195,16 +179,9 @@ def ledger_cash_balance(user=Depends(get_current_user)) -> Dict[str, Any]:
 @router.get("/ledger/entries", response_model=List[Dict[str, Any]])
 def ledger_entries(
     user=Depends(get_current_user),
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> List[Dict[str, Any]]:
-    rows = services.list_ledger_entries(user_id=int(user["sub"]), limit=int(limit + offset))
-    cleaned: List[Dict[str, Any]] = []
-    for r in rows[offset:]:
-        rec: Dict[str, Any] = dict(r)
-        for k in ("created_at", "effective_at"):
-            v = rec.get(k)
-            if isinstance(v, (pd.Timestamp, datetime)):
-                rec[k] = pd.to_datetime(v).to_pydatetime().isoformat()
-        cleaned.append(rec)
-    return cleaned
+    import pandas as pd
+    rows = services.list_ledger_entries(user_id=int(user["sub"]), limit=int(limit), offset=int(offset))
+    return _df_records(pd.DataFrame(rows) if rows else pd.DataFrame())
