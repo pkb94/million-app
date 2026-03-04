@@ -18,6 +18,7 @@ from ..schemas import (
     OrderOut,
     TradeCloseRequest,
     TradeCreateRequest,
+    TradeOut,
     TradeUpdateRequest,
 )
 from ..deps import get_current_user
@@ -93,9 +94,8 @@ def list_orders(
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ) -> List[OrderOut]:
-    rows = services.list_orders(user_id=int(user["sub"]))
-    paginated = rows[offset: offset + limit]
-    return [OrderOut.model_validate(r) for r in paginated]
+    rows = services.list_orders(user_id=int(user["sub"]), limit=limit, offset=offset)
+    return [OrderOut.model_validate(r) for r in rows]
 
 
 @router.post("/orders", response_model=Dict[str, Any])
@@ -183,26 +183,37 @@ def order_events(
 
 # ── Trades ────────────────────────────────────────────────────────────────────
 
-@router.get("/trades", response_model=List[Dict[str, Any]])
+@router.get("/trades", response_model=List[TradeOut])
 def list_trades(
     user=Depends(get_current_user),
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
-) -> List[Dict[str, Any]]:
-    trades, _, _ = services.load_data(user_id=int(user["sub"]))
-    records = _df_records(trades)
-    return records[offset: offset + limit]
+) -> List[TradeOut]:
+    rows = services.list_trades(user_id=int(user["sub"]), limit=limit, offset=offset)
+    return [TradeOut.model_validate(r) for r in rows]
 
 
-@router.post("/trades", response_model=Dict[str, str])
-def create_trade(req: TradeCreateRequest, user=Depends(get_current_user)) -> Dict[str, str]:
-    services.save_trade(
+@router.get("/trades/{trade_id}", response_model=TradeOut)
+def get_trade(trade_id: int, user=Depends(get_current_user)) -> TradeOut:
+    row = services.get_trade(trade_id, user_id=int(user["sub"]))
+    if row is None:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return TradeOut.model_validate(row)
+
+
+@router.post("/trades", response_model=Dict[str, Any])
+def create_trade(req: TradeCreateRequest, user=Depends(get_current_user)) -> Dict[str, Any]:
+    trade_id = services.save_trade(
         req.symbol, req.instrument, req.strategy, req.action,
         req.qty, req.price, req.date,
+        o_type=req.option_type,
+        strike=req.strike,
+        expiry=req.expiry,
+        notes=req.notes,
         user_id=int(user["sub"]),
         client_order_id=req.client_order_id,
     )
-    return {"status": "ok"}
+    return {"status": "ok", "trade_id": int(trade_id)}
 
 
 @router.put("/trades/{trade_id}", response_model=Dict[str, str])
@@ -211,7 +222,9 @@ def update_trade(
 ) -> Dict[str, str]:
     ok = services.update_trade(
         trade_id, req.symbol, req.strategy, req.action,
-        req.qty, req.price, req.date, user_id=int(user["sub"]),
+        req.qty, req.price, req.date,
+        user_id=int(user["sub"]),
+        notes=req.notes,
     )
     if not ok:
         raise HTTPException(status_code=404, detail="Trade not found")

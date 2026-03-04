@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from logic.holdings import (
     apply_position_status_change,
@@ -35,7 +35,21 @@ from logic.portfolio import (
     parse_dt,
 )
 from logic.premium_ledger import get_premium_dashboard, get_premium_summary, sync_ledger_from_positions
+from logic import services as _services
 from ..deps import get_current_user
+from ..schemas import (
+    AssignmentCreateRequest,
+    AssignmentUpdateRequest,
+    PortfolioSnapshotCreateRequest,
+    PortfolioSnapshotOut,
+    PositionCreateRequest,
+    PositionUpdateRequest,
+    StockHoldingCreateRequest,
+    StockHoldingUpdateRequest,
+    WeekCompleteRequest,
+    WeekCreateRequest,
+    WeekUpdateRequest,
+)
 
 logger = logging.getLogger("optionflow.portfolio")
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -49,9 +63,8 @@ def list_weeks_route(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
 
 
 @router.post("/weeks", response_model=Dict[str, Any])
-def get_or_create_week_route(body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
-    for_date = parse_dt(body.get("for_date"))
-    return get_or_create_week(user_id=int(user["sub"]), for_date=for_date)
+def get_or_create_week_route(body: WeekCreateRequest, user=Depends(get_current_user)) -> Dict[str, Any]:
+    return get_or_create_week(user_id=int(user["sub"]), for_date=parse_dt(body.for_date))
 
 
 @router.get("/weeks/{week_id}", response_model=Dict[str, Any])
@@ -63,11 +76,11 @@ def get_week_route(week_id: int, user=Depends(get_current_user)) -> Dict[str, An
 
 
 @router.patch("/weeks/{week_id}", response_model=Dict[str, Any])
-def update_week_route(week_id: int, body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+def update_week_route(week_id: int, body: WeekUpdateRequest, user=Depends(get_current_user)) -> Dict[str, Any]:
     try:
         return update_week(
             user_id=int(user["sub"]), week_id=week_id,
-            account_value=body.get("account_value"), notes=body.get("notes"),
+            account_value=body.account_value, notes=body.notes,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -75,12 +88,12 @@ def update_week_route(week_id: int, body: Dict[str, Any], user=Depends(get_curre
 
 @router.post("/weeks/{week_id}/complete", response_model=Dict[str, Any])
 def mark_week_complete_route(
-    week_id: int, body: Dict[str, Any], user=Depends(get_current_user)
+    week_id: int, body: WeekCompleteRequest, user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
         return mark_week_complete(
             user_id=int(user["sub"]), week_id=week_id,
-            account_value=body.get("account_value"),
+            account_value=body.account_value,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -103,26 +116,27 @@ def list_positions_route(week_id: int, user=Depends(get_current_user)) -> List[D
 
 @router.post("/weeks/{week_id}/positions", response_model=Dict[str, Any])
 def create_position_route(
-    week_id: int, body: Dict[str, Any], user=Depends(get_current_user)
+    week_id: int, body: PositionCreateRequest, user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
-        return create_position(user_id=int(user["sub"]), week_id=week_id, data=body)
+        return create_position(user_id=int(user["sub"]), week_id=week_id, data=body.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/positions/{position_id}", response_model=Dict[str, Any])
 def update_position_route(
-    position_id: int, body: Dict[str, Any], user=Depends(get_current_user)
+    position_id: int, body: PositionUpdateRequest, user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
-        result = update_position(user_id=int(user["sub"]), position_id=position_id, data=body)
-        if "status" in body:
+        data = body.model_dump(exclude_unset=True)
+        result = update_position(user_id=int(user["sub"]), position_id=position_id, data=data)
+        if body.status is not None:
             try:
                 apply_position_status_change(
                     user_id=int(user["sub"]),
                     position_id=position_id,
-                    new_status=body["status"],
+                    new_status=body.status,
                 )
             except Exception as exc:
                 logger.warning(
@@ -146,10 +160,10 @@ def delete_position_route(position_id: int, user=Depends(get_current_user)) -> D
 
 @router.post("/positions/{position_id}/assign", response_model=Dict[str, Any])
 def create_assignment_route(
-    position_id: int, body: Dict[str, Any], user=Depends(get_current_user)
+    position_id: int, body: AssignmentCreateRequest, user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
-        return create_assignment(user_id=int(user["sub"]), position_id=position_id, data=body)
+        return create_assignment(user_id=int(user["sub"]), position_id=position_id, data=body.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -164,11 +178,11 @@ def get_assignment_route(position_id: int, user=Depends(get_current_user)) -> Di
 
 @router.patch("/assignments/{assignment_id}", response_model=Dict[str, Any])
 def update_assignment_route(
-    assignment_id: int, body: Dict[str, Any], user=Depends(get_current_user)
+    assignment_id: int, body: AssignmentUpdateRequest, user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
         return update_assignment(
-            user_id=int(user["sub"]), assignment_id=assignment_id, data=body
+            user_id=int(user["sub"]), assignment_id=assignment_id, data=body.model_dump(exclude_unset=True)
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -194,9 +208,9 @@ def list_stock_holdings(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
 
 
 @router.post("/holdings", response_model=Dict[str, Any])
-def create_stock_holding(body: Dict[str, Any], user=Depends(get_current_user)) -> Dict[str, Any]:
+def create_stock_holding(body: StockHoldingCreateRequest, user=Depends(get_current_user)) -> Dict[str, Any]:
     try:
-        return create_holding(user_id=int(user["sub"]), data=body)
+        return create_holding(user_id=int(user["sub"]), data=body.model_dump())
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -230,10 +244,10 @@ def get_holding_premium_ledger(holding_id: int, user=Depends(get_current_user)) 
 
 @router.patch("/holdings/{holding_id}", response_model=Dict[str, Any])
 def update_stock_holding(
-    holding_id: int, body: Dict[str, Any], user=Depends(get_current_user)
+    holding_id: int, body: StockHoldingUpdateRequest, user=Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
-        return update_holding(user_id=int(user["sub"]), holding_id=holding_id, data=body)
+        return update_holding(user_id=int(user["sub"]), holding_id=holding_id, data=body.model_dump(exclude_unset=True))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -250,3 +264,36 @@ def delete_stock_holding(holding_id: int, user=Depends(get_current_user)) -> Dic
 @router.get("/holdings/{holding_id}/events", response_model=List[Dict[str, Any]])
 def list_holding_events_route(holding_id: int, user=Depends(get_current_user)) -> List[Dict[str, Any]]:
     return list_holding_events(user_id=int(user["sub"]), holding_id=holding_id)
+
+
+# ── Portfolio Value History ────────────────────────────────────────────────────
+
+@router.get("/value-history", response_model=List[PortfolioSnapshotOut])
+def list_portfolio_value_history(
+    user=Depends(get_current_user),
+    limit: int = Query(default=365, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> List[PortfolioSnapshotOut]:
+    rows = _services.list_portfolio_snapshots(user_id=int(user["sub"]), limit=limit, offset=offset)
+    return [PortfolioSnapshotOut.model_validate(r) for r in rows]
+
+
+@router.post("/value-history", response_model=PortfolioSnapshotOut)
+def upsert_portfolio_value_history(
+    body: PortfolioSnapshotCreateRequest, user=Depends(get_current_user)
+) -> PortfolioSnapshotOut:
+    try:
+        row = _services.upsert_portfolio_snapshot(
+            user_id=int(user["sub"]),
+            snapshot_date=body.snapshot_date,
+            total_value=body.total_value,
+            cash=body.cash,
+            stock_value=body.stock_value,
+            options_value=body.options_value,
+            realized_pnl=body.realized_pnl,
+            unrealized_pnl=body.unrealized_pnl,
+            notes=body.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return PortfolioSnapshotOut.model_validate(row)

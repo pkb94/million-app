@@ -360,13 +360,14 @@ def create_order(
         session.close()
 
 
-def list_orders(*, user_id: int, limit: int = 100) -> list[dict]:
+def list_orders(*, user_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
     session = get_session()
     try:
         rows = (
             session.query(Order)
             .filter(Order.user_id == int(user_id))
             .order_by(Order.created_at.desc())
+            .offset(int(offset))
             .limit(int(limit))
             .all()
         )
@@ -1487,6 +1488,85 @@ def _ensure_filled_order_for_trade(session, *, trade: Trade) -> None:
     except Exception:
         return
 
+def list_trades(*, user_id: int, limit: int = 200, offset: int = 0) -> list[dict]:
+    """Return trades for a user with SQL-level pagination."""
+    session = get_session()
+    try:
+        rows = (
+            session.query(Trade)
+            .filter(Trade.user_id == int(user_id))
+            .order_by(Trade.entry_date.desc())
+            .offset(int(offset))
+            .limit(int(limit))
+            .all()
+        )
+        out: list[dict] = []
+        for t in rows:
+            out.append({
+                "id": int(getattr(t, "id")),
+                "symbol": str(getattr(t, "symbol", "") or ""),
+                "instrument": str(getattr(getattr(t, "instrument", None), "value", getattr(t, "instrument", "")) or ""),
+                "strategy": (str(getattr(t, "strategy", "") or "") or None),
+                "action": str(getattr(getattr(t, "action", None), "value", getattr(t, "action", "")) or ""),
+                "quantity": int(getattr(t, "quantity", 0) or 0),
+                "entry_price": float(getattr(t, "entry_price", 0.0) or 0.0),
+                "entry_date": getattr(t, "entry_date", None),
+                "is_closed": bool(getattr(t, "is_closed", False)),
+                "exit_date": getattr(t, "exit_date", None),
+                "exit_price": (float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None),
+                "realized_pnl": (float(getattr(t, "realized_pnl")) if getattr(t, "realized_pnl", None) is not None else None),
+                "option_type": (str(getattr(getattr(t, "option_type", None), "value", getattr(t, "option_type", "")) or "") or None),
+                "strike_price": (float(getattr(t, "strike_price")) if getattr(t, "strike_price", None) is not None else None),
+                "expiry_date": getattr(t, "expiry_date", None),
+                "notes": (str(getattr(t, "notes", "") or "") or None),
+                "client_order_id": (str(getattr(t, "client_order_id", "") or "") or None),
+                "account_id": (int(getattr(t, "account_id")) if getattr(t, "account_id", None) is not None else None),
+                "created_at": getattr(t, "created_at", None),
+                "updated_at": getattr(t, "updated_at", None),
+            })
+        return out
+    finally:
+        session.close()
+
+
+def get_trade(trade_id: int, *, user_id: int) -> dict | None:
+    """Fetch a single trade by id. Returns None if not found or not owned by user."""
+    session = get_session()
+    try:
+        t = (
+            session.query(Trade)
+            .filter(Trade.id == int(trade_id))
+            .filter(Trade.user_id == int(user_id))
+            .first()
+        )
+        if t is None:
+            return None
+        return {
+            "id": int(getattr(t, "id")),
+            "symbol": str(getattr(t, "symbol", "") or ""),
+            "instrument": str(getattr(getattr(t, "instrument", None), "value", getattr(t, "instrument", "")) or ""),
+            "strategy": (str(getattr(t, "strategy", "") or "") or None),
+            "action": str(getattr(getattr(t, "action", None), "value", getattr(t, "action", "")) or ""),
+            "quantity": int(getattr(t, "quantity", 0) or 0),
+            "entry_price": float(getattr(t, "entry_price", 0.0) or 0.0),
+            "entry_date": getattr(t, "entry_date", None),
+            "is_closed": bool(getattr(t, "is_closed", False)),
+            "exit_date": getattr(t, "exit_date", None),
+            "exit_price": (float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None),
+            "realized_pnl": (float(getattr(t, "realized_pnl")) if getattr(t, "realized_pnl", None) is not None else None),
+            "option_type": (str(getattr(getattr(t, "option_type", None), "value", getattr(t, "option_type", "")) or "") or None),
+            "strike_price": (float(getattr(t, "strike_price")) if getattr(t, "strike_price", None) is not None else None),
+            "expiry_date": getattr(t, "expiry_date", None),
+            "notes": (str(getattr(t, "notes", "") or "") or None),
+            "client_order_id": (str(getattr(t, "client_order_id", "") or "") or None),
+            "account_id": (int(getattr(t, "account_id")) if getattr(t, "account_id", None) is not None else None),
+            "created_at": getattr(t, "created_at", None),
+            "updated_at": getattr(t, "updated_at", None),
+        }
+    finally:
+        session.close()
+
+
 def save_trade(
     symbol,
     instrument,
@@ -1500,6 +1580,7 @@ def save_trade(
     expiry=None,
     user_id=None,
     client_order_id=None,
+    notes=None,
 ):
     session = get_session()
     try:
@@ -1531,6 +1612,7 @@ def save_trade(
             expiry_date=pd.to_datetime(expiry) if expiry else None,
             user_id=int(user_id) if user_id is not None else None,
             client_order_id=coid,
+            notes=(str(notes)[:2000] if notes else None),
         )
         session.add(new_trade)
 
@@ -1680,6 +1762,176 @@ def list_ledger_entries(*, user_id: int, limit: int = 100, offset: int = 0) -> l
         return out
     finally:
         session.close()
+
+def list_portfolio_snapshots(*, user_id: int, limit: int = 365, offset: int = 0) -> list[dict]:
+    """Return portfolio value history snapshots for a user."""
+    session = _portfolio_session()
+    try:
+        from database.models import PortfolioValueHistory
+        rows = (
+            session.query(PortfolioValueHistory)
+            .filter(PortfolioValueHistory.user_id == int(user_id))
+            .order_by(PortfolioValueHistory.snapshot_date.desc())
+            .offset(int(offset))
+            .limit(int(limit))
+            .all()
+        )
+        return [
+            {
+                "id": int(r.id),
+                "snapshot_date": r.snapshot_date,
+                "total_value": (float(r.total_value) if r.total_value is not None else None),
+                "cash": (float(r.cash) if r.cash is not None else None),
+                "stock_value": (float(r.stock_value) if r.stock_value is not None else None),
+                "options_value": (float(r.options_value) if r.options_value is not None else None),
+                "realized_pnl": (float(r.realized_pnl) if r.realized_pnl is not None else None),
+                "unrealized_pnl": (float(r.unrealized_pnl) if r.unrealized_pnl is not None else None),
+                "notes": (str(r.notes) if r.notes else None),
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ]
+    finally:
+        session.close()
+
+
+def upsert_portfolio_snapshot(
+    *,
+    user_id: int,
+    snapshot_date,
+    total_value: float | None = None,
+    cash: float | None = None,
+    stock_value: float | None = None,
+    options_value: float | None = None,
+    realized_pnl: float | None = None,
+    unrealized_pnl: float | None = None,
+    notes: str | None = None,
+) -> dict:
+    """Insert or update a portfolio value history snapshot for a given date."""
+    session = _portfolio_session()
+    try:
+        from database.models import PortfolioValueHistory
+        snap_dt = pd.to_datetime(snapshot_date).to_pydatetime().replace(tzinfo=None) if snapshot_date is not None else None
+        if snap_dt is None:
+            raise ValueError("snapshot_date is required")
+        # Normalize to midnight to match the unique index
+        snap_dt = snap_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        existing = (
+            session.query(PortfolioValueHistory)
+            .filter(PortfolioValueHistory.user_id == int(user_id))
+            .filter(PortfolioValueHistory.snapshot_date == snap_dt)
+            .first()
+        )
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if existing is None:
+            row = PortfolioValueHistory(
+                user_id=int(user_id),
+                snapshot_date=snap_dt,
+                total_value=(float(total_value) if total_value is not None else None),
+                cash=(float(cash) if cash is not None else None),
+                stock_value=(float(stock_value) if stock_value is not None else None),
+                options_value=(float(options_value) if options_value is not None else None),
+                realized_pnl=(float(realized_pnl) if realized_pnl is not None else None),
+                unrealized_pnl=(float(unrealized_pnl) if unrealized_pnl is not None else None),
+                notes=(str(notes)[:500] if notes else None),
+                created_at=now,
+            )
+            session.add(row)
+        else:
+            row = existing
+            if total_value is not None:
+                row.total_value = float(total_value)
+            if cash is not None:
+                row.cash = float(cash)
+            if stock_value is not None:
+                row.stock_value = float(stock_value)
+            if options_value is not None:
+                row.options_value = float(options_value)
+            if realized_pnl is not None:
+                row.realized_pnl = float(realized_pnl)
+            if unrealized_pnl is not None:
+                row.unrealized_pnl = float(unrealized_pnl)
+            if notes is not None:
+                row.notes = str(notes)[:500]
+            session.add(row)
+        session.commit()
+        session.refresh(row)
+        return {
+            "id": int(row.id),
+            "snapshot_date": row.snapshot_date,
+            "total_value": (float(row.total_value) if row.total_value is not None else None),
+            "cash": (float(row.cash) if row.cash is not None else None),
+            "stock_value": (float(row.stock_value) if row.stock_value is not None else None),
+            "options_value": (float(row.options_value) if row.options_value is not None else None),
+            "realized_pnl": (float(row.realized_pnl) if row.realized_pnl is not None else None),
+            "unrealized_pnl": (float(row.unrealized_pnl) if row.unrealized_pnl is not None else None),
+            "notes": (str(row.notes) if row.notes else None),
+            "created_at": row.created_at,
+        }
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def list_cash_flows(*, user_id: int, limit: int = 200, offset: int = 0) -> list[dict]:
+    """Return cash flow rows for a user with SQL-level pagination."""
+    session = _budget_session()
+    try:
+        rows = (
+            session.query(CashFlow)
+            .filter(CashFlow.user_id == int(user_id))
+            .order_by(CashFlow.date.desc())
+            .offset(int(offset))
+            .limit(int(limit))
+            .all()
+        )
+        return [
+            {
+                "id": int(r.id),
+                "action": str(getattr(getattr(r, "action", None), "value", r.action) or ""),
+                "amount": float(r.amount),
+                "date": r.date,
+                "notes": (str(r.notes) if r.notes else None),
+            }
+            for r in rows
+        ]
+    finally:
+        session.close()
+
+
+def list_budget_entries(*, user_id: int, limit: int = 500, offset: int = 0) -> list[dict]:
+    """Return budget rows for a user with SQL-level pagination."""
+    session = _budget_session()
+    try:
+        rows = (
+            session.query(Budget)
+            .filter(Budget.user_id == int(user_id))
+            .order_by(Budget.date.desc())
+            .offset(int(offset))
+            .limit(int(limit))
+            .all()
+        )
+        return [
+            {
+                "id": int(r.id),
+                "category": (str(r.category) if r.category else None),
+                "type": str(getattr(getattr(r, "type", None), "value", r.type) or ""),
+                "entry_type": (str(r.entry_type) if r.entry_type else None),
+                "recurrence": (str(r.recurrence) if r.recurrence else None),
+                "amount": float(r.amount),
+                "date": r.date,
+                "description": (str(r.description) if r.description else None),
+                "merchant": (str(r.merchant) if r.merchant else None),
+                "active_until": (str(r.active_until) if r.active_until else None),
+            }
+            for r in rows
+        ]
+    finally:
+        session.close()
+
 
 def save_budget(category, b_type, amount, date, desc, user_id=None, entry_type=None, recurrence=None, merchant=None, active_until=None):
     session = _budget_session()
@@ -1832,7 +2084,7 @@ def delete_budget_overrides_for_entry(budget_id: int, user_id: int):
 
 
 def create_account(*, user_id: int, name: str, broker: str | None = None, currency: str = "USD") -> int:
-    session = _budget_session()
+    session = get_session()  # trades.db — Account is TradesBase
     try:
         nm = str(name or "").strip()
         if not nm:
@@ -1856,7 +2108,7 @@ def create_account(*, user_id: int, name: str, broker: str | None = None, curren
 
 
 def list_accounts(*, user_id: int) -> list[dict]:
-    session = _budget_session()
+    session = get_session()  # trades.db — Account is TradesBase
     try:
         rows = (
             session.query(Account)
@@ -1881,11 +2133,12 @@ def list_accounts(*, user_id: int) -> list[dict]:
 
 
 def list_holdings(*, user_id: int, account_id: int) -> list[dict]:
-    session = _budget_session()
+    trades_session = get_session()    # Account is TradesBase (trades.db)
+    portfolio_session = _portfolio_session()  # StockHolding is PortfolioBase (portfolio.db)
     try:
         # Ensure account belongs to user.
         acct = (
-            session.query(Account)
+            trades_session.query(Account)
             .filter(Account.id == int(account_id))
             .filter(Account.user_id == int(user_id))
             .first()
@@ -1894,7 +2147,7 @@ def list_holdings(*, user_id: int, account_id: int) -> list[dict]:
             raise ValueError("account not found")
 
         rows = (
-            session.query(StockHolding)
+            portfolio_session.query(StockHolding)
             .filter(StockHolding.user_id == int(user_id))
             .filter(StockHolding.account_id == int(account_id))
             .order_by(StockHolding.symbol.asc())
@@ -1914,7 +2167,8 @@ def list_holdings(*, user_id: int, account_id: int) -> list[dict]:
             )
         return out
     finally:
-        session.close()
+        trades_session.close()
+        portfolio_session.close()
 
 
 def upsert_holding(
@@ -1925,14 +2179,15 @@ def upsert_holding(
     quantity: float,
     avg_cost: float | None = None,
 ) -> dict:
-    session = _budget_session()
+    trades_session = get_session()    # Account is TradesBase (trades.db)
+    portfolio_session = _portfolio_session()  # StockHolding is PortfolioBase (portfolio.db)
     try:
         sym = str(symbol or "").strip().upper()
         if not sym:
             raise ValueError("symbol is required")
 
         acct = (
-            session.query(Account)
+            trades_session.query(Account)
             .filter(Account.id == int(account_id))
             .filter(Account.user_id == int(user_id))
             .first()
@@ -1941,7 +2196,7 @@ def upsert_holding(
             raise ValueError("account not found")
 
         h = (
-            session.query(StockHolding)
+            portfolio_session.query(StockHolding)
             .filter(StockHolding.user_id == int(user_id))
             .filter(StockHolding.account_id == int(account_id))
             .filter(StockHolding.symbol == sym)
@@ -1961,16 +2216,16 @@ def upsert_holding(
                 avg_cost=(float(avg_cost) if avg_cost is not None else None),
                 updated_at=now,
             )
-            session.add(h)
-            session.commit()
+            portfolio_session.add(h)
+            portfolio_session.commit()
         else:
             h.shares = qty
             h.cost_basis = cost
             h.adjusted_cost_basis = cost
             h.avg_cost = (float(avg_cost) if avg_cost is not None else None)
             h.updated_at = now
-            session.add(h)
-            session.commit()
+            portfolio_session.add(h)
+            portfolio_session.commit()
 
         return {
             "id": int(getattr(h, "id")),
@@ -1981,10 +2236,11 @@ def upsert_holding(
             "updated_at": getattr(h, "updated_at", None),
         }
     except Exception:
-        session.rollback()
+        portfolio_session.rollback()
         raise
     finally:
-        session.close()
+        trades_session.close()
+        portfolio_session.close()
 
 
 def delete_holding(*, user_id: int, holding_id: int) -> bool:
@@ -2146,7 +2402,7 @@ def delete_trade(trade_id, user_id=None):
         session.close()
 
 
-def update_trade(trade_id, symbol, strategy, action, qty, price, date, user_id=None):
+def update_trade(trade_id, symbol, strategy, action, qty, price, date, user_id=None, notes=None):
     session = get_session()
     try:
         q = session.query(Trade).filter(Trade.id == int(trade_id))
@@ -2201,6 +2457,8 @@ def update_trade(trade_id, symbol, strategy, action, qty, price, date, user_id=N
             trade.quantity = int(qty)
             trade.entry_price = float(price)
             trade.entry_date = pd.to_datetime(date)
+            if notes is not None:
+                trade.notes = str(notes)[:2000]
             session.commit()
             return True
         return False

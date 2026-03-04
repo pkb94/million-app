@@ -30,9 +30,7 @@ def list_cash(
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ) -> List[Dict[str, Any]]:
-    _, cash, _ = services.load_data(user_id=int(user["sub"]))
-    records = _df_records(cash)
-    return records[offset: offset + limit]
+    return services.list_cash_flows(user_id=int(user["sub"]), limit=limit, offset=offset)
 
 
 @router.get("/cash/balance")
@@ -56,9 +54,7 @@ def list_budget(
     limit: int = Query(default=500, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
 ) -> List[Dict[str, Any]]:
-    _, _, budget = services.load_data(user_id=int(user["sub"]))
-    records = _df_records(budget)
-    return records[offset: offset + limit]
+    return services.list_budget_entries(user_id=int(user["sub"]), limit=limit, offset=offset)
 
 
 @router.post("/budget")

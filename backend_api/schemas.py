@@ -157,12 +157,17 @@ class OrderOut(BaseModel):
 
 class TradeCreateRequest(BaseModel):
     symbol: str
-    instrument: str
-    strategy: str
+    instrument: str = "STOCK"
+    strategy: str = "Swing"
     action: str
-    qty: int
-    price: float
+    qty: int = Field(ge=1)
+    price: float = Field(gt=0)
     date: datetime
+    option_type: Optional[str] = None
+    strike: Optional[float] = None
+    expiry: Optional[datetime] = None
+    notes: Optional[str] = None
+    account_id: Optional[int] = None
     client_order_id: Optional[str] = None
 
 
@@ -170,9 +175,10 @@ class TradeUpdateRequest(BaseModel):
     symbol: str
     strategy: str
     action: str
-    qty: int
-    price: float
+    qty: int = Field(ge=1)
+    price: float = Field(gt=0)
     date: datetime
+    notes: Optional[str] = None
 
 
 class TradeCloseRequest(BaseModel):
@@ -189,6 +195,18 @@ class TradeOut(BaseModel):
     quantity: Optional[int] = None
     entry_price: Optional[float] = None
     entry_date: Optional[datetime] = None
+    is_closed: bool = False
+    exit_date: Optional[datetime] = None
+    exit_price: Optional[float] = None
+    realized_pnl: Optional[float] = None
+    option_type: Optional[str] = None
+    strike_price: Optional[float] = None
+    expiry_date: Optional[datetime] = None
+    notes: Optional[str] = None
+    client_order_id: Optional[str] = None
+    account_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # ── Cash & Budget ─────────────────────────────────────────────────────────────
@@ -267,3 +285,106 @@ class CreditCardWeekOut(BaseModel):
     paid_amount: Optional[float] = None
     note: Optional[str] = None
     card_name: Optional[str] = None
+
+
+# ── Portfolio ─────────────────────────────────────────────────────────────────
+
+class WeekCreateRequest(BaseModel):
+    for_date: Optional[datetime] = None
+
+
+class WeekUpdateRequest(BaseModel):
+    account_value: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class WeekCompleteRequest(BaseModel):
+    account_value: Optional[float] = None
+
+
+class PositionCreateRequest(BaseModel):
+    symbol: str = Field(min_length=1)
+    contracts: int = Field(default=1, ge=1)
+    strike: float = Field(gt=0)
+    option_type: str  # CALL or PUT
+    sold_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    premium_in: Optional[float] = None
+    spot_price: Optional[float] = None
+    holding_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class PositionUpdateRequest(BaseModel):
+    symbol: Optional[str] = None
+    contracts: Optional[int] = Field(default=None, ge=1)
+    strike: Optional[float] = Field(default=None, gt=0)
+    option_type: Optional[str] = None
+    sold_date: Optional[datetime] = None
+    buy_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    premium_in: Optional[float] = None
+    premium_out: Optional[float] = None
+    spot_price: Optional[float] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    holding_id: Optional[int] = None
+
+
+class AssignmentCreateRequest(BaseModel):
+    symbol: str = Field(min_length=1)
+    shares_acquired: int = Field(ge=1)
+    acquisition_price: float = Field(gt=0)
+    net_option_premium: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class AssignmentUpdateRequest(BaseModel):
+    shares_acquired: Optional[int] = Field(default=None, ge=1)
+    acquisition_price: Optional[float] = Field(default=None, gt=0)
+    net_option_premium: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class StockHoldingCreateRequest(BaseModel):
+    symbol: str = Field(min_length=1)
+    shares: float = Field(gt=0)
+    cost_basis: Optional[float] = None
+    avg_cost: Optional[float] = None
+    company_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class StockHoldingUpdateRequest(BaseModel):
+    shares: Optional[float] = Field(default=None, gt=0)
+    cost_basis: Optional[float] = None
+    avg_cost: Optional[float] = None
+    company_name: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+
+# ── Portfolio Value History ───────────────────────────────────────────────────
+
+class PortfolioSnapshotCreateRequest(BaseModel):
+    snapshot_date: datetime
+    total_value: Optional[float] = None
+    cash: Optional[float] = None
+    stock_value: Optional[float] = None
+    options_value: Optional[float] = None
+    realized_pnl: Optional[float] = None
+    unrealized_pnl: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class PortfolioSnapshotOut(BaseModel):
+    id: int
+    snapshot_date: datetime
+    total_value: Optional[float] = None
+    cash: Optional[float] = None
+    stock_value: Optional[float] = None
+    options_value: Optional[float] = None
+    realized_pnl: Optional[float] = None
+    unrealized_pnl: Optional[float] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
