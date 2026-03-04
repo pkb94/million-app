@@ -5,6 +5,40 @@
 
 ---
 
+## v1.9.1 — Automated DB Backups
+**Released:** 2026-03-04
+**Branch:** `develop`
+
+### 🔒 Database Backup System
+- **`scripts/backup_dbs.py`** — backs up all 5 domain databases using SQLite's online backup API (zero corruption risk)
+- **Retention policy**: 7 daily + 4 weekly + 12 monthly snapshots, auto-pruned
+- **Daily cron** installed at midnight: `0 0 * * * .venv/bin/python3 scripts/backup_dbs.py`
+- Logs to `/tmp/optionflow_backup.log`
+- `backups/` folder added to `.gitignore`
+
+---
+
+## v1.9.0 — Multi-Database Architecture
+**Released:** 2026-03-04
+**Branch:** `develop`
+
+### 🗄️ Split Monolithic DB into 5 Domain Databases
+- **Rewrote `database/models.py`** with 5 separate `declarative_base()` classes and engine factories
+  - `users.db`: `User`, `RefreshToken`, `RevokedToken`, `AuthEvent`
+  - `trades.db`: `Account`, `Trade`, `Order`, `OrderEvent`
+  - `portfolio.db`: `StockHolding` (merged), `HoldingEvent`, `WeeklySnapshot`, `OptionPosition`, `PremiumLedger`, `StockAssignment`, `PortfolioValueHistory` (new)
+  - `budget.db`: `Budget`, `BudgetOverride`, `CreditCardWeek`, `CashFlow`, `LedgerAccount`, `LedgerEntry`, `LedgerLine`
+  - `markets.db`: `NetFlowSnapshot`, `PriceSnapshot` (new)
+- **`scripts/migrate_to_split_dbs.py`** — one-time migration from `trading_journal.db` to all 5 new DBs; idempotent
+- **`logic/services.py`** — added `_users_session()`, `_budget_session()`, `_portfolio_session()` helpers; rerouted all 40+ session calls to the correct domain DB
+- **`logic/portfolio.py`, `holdings.py`, `premium_ledger.py`** — all updated to use `_portfolio_session()`
+- **`load_data()`** fixed to query `trades.db` for trades and `budget.db` for budget/cash
+- `get_engine()` kept as legacy alias → `get_trades_engine()` for test compatibility
+- Old `Holding` model merged into `StockHolding` in portfolio.db
+- Per-domain `DATABASE_URL_*` env vars supported for production overrides
+
+---
+
 ## v1.8.4 — Live Moneyness (Real-Time ITM/ATM/OTM)
 **Released:** 2026-03-04
 **Tag:** `v1.8.4`
