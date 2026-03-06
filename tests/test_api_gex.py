@@ -55,7 +55,15 @@ def db():
         poolclass=StaticPool,
     )
     Session = sessionmaker(bind=engine)
-    dbmodels.Base.metadata.create_all(engine)
+    # Create all domain tables on the shared in-memory engine
+    for base in (
+        dbmodels.UsersBase,
+        dbmodels.TradesBase,
+        dbmodels.PortfolioBase,
+        dbmodels.BudgetBase,
+        dbmodels.MarketsBase,
+    ):
+        base.metadata.create_all(engine)
     # Patch services to use this engine
     original_engine  = services.engine
     original_session = services.Session

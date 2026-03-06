@@ -1,14 +1,23 @@
 """
-database/models.py — Multi-database architecture for OptionFlow.
+database/models.py — Multi-database / multi-schema architecture for OptionFlow.
 
-Each domain has its own SQLite file so data is isolated, independently
-backup-able, and never lost due to unrelated migrations.
+SQLite mode  (default, local dev & tests):
+  Five separate .db files, no schemas, everything works as before.
 
-  users.db      — authentication & user management
-  trades.db     — trade journal, orders, brokerage accounts
-  portfolio.db  — stock holdings, option positions, premium ledger, weekly snapshots
-  budget.db     — budget, credit card weeks, cash flows, double-entry ledger
-  markets.db    — market data, GEX/options-flow snapshots, price history
+PostgreSQL mode  (set DATABASE_URL=postgresql://... in environment):
+  Single Postgres instance with five logical schemas:
+    auth      — authentication & user management
+    trades    — trade journal, orders, brokerage accounts
+    portfolio — stock holdings, option positions, premium ledger, weekly snapshots
+    budget    — budget, credit card weeks, cash flows, double-entry ledger
+    markets   — market data, GEX/options-flow snapshots, price history
+
+  All five domains share one connection pool.  Domain isolation is preserved
+  via schemas rather than separate files.
+
+The dialect switch is fully transparent to all business logic — session helpers,
+engine getters, and the test monkeypatch fixtures all work identically in both
+modes.
 """
 from __future__ import annotations
 
@@ -18,6 +27,7 @@ from functools import lru_cache
 from sqlalchemy import (
     Boolean, Column, DateTime, Enum, Float,
     Index, Integer, String, Text, create_engine,
+    MetaData,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -27,11 +37,32 @@ from datetime import datetime
 
 _EPOCH_UTC_NAIVE = datetime(1970, 1, 1)
 
-UsersBase     = declarative_base()
-TradesBase    = declarative_base()
-PortfolioBase = declarative_base()
-BudgetBase    = declarative_base()
-MarketsBase   = declarative_base()
+# ── Dialect helpers ────────────────────────────────────────────────────────────
+
+def _is_postgres() -> bool:
+    """Return True when a PostgreSQL DATABASE_URL is configured."""
+    url = os.getenv("DATABASE_URL", "")
+    return url.startswith("postgresql") or url.startswith("postgres")
+
+
+def _schema(name: str) -> str | None:
+    """Return the schema name for Postgres, or None for SQLite.
+
+    SQLAlchemy treats schema=None as 'no schema' and generates plain
+    CREATE TABLE statements — safe for SQLite and in-memory test engines.
+    """
+    return name if _is_postgres() else None
+
+
+# ── Named metadata objects — carry the schema for Postgres DDL ─────────────
+# We bind schema at MetaData level so Alembic's autogenerate sees it, and also
+# set it per-table via __table_args__ so individual queries resolve correctly.
+
+UsersBase     = declarative_base(metadata=MetaData(schema=_schema("auth")))
+TradesBase    = declarative_base(metadata=MetaData(schema=_schema("trades")))
+PortfolioBase = declarative_base(metadata=MetaData(schema=_schema("portfolio")))
+BudgetBase    = declarative_base(metadata=MetaData(schema=_schema("budget")))
+MarketsBase   = declarative_base(metadata=MetaData(schema=_schema("markets")))
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +105,7 @@ class HoldingEventType(enum.Enum):
 
 class User(UsersBase):
     __tablename__ = "users"
+    __table_args__ = {"schema": _schema("auth")}
     id               = Column(Integer, primary_key=True)
     username         = Column(String, unique=True, index=True, nullable=False)
     password_hash    = Column(String, nullable=False)
@@ -85,6 +117,7 @@ class User(UsersBase):
 
 class RefreshToken(UsersBase):
     __tablename__ = "refresh_tokens"
+    __table_args__ = {"schema": _schema("auth")}
     id                   = Column(Integer, primary_key=True)
     user_id              = Column(Integer, nullable=False, index=True)
     token_hash           = Column(String, nullable=False, unique=True, index=True)
@@ -101,6 +134,7 @@ class RefreshToken(UsersBase):
 
 class RevokedToken(UsersBase):
     __tablename__ = "revoked_tokens"
+    __table_args__ = {"schema": _schema("auth")}
     id         = Column(Integer, primary_key=True)
     user_id    = Column(Integer, nullable=False, index=True)
     jti        = Column(String, nullable=False, unique=True, index=True)
@@ -109,6 +143,7 @@ class RevokedToken(UsersBase):
 
 class AuthEvent(UsersBase):
     __tablename__ = "auth_events"
+    __table_args__ = {"schema": _schema("auth")}
     id         = Column(Integer, primary_key=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     event_type = Column(String, nullable=False, index=True)
@@ -125,6 +160,7 @@ class AuthEvent(UsersBase):
 
 class Account(TradesBase):
     __tablename__ = "accounts"
+    __table_args__ = {"schema": _schema("trades")}
     id         = Column(Integer, primary_key=True)
     user_id    = Column(Integer, nullable=False, index=True)
     name       = Column(String, nullable=False)
@@ -139,6 +175,7 @@ class Account(TradesBase):
 class StockHolding(PortfolioBase):
     """Merged replacement for old `holdings` + `stock_holdings` tables."""
     __tablename__ = "stock_holdings"
+    __table_args__ = {"schema": _schema("portfolio")}
     id                  = Column(Integer, primary_key=True)
     user_id             = Column(Integer, nullable=False, index=True)
     account_id          = Column(Integer, nullable=True, index=True)
@@ -156,6 +193,7 @@ class StockHolding(PortfolioBase):
 
 class HoldingEvent(PortfolioBase):
     __tablename__ = "holding_events"
+    __table_args__ = {"schema": _schema("portfolio")}
     id            = Column(Integer, primary_key=True)
     user_id       = Column(Integer, nullable=False, index=True)
     holding_id    = Column(Integer, nullable=False, index=True)
@@ -169,6 +207,7 @@ class HoldingEvent(PortfolioBase):
 
 class WeeklySnapshot(PortfolioBase):
     __tablename__ = "weekly_snapshots"
+    __table_args__ = {"schema": _schema("portfolio")}
     id            = Column(Integer, primary_key=True)
     user_id       = Column(Integer, nullable=False, index=True)
     week_start    = Column(DateTime, nullable=False, index=True)
@@ -183,6 +222,7 @@ Index("ux_weekly_snapshots_user_week_end", WeeklySnapshot.user_id, WeeklySnapsho
 
 class OptionPosition(PortfolioBase):
     __tablename__ = "option_positions"
+    __table_args__ = {"schema": _schema("portfolio")}
     id              = Column(Integer, primary_key=True)
     user_id         = Column(Integer, nullable=False, index=True)
     week_id         = Column(Integer, nullable=False, index=True)
@@ -208,6 +248,7 @@ class OptionPosition(PortfolioBase):
 
 class PremiumLedger(PortfolioBase):
     __tablename__ = "premium_ledger"
+    __table_args__ = {"schema": _schema("portfolio")}
     id                 = Column(Integer, primary_key=True)
     user_id            = Column(Integer, nullable=False, index=True)
     holding_id         = Column(Integer, nullable=False, index=True)
@@ -230,6 +271,7 @@ Index("ux_premium_ledger_holding_position", PremiumLedger.holding_id, PremiumLed
 
 class StockAssignment(PortfolioBase):
     __tablename__ = "stock_assignments"
+    __table_args__ = {"schema": _schema("portfolio")}
     id                 = Column(Integer, primary_key=True)
     user_id            = Column(Integer, nullable=False, index=True)
     position_id        = Column(Integer, nullable=False, index=True)
@@ -246,6 +288,7 @@ class StockAssignment(PortfolioBase):
 class PortfolioValueHistory(PortfolioBase):
     """Daily net-worth snapshot — new table, ensures we never lose portfolio history again."""
     __tablename__ = "portfolio_value_history"
+    __table_args__ = {"schema": _schema("portfolio")}
     id             = Column(Integer, primary_key=True)
     user_id        = Column(Integer, nullable=False, index=True)
     snapshot_date  = Column(DateTime, nullable=False, index=True)
@@ -266,6 +309,7 @@ Index("ux_portfolio_value_history_user_date", PortfolioValueHistory.user_id, Por
 
 class Budget(BudgetBase):
     __tablename__ = "budget"
+    __table_args__ = {"schema": _schema("budget")}
     id           = Column(Integer, primary_key=True)
     user_id      = Column(Integer, nullable=False, index=True)
     category     = Column(String, nullable=True)
@@ -282,6 +326,7 @@ class Budget(BudgetBase):
 
 class BudgetOverride(BudgetBase):
     __tablename__ = "budget_overrides"
+    __table_args__ = {"schema": _schema("budget")}
     id          = Column(Integer, primary_key=True)
     user_id     = Column(Integer, nullable=False, index=True)
     budget_id   = Column(Integer, nullable=False, index=True)
@@ -295,6 +340,7 @@ Index("ux_budget_overrides_user_budget_month", BudgetOverride.user_id, BudgetOve
 
 class CreditCardWeek(BudgetBase):
     __tablename__ = "credit_card_weeks"
+    __table_args__ = {"schema": _schema("budget")}
     id          = Column(Integer, primary_key=True)
     user_id     = Column(Integer, nullable=False, index=True)
     week_start  = Column(DateTime, nullable=False)
@@ -308,6 +354,7 @@ class CreditCardWeek(BudgetBase):
 
 class CashFlow(BudgetBase):
     __tablename__ = "cash_flow"
+    __table_args__ = {"schema": _schema("budget")}
     id      = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False, index=True)
     action  = Column(Enum(CashAction), nullable=False)
@@ -317,6 +364,7 @@ class CashFlow(BudgetBase):
 
 class LedgerAccount(BudgetBase):
     __tablename__ = "ledger_accounts"
+    __table_args__ = {"schema": _schema("budget")}
     id         = Column(Integer, primary_key=True)
     user_id    = Column(Integer, nullable=False, index=True)
     name       = Column(String, nullable=False)
@@ -328,6 +376,7 @@ Index("ux_ledger_accounts_user_name_currency", LedgerAccount.user_id, LedgerAcco
 
 class LedgerEntry(BudgetBase):
     __tablename__ = "ledger_entries"
+    __table_args__ = {"schema": _schema("budget")}
     id              = Column(Integer, primary_key=True)
     user_id         = Column(Integer, nullable=False, index=True)
     entry_type      = Column(Enum(LedgerEntryType), nullable=False, index=True)
@@ -342,6 +391,7 @@ Index("ux_ledger_entries_user_idempotency_key", LedgerEntry.user_id, LedgerEntry
 
 class LedgerLine(BudgetBase):
     __tablename__ = "ledger_lines"
+    __table_args__ = {"schema": _schema("budget")}
     id         = Column(Integer, primary_key=True)
     entry_id   = Column(Integer, nullable=False, index=True)
     account_id = Column(Integer, nullable=False, index=True)
@@ -354,6 +404,7 @@ class LedgerLine(BudgetBase):
 
 class NetFlowSnapshot(MarketsBase):
     __tablename__ = "net_flow_snapshots"
+    __table_args__ = {"schema": _schema("markets")}
     id         = Column(Integer, primary_key=True)
     symbol     = Column(String, nullable=False, index=True)
     ts         = Column(String, nullable=False, index=True)
@@ -366,6 +417,7 @@ class NetFlowSnapshot(MarketsBase):
 
 class PriceSnapshot(MarketsBase):
     __tablename__ = "price_snapshots"
+    __table_args__ = {"schema": _schema("markets")}
     id         = Column(Integer, primary_key=True)
     symbol     = Column(String, nullable=False, index=True)
     date       = Column(DateTime, nullable=False, index=True)
@@ -382,7 +434,12 @@ Index("ux_price_snapshots_symbol_date", PriceSnapshot.symbol, PriceSnapshot.date
 # ENGINE FACTORY
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENGINE FACTORY
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def _db_path(filename: str) -> str:
+    """Return a SQLite URL for the given filename, respecting DB_DIR and per-db overrides."""
     env_key  = f"DATABASE_URL_{filename.upper().replace('.DB','').replace('-','_')}"
     override = os.getenv(env_key)
     if override:
@@ -390,37 +447,58 @@ def _db_path(filename: str) -> str:
     base = os.getenv("DB_DIR", ".")
     return f"sqlite:///{base}/{filename}"
 
+
 def _make_engine(url: str) -> Engine:
     if url.startswith("sqlite"):
         return create_engine(url, connect_args={"check_same_thread": False}, poolclass=NullPool)
-    return create_engine(url, pool_pre_ping=True,
-                         pool_size=int(os.getenv("DB_POOL_SIZE","5")),
-                         max_overflow=int(os.getenv("DB_MAX_OVERFLOW","10")),
-                         pool_timeout=int(os.getenv("DB_POOL_TIMEOUT","30")))
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+        pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    )
+
+
+def _postgres_url() -> str:
+    """Return the single shared Postgres URL (DATABASE_URL env var)."""
+    return os.environ["DATABASE_URL"]
+
 
 @lru_cache(maxsize=1)
 def get_users_engine() -> Engine:
+    if _is_postgres():
+        return _make_engine(_postgres_url())
     return _make_engine(_db_path("users.db"))
 
 @lru_cache(maxsize=1)
 def get_trades_engine() -> Engine:
+    if _is_postgres():
+        return _make_engine(_postgres_url())
     return _make_engine(_db_path("trades.db"))
 
 @lru_cache(maxsize=1)
 def get_portfolio_engine() -> Engine:
+    if _is_postgres():
+        return _make_engine(_postgres_url())
     return _make_engine(_db_path("portfolio.db"))
 
 @lru_cache(maxsize=1)
 def get_budget_engine() -> Engine:
+    if _is_postgres():
+        return _make_engine(_postgres_url())
     return _make_engine(_db_path("budget.db"))
 
 @lru_cache(maxsize=1)
 def get_markets_engine() -> Engine:
+    if _is_postgres():
+        return _make_engine(_postgres_url())
     return _make_engine(_db_path("markets.db"))
 
 # Legacy alias — points to trades.db for backwards compat
 def get_engine() -> Engine:
     return get_trades_engine()
+
 
 # ── Session factories ──────────────────────────────────────────────────────────
 
@@ -451,9 +529,24 @@ def reset_engine_cache() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def init_db():
-    """Create all tables across all five databases. Safe to call multiple times."""
-    UsersBase.metadata.create_all(get_users_engine())
-    TradesBase.metadata.create_all(get_trades_engine())
-    PortfolioBase.metadata.create_all(get_portfolio_engine())
-    BudgetBase.metadata.create_all(get_budget_engine())
-    MarketsBase.metadata.create_all(get_markets_engine())
+    """Create all tables across all five domains. Safe to call multiple times.
+
+    In Postgres mode, also creates the logical schemas (auth, trades, portfolio,
+    budget, markets) if they don't already exist, then runs CREATE TABLE IF NOT
+    EXISTS for every model — all on the shared engine.
+    """
+    if _is_postgres():
+        eng = get_users_engine()  # all engines point to the same URL
+        from sqlalchemy import text
+        with eng.connect() as conn:
+            for schema in ("auth", "trades", "portfolio", "budget", "markets"):
+                conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+            conn.commit()
+        for base in (UsersBase, TradesBase, PortfolioBase, BudgetBase, MarketsBase):
+            base.metadata.create_all(eng)
+    else:
+        UsersBase.metadata.create_all(get_users_engine())
+        TradesBase.metadata.create_all(get_trades_engine())
+        PortfolioBase.metadata.create_all(get_portfolio_engine())
+        BudgetBase.metadata.create_all(get_budget_engine())
+        MarketsBase.metadata.create_all(get_markets_engine())
