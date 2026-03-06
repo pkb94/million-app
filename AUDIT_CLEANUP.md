@@ -65,3 +65,57 @@ This file tracks all remnant references to the old project names (`million-app`,
 ---
 
 *Nothing in this file has been changed yet. Update status here as items are resolved.*
+
+---
+
+## 🚀 SaaS Migration Roadmap (Shelved — budget pending)
+> Brainstorm list. No action until explicitly decided.
+
+### Why the current setup can't scale
+- `optflw.com` runs through a Cloudflare tunnel → your Mac → port 3000
+- Any reboot, sleep, dev restart, or broken build = live outage for all users
+- SQLite can't handle concurrent writes from multiple users
+- `next dev` is not a production server (slow, exposes internals, no caching)
+
+### Step 1 — SQLite → PostgreSQL (biggest blocker, do this first)
+- SQLAlchemy models are already clean — mostly a DB URL swap
+- 5 SQLite files → 1 Postgres DB with 5 schemas (or 5 separate DBs)
+- Run Alembic migrations against Postgres to create schema
+- Write a one-time data migration script (5 SQLite files → Postgres)
+- **Cost options:**
+  - Supabase free tier — 500MB, enough for personal use indefinitely
+  - Railway free tier — $5 credit/mo
+  - Neon.tech free tier — generous free Postgres
+
+### Step 2 — Host the backend (FastAPI off your Mac)
+- Options in order of cheapest:
+  - **Railway** (~$5/mo, easy deploy from GitHub)
+  - **Render** (free tier for web services, sleeps after inactivity)
+  - **Fly.io** (free tier, stays awake)
+- Just needs: `Dockerfile` or `requirements.txt` + env vars configured in dashboard
+
+### Step 3 — Host the frontend (Next.js off your Mac)
+- **Vercel** — free tier, deploys from GitHub automatically on every push to `main`
+- Point `optflw.com` DNS at Vercel instead of Cloudflare tunnel
+- Zero config for Next.js — Vercel built it
+
+### Step 4 — Stripe + multi-user (do last)
+- Add `tier` field to `users` table (`free | pro | lifetime`)
+- FastAPI middleware checks tier before serving gated routes
+- Stripe webhook flips tier on payment
+- ~1 week of work once infra is sorted
+
+### Total cost when ready
+| Service | Free tier | Paid tier |
+|---------|-----------|-----------|
+| Vercel (frontend) | Free forever for personal | $20/mo pro |
+| Supabase (Postgres) | Free 500MB | $25/mo |
+| Railway (backend) | $5 credit/mo | ~$5–10/mo |
+| **Total** | **~$0** to start | **~$30–35/mo** |
+
+### Prerequisite checklist before any of this
+- [ ] SQLite → PostgreSQL migration complete
+- [ ] All secrets in env vars (JWT_SECRET, DB_URL, TRADIER_TOKEN, OPENAI_KEY)
+- [ ] `next build` working cleanly (✅ already fixed in v2.5.4)
+- [ ] Alembic migration history complete for all 5 DBs
+- [ ] Stale reference cleanup done (see audit list above)
