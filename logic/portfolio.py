@@ -501,6 +501,21 @@ def list_positions(*, user_id: int, week_id: int) -> list[dict]:
         session.close()
 
 
+def list_all_positions(*, user_id: int) -> list[dict]:
+    """Return every OptionPosition for the user across all weeks, ordered by expiry_date asc."""
+    session = _portfolio_session()
+    try:
+        positions = (
+            session.query(OptionPosition)
+            .filter(OptionPosition.user_id == user_id)
+            .order_by(OptionPosition.expiry_date.asc(), OptionPosition.symbol)
+            .all()
+        )
+        return [_pos_to_dict(p) for p in positions]
+    finally:
+        session.close()
+
+
 def create_position(*, user_id: int, week_id: int, data: dict) -> dict:
     session = _portfolio_session()
     try:

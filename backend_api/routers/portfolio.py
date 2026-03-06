@@ -23,6 +23,7 @@ from logic.portfolio import (
     get_assignment_for_position,
     get_or_create_week,
     get_week,
+    list_all_positions,
     list_positions,
     list_weeks,
     mark_week_complete,
@@ -108,6 +109,12 @@ def reopen_week_route(week_id: int, user=Depends(get_current_user)) -> Dict[str,
 
 
 # ── Positions ─────────────────────────────────────────────────────────────────
+
+@router.get("/positions", response_model=List[Dict[str, Any]])
+def list_all_positions_route(user=Depends(get_current_user)) -> List[Dict[str, Any]]:
+    """Return all positions across all weeks for the authenticated user."""
+    return list_all_positions(user_id=int(user["sub"]))
+
 
 @router.get("/weeks/{week_id}/positions", response_model=List[Dict[str, Any]])
 def list_positions_route(week_id: int, user=Depends(get_current_user)) -> List[Dict[str, Any]]:

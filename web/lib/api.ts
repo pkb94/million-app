@@ -419,6 +419,8 @@ export const reopenWeek = (id: number) =>
 // Positions
 export const fetchPositions = (week_id: number) =>
   api.get<OptionPosition[]>(`/portfolio/weeks/${week_id}/positions`);
+export const fetchAllPositions = () =>
+  api.get<OptionPosition[]>(`/portfolio/positions`);
 export const createPosition = (week_id: number, body: Partial<OptionPosition>) =>
   api.post<OptionPosition>(`/portfolio/weeks/${week_id}/positions`, body);
 export const updatePosition = (id: number, body: Partial<OptionPosition> & { status?: PositionStatus }) =>
