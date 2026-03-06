@@ -133,6 +133,21 @@ export function PositionsTab({ week }: { week: WeeklySnapshot }) {
           .reduce((acc, p) => acc + p.strike * p.contracts * 100, 0);
         const inFlightPrem = premDash?.grand_total.unrealized_premium ?? 0;
         const realizedPrem = premDash?.grand_total.realized_premium   ?? 0;
+
+        // ITM Assignment Risk card — live, updates with liveSpotMap every 30s
+        const itmPositions = positions.filter((p) => {
+          if (p.status !== "ACTIVE") return false;
+          const spot = liveSpotMap.get(p.symbol);
+          if (spot == null || spot <= 0) return false;
+          if (p.option_type === "CALL") return spot > p.strike;
+          if (p.option_type === "PUT")  return spot < p.strike;
+          return false;
+        });
+        const itmAssignmentValue = itmPositions.reduce((acc, p) => acc + p.strike * p.contracts * 100, 0);
+        const itmPremCollected   = itmPositions.reduce((acc, p) => acc + (p.premium_in ?? 0) * p.contracts * 100, 0);
+        const itmNetProceeds     = itmAssignmentValue + itmPremCollected;
+        const hasLiveData        = liveSpotMap.size > 0;
+
         return (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-4">
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3">
@@ -197,6 +212,52 @@ export function PositionsTab({ week }: { week: WeeklySnapshot }) {
                 ? <p className="text-base font-black text-cyan-400">${inFlightPrem.toFixed(2)}</p>
                 : <p className="text-base font-black text-foreground/30">—</p>}
               <p className="text-[10px] text-foreground/40 mt-0.5">locked: ${realizedPrem.toFixed(2)}</p>
+            </div>
+            {/* ITM Assignment Risk — live card, only shown when live quotes loaded */}
+            <div className={`border rounded-xl p-3 col-span-2 sm:col-span-2 lg:col-span-2 ${
+              itmPositions.length > 0
+                ? "bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800"
+                : "bg-[var(--surface)] border-[var(--border)]"
+            }`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className={`text-[10px] font-semibold uppercase tracking-wide ${
+                  itmPositions.length > 0 ? "text-red-500" : "text-foreground/60"
+                }`}>
+                  ITM / Assignment Risk
+                </p>
+                {hasLiveData && (
+                  <span className="text-[8px] px-1 py-0.5 rounded-full bg-green-500/15 text-green-500 font-bold tracking-wide">● LIVE</span>
+                )}
+              </div>
+              {!hasLiveData ? (
+                <p className="text-base font-black text-foreground/30">Loading…</p>
+              ) : itmPositions.length === 0 ? (
+                <>
+                  <p className="text-base font-black text-green-500">All Clear</p>
+                  <p className="text-[10px] text-foreground/40 mt-0.5">no active positions ITM</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-base font-black text-red-500">
+                    ${itmNetProceeds.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                  <p className="text-[10px] text-red-400/80 mt-0.5">
+                    {itmPositions.length} ITM · ${itmAssignmentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} at strike
+                    {" + "}${itmPremCollected.toLocaleString(undefined, { maximumFractionDigits: 0 })} prem
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {itmPositions.map((p) => {
+                      const spot = liveSpotMap.get(p.symbol);
+                      const depth = spot != null ? Math.abs(spot - p.strike) : null;
+                      return (
+                        <span key={p.id} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500">
+                          {p.symbol} ${p.strike}{depth != null ? ` (${depth.toFixed(1)} deep)` : ""}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );

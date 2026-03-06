@@ -1,8 +1,8 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import {
-  fetchPortfolioSummary, fetchPremiumDashboard, fetchHoldings,
-  WeekBreakdown,
+  fetchPortfolioSummary, fetchPremiumDashboard, fetchHoldings, fetchAllPositions,
+  WeekBreakdown, OptionPosition,
 } from "@/lib/api";
 import { EmptyState, SkeletonCard } from "@/components/ui";
 import { TrendingUp, TrendingDown, BarChart2, Calendar } from "lucide-react";
@@ -25,6 +25,11 @@ export function YearTab() {
   const { data: holdings = [] } = useQuery({
     queryKey: ["holdings"],
     queryFn: fetchHoldings,
+    staleTime: 60_000,
+  });
+  const { data: allPositions = [] } = useQuery({
+    queryKey: ["allPositions"],
+    queryFn: fetchAllPositions,
     staleTime: 60_000,
   });
 
@@ -130,6 +135,36 @@ export function YearTab() {
   const premiumEfficiency  = totalCostBasis > 0 ? ((premDash?.grand_total.total_premium_sold ?? 0) / totalCostBasis) * 100 : 0;
   const totalPremCollected = premDash?.grand_total.total_premium_sold ?? s.total_premium_collected;
   const weeksToFullCover   = avgWeeklyPremium > 0 ? Math.ceil(totalCostBasis / avgWeeklyPremium) : null;
+
+  // ── Expiry-bucketed premium table ──────────────────────────────────────────
+  interface ExpiryBucket {
+    expiry: string;           // "YYYY-MM-DD"
+    positions: OptionPosition[];
+    totalPremium: number;
+    dte: number;              // days to expiry (negative = past)
+    isSettled: boolean;
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const expiryBucketMap = new Map<string, OptionPosition[]>();
+  for (const pos of allPositions) {
+    if (!pos.expiry_date) continue;
+    // Normalise to "YYYY-MM-DD" regardless of whether the backend returns
+    // a full ISO datetime ("2026-03-07T00:00:00") or a bare date string.
+    const key = pos.expiry_date.slice(0, 10);
+    if (!expiryBucketMap.has(key)) expiryBucketMap.set(key, []);
+    expiryBucketMap.get(key)!.push(pos);
+  }
+  const expiryBuckets: ExpiryBucket[] = Array.from(expiryBucketMap.entries())
+    .map(([expiry, positions]) => {
+      // Parse as local midnight by appending T00:00:00 to the guaranteed YYYY-MM-DD key
+      const expiryDate = new Date(expiry + "T00:00:00");
+      const dte = isNaN(expiryDate.getTime())
+        ? 0
+        : Math.round((expiryDate.getTime() - today.getTime()) / 86_400_000);
+      const totalPremium = positions.reduce((sum, p) => sum + (p.total_premium ?? 0), 0);
+      return { expiry, positions, totalPremium, dte, isSettled: dte < 0 };
+    })
+    .sort((a, b) => a.expiry.localeCompare(b.expiry));
 
   return (
     <div className="space-y-6">
@@ -613,6 +648,83 @@ export function YearTab() {
 
       {weeksBreakdown.length === 0 && (
         <EmptyState icon={Calendar} title="No completed weeks yet" body="Mark a week complete to populate your performance summary." />
+      )}
+
+      {/* ── Expiry-Bucketed Premium Table ── */}
+      {expiryBuckets.length > 0 && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground">Premium by Expiry</h3>
+            <span className="text-[10px] text-foreground/40">{expiryBuckets.length} expiries</span>
+          </div>
+          {/* Column headers */}
+          <div className="grid grid-cols-[100px_1fr_auto_90px_90px] gap-2 px-4 py-2 border-b border-[var(--border)] bg-[var(--surface-2)]">
+            <span className="text-[10px] font-semibold text-foreground/50 uppercase">Expiry</span>
+            <span className="text-[10px] font-semibold text-foreground/50 uppercase">Symbols</span>
+            <span className="text-[10px] font-semibold text-foreground/50 uppercase text-center"># Pos</span>
+            <span className="text-[10px] font-semibold text-foreground/50 uppercase text-right">Premium</span>
+            <span className="text-[10px] font-semibold text-foreground/50 uppercase text-right">Status</span>
+          </div>
+          <div className="divide-y divide-[var(--border)]">
+            {expiryBuckets.map((bucket) => {
+              const dateLabel = new Date(bucket.expiry + "T00:00:00").toLocaleDateString("en-US", {
+                month: "short", day: "numeric",
+              });
+              // Unique symbols in this bucket
+              const symbolSet = Array.from(new Set(bucket.positions.map((p) => p.symbol)));
+              // Status badge
+              let statusLabel: string;
+              let statusClass: string;
+              if (bucket.isSettled) {
+                statusLabel = "Settled";
+                statusClass = "bg-[var(--surface-2)] text-foreground/40";
+              } else if (bucket.dte === 0) {
+                statusLabel = "Expires today";
+                statusClass = "bg-red-500/20 text-red-400";
+              } else if (bucket.dte <= 3) {
+                statusLabel = `${bucket.dte}d`;
+                statusClass = "bg-red-500/15 text-red-400";
+              } else if (bucket.dte <= 7) {
+                statusLabel = `${bucket.dte}d`;
+                statusClass = "bg-orange-500/15 text-orange-400";
+              } else {
+                statusLabel = `${bucket.dte}d`;
+                statusClass = "bg-green-500/15 text-green-400";
+              }
+              return (
+                <div
+                  key={bucket.expiry}
+                  className={`grid grid-cols-[100px_1fr_auto_90px_90px] gap-2 px-4 py-2.5 items-center hover:bg-[var(--surface-2)] transition-colors ${
+                    bucket.isSettled ? "opacity-50" : ""
+                  }`}
+                >
+                  {/* Expiry date */}
+                  <p className="text-[11px] font-semibold text-foreground tabular-nums">{dateLabel}</p>
+                  {/* Symbol pills */}
+                  <div className="flex flex-wrap gap-1">
+                    {symbolSet.map((sym) => (
+                      <span key={sym} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
+                        {sym}
+                      </span>
+                    ))}
+                  </div>
+                  {/* # positions */}
+                  <p className="text-[11px] text-foreground/60 text-center tabular-nums">{bucket.positions.length}</p>
+                  {/* Total premium */}
+                  <p className={`text-[12px] font-black tabular-nums text-right ${
+                    bucket.totalPremium > 0 ? "text-green-500" : bucket.totalPremium < 0 ? "text-red-500" : "text-foreground/40"
+                  }`}>{fmt$(bucket.totalPremium)}</p>
+                  {/* Status badge */}
+                  <div className="flex justify-end">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
