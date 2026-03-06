@@ -5,6 +5,30 @@
 
 ---
 
+## v2.5.5 — Expiry-Bucketed Premium Table + Live ITM Assignment Risk Card
+**Released:** 2026-03-06
+**Branch:** `develop → main`
+
+### ✨ New Features
+
+#### Performance Tab — Premium by Expiry table (`YearTab.tsx`)
+- New table at the bottom of the Performance tab grouping all positions by `expiry_date`
+- Columns: Expiry Date | Symbol pills | # Positions | Total Premium | DTE / Status
+- Status badge colour-coded: 🟢 >7d remaining · 🟠 ≤7d · 🔴 ≤3d · grey `Settled` for past expiries
+- Past expiry rows dimmed (50% opacity) for visual hierarchy
+- New `GET /portfolio/positions` backend endpoint returns all positions across all weeks
+- `fetchAllPositions()` added to `web/lib/api.ts`; React Query cache key `"allPositions"` (60s stale)
+- **Bug fix (same release):** `expiry_date` from backend is a full ISO datetime — normalised via `.slice(0, 10)` to prevent `Invalid Date` / `NaNd` display
+
+#### Positions Tab — ITM Assignment Risk card (`PositionsTab.tsx`)
+- Live metric card in the metrics grid showing all ACTIVE positions currently in-the-money
+- Computes: strike × contracts × 100 (assignment value) + premium collected = net proceeds if assigned
+- Per-symbol pill badges showing symbol, strike, and depth (e.g. `AAPL $210 (3.2 deep)`)
+- Turns red when any position is ITM; green "All Clear" badge when none
+- `● LIVE` badge once market quotes loaded; updates every 30s via existing `liveSpotMap`
+
+---
+
 ## v2.5.4 — Build Fix: ESLint & TypeScript Errors
 **Released:** 2026-03-06
 **Branch:** `develop`
