@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { adminListUsers, adminCreateUser, adminPatchUser, adminDeleteUser, AdminUser } from "@/lib/api";
@@ -109,9 +110,9 @@ export default function AdminUsersPage() {
         </button>
       </div>
 
-      {/* Create modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      {/* Create modal — rendered in a portal so it escapes any layout stacking context */}
+      {showCreate && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-sm mx-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-bold text-foreground">Create User</h2>
@@ -164,7 +165,8 @@ export default function AdminUsersPage() {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* User table */}

@@ -81,12 +81,13 @@ function HoldingLivePrice({ symbol, liveAdjBasis, shares, status, realizedGain }
   );
 }
 
-function HoldingRow({ h, onEdit, onClose, onDelete, onReenter }: {
+function HoldingRow({ h, onEdit, onClose, onDelete, onReenter, closedTable }: {
   h: StockHolding;
   onEdit: () => void;
   onClose: (closePrice: number) => void;
   onDelete: () => void;
   onReenter: () => void;
+  closedTable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showClose, setShowClose] = useState(false);
@@ -206,13 +207,7 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter }: {
               <button onClick={() => setExpanded((v) => !v)} className="text-[10px] px-2 py-1 rounded-lg bg-[var(--surface-2)] text-foreground/70 font-semibold flex items-center gap-1">
                 {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
               </button>
-              <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold">Edit</button>
-              {h.status === "ACTIVE" ? (
-                <button
-                  onClick={() => { setShowClose((v) => !v); setClosePriceStr(""); }}
-                  className="text-[10px] px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 font-semibold"
-                >Close</button>
-              ) : (
+              {closedTable ? (
                 <>
                   <button
                     onClick={onReenter}
@@ -224,24 +219,51 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter }: {
                     className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
                   >Del</button>
                 </>
+              ) : (
+                <>
+                  <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold">Edit</button>
+                  <button
+                    onClick={() => { setShowClose((v) => !v); setClosePriceStr(""); }}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 font-semibold"
+                  >Close</button>
+                </>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4 mb-1.5 text-sm">
-            <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Shares</span><span className="font-semibold text-foreground">{h.shares.toLocaleString()}</span></div>
-            <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Avg Cost</span><span className="text-foreground/70">${h.cost_basis.toFixed(2)}</span></div>
-            <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Live Adj</span><span className="font-bold text-blue-500">${liveAdj.toFixed(2)}</span></div>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-            {realizedPrem > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-semibold">✓ -${realizedPerShare.toFixed(2)}/sh realized</span>}
-            {unrealizedPrem > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold">⏳ -${unrealizedPerShare.toFixed(2)}/sh in-flight</span>}
-            {basisReduction > 0 && <span className="text-[9px] text-green-500 font-semibold">↓ ${basisReduction.toFixed(2)} saved</span>}
-          </div>
-          <div className="flex items-center gap-4 text-[11px]">
-            <span className="text-foreground/50">▼ BE: <span className="text-red-400 font-semibold">${downsideBasis.toFixed(2)}</span></span>
-            {upsideBasis != null && <span className="text-foreground/50">▲ CC: <span className="text-green-500 font-semibold">${upsideBasis.toFixed(2)}</span></span>}
-            <HoldingLivePriceMobile symbol={h.symbol} liveAdjBasis={liveAdj} shares={h.shares} status={h.status} realizedGain={h.realized_gain} />
-          </div>
+          {closedTable ? (
+            /* Closed mobile: adj basis + realized P&L only */
+            <div className="flex items-center gap-4 mb-1.5 text-sm">
+              <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Adj Basis</span><span className="font-semibold text-foreground">${storedAdj.toFixed(2)}</span></div>
+              {basisReduction > 0 && <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Saved</span><span className="text-[9px] text-green-500 font-semibold">↓ ${basisReduction.toFixed(2)}</span></div>}
+              <div>
+                <span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Realized P&L</span>
+                {h.realized_gain != null ? (
+                  <span className={`font-semibold ${h.realized_gain >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {h.realized_gain >= 0 ? "+" : ""}${h.realized_gain.toFixed(2)}
+                  </span>
+                ) : <span className="text-foreground/30">—</span>}
+              </div>
+            </div>
+          ) : (
+            /* Active mobile: shares + avg cost + live adj */
+            <>
+              <div className="flex items-center gap-4 mb-1.5 text-sm">
+                <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Shares</span><span className="font-semibold text-foreground">{h.shares.toLocaleString()}</span></div>
+                <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Avg Cost</span><span className="text-foreground/70">${h.cost_basis.toFixed(2)}</span></div>
+                <div><span className="text-[10px] text-foreground/40 uppercase tracking-wide block">Live Adj</span><span className="font-bold text-blue-500">${liveAdj.toFixed(2)}</span></div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                {realizedPrem > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-semibold">✓ -${realizedPerShare.toFixed(2)}/sh realized</span>}
+                {unrealizedPrem > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold">⏳ -${unrealizedPerShare.toFixed(2)}/sh in-flight</span>}
+                {basisReduction > 0 && <span className="text-[9px] text-green-500 font-semibold">↓ ${basisReduction.toFixed(2)} saved</span>}
+              </div>
+              <div className="flex items-center gap-4 text-[11px]">
+                <span className="text-foreground/50">▼ BE: <span className="text-red-400 font-semibold">${downsideBasis.toFixed(2)}</span></span>
+                {upsideBasis != null && <span className="text-foreground/50">▲ CC: <span className="text-green-500 font-semibold">${upsideBasis.toFixed(2)}</span></span>}
+                <HoldingLivePriceMobile symbol={h.symbol} liveAdjBasis={liveAdj} shares={h.shares} status={h.status} realizedGain={h.realized_gain} />
+              </div>
+            </>
+          )}
         </div>
         {showClose && h.status === "ACTIVE" && (
           <div className="px-3 pb-3 pt-2 bg-orange-50/60 dark:bg-orange-900/10 border-t border-orange-200 dark:border-orange-800/40">
@@ -278,64 +300,45 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter }: {
       </div>
 
       {/* ── Desktop table row ── */}
-      <tr className="hidden sm:table-row border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-        <td className="px-3 py-2.5 w-32 max-w-[8rem]">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-bold text-foreground">{h.symbol}</span>
-            <ReopenedBadge />
-          </div>
-          {h.company_name && <div className="text-[10px] text-foreground/50 truncate max-w-[7rem]">{h.company_name}</div>}
-          <BasisCarryHint />
-        </td>
-        <td className="px-3 py-2.5 text-foreground font-semibold">{h.shares.toLocaleString()}</td>
-        <td className="px-3 py-2.5 text-foreground/70 text-sm">${h.cost_basis.toFixed(2)}</td>
-        <td className="px-3 py-2.5 text-sm">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-bold text-blue-500">${liveAdj.toFixed(2)}</span>
-            <span className="text-[9px] text-foreground/40 font-normal">live</span>
-            {storedAdj !== liveAdj && (
-              <span className="text-[9px] text-foreground/40" title="Stored adj basis">(stored: ${storedAdj.toFixed(2)})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {realizedPrem > 0 && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-semibold"
-                title={`Per share: -$${realizedPerShare.toFixed(4)}`}>
-                ✓ -${realizedPerShare.toFixed(2)}/sh realized
-              </span>
-            )}
-            {unrealizedPrem > 0 && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold"
-                title={`Per share: -$${unrealizedPerShare.toFixed(4)}`}>
-                ⏳ -${unrealizedPerShare.toFixed(2)}/sh in-flight
-              </span>
-            )}
-          </div>
-          {basisReduction > 0 && <div className="text-[9px] text-green-500 font-semibold mt-0.5">↓ ${basisReduction.toFixed(2)} total saved</div>}
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[9px] text-foreground/50">▼ BE: <span className="text-red-400 font-semibold">${downsideBasis.toFixed(2)}</span></span>
-            {upsideBasis != null && (
-              <span className="text-[9px] text-foreground/50">▲ CC: <span className="text-green-500 font-semibold">${upsideBasis.toFixed(2)}</span></span>
-            )}
-          </div>
-        </td>
-        <HoldingLivePrice symbol={h.symbol} liveAdjBasis={liveAdj} shares={h.shares} status={h.status} realizedGain={h.realized_gain} />
-        <td className="px-3 py-2.5">
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="text-[10px] px-2 py-1 rounded-lg bg-[var(--surface-2)] text-foreground/70 font-semibold hover:bg-[var(--surface-3,var(--surface-2))] transition flex items-center gap-1"
-            >
-              {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />} History
-            </button>
-            <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
-            {h.status === "ACTIVE" ? (
-              <button
-                onClick={() => { setShowClose((v) => !v); setClosePriceStr(""); }}
-                className="text-[10px] px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 font-semibold hover:bg-orange-100 transition"
-              >Close</button>
-            ) : (
-              <>
+      {closedTable ? (
+        /* Closed / Called Away — slim 4-column row */
+        <>
+          <tr className="hidden sm:table-row border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors text-foreground/60">
+            {/* Company */}
+            <td className="px-3 py-2.5 w-32 max-w-[8rem]">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-foreground">{h.symbol}</span>
+                <ReopenedBadge />
+              </div>
+              {h.company_name && <div className="text-[10px] text-foreground/50 truncate max-w-[7rem]">{h.company_name}</div>}
+              <BasisCarryHint />
+            </td>
+            {/* Adj Basis */}
+            <td className="px-3 py-2.5 text-sm">
+              <span className="font-semibold text-foreground">${storedAdj.toFixed(2)}</span>
+              {basisReduction > 0 && (
+                <div className="text-[9px] text-green-500 font-semibold">↓ ${basisReduction.toFixed(2)} saved</div>
+              )}
+            </td>
+            {/* Realized P&L */}
+            <td className="px-3 py-2.5 text-sm">
+              {h.realized_gain != null ? (
+                <span className={`font-semibold ${h.realized_gain >= 0 ? "text-green-500" : "text-red-500"}`}>
+                  {h.realized_gain >= 0 ? "+" : ""}${h.realized_gain.toFixed(2)}
+                </span>
+              ) : (
+                <span className="text-foreground/30 text-xs">—</span>
+              )}
+            </td>
+            {/* Actions */}
+            <td className="px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setExpanded((v) => !v)}
+                  className="text-[10px] px-2 py-1 rounded-lg bg-[var(--surface-2)] text-foreground/70 font-semibold hover:bg-[var(--surface-3,var(--surface-2))] transition flex items-center gap-1"
+                >
+                  {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />} History
+                </button>
                 <button
                   onClick={onReenter}
                   className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition"
@@ -345,46 +348,115 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter }: {
                   onClick={() => { if (window.confirm(`Delete ${h.symbol}? If it has premium history it will be soft-closed instead.`)) onDelete(); }}
                   className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
                 >Del</button>
-              </>
-            )}
-          </div>
-        </td>
-      </tr>
-      {showClose && h.status === "ACTIVE" && (
-        <tr className="hidden sm:table-row border-b border-orange-200 dark:border-orange-800/40 bg-orange-50/60 dark:bg-orange-900/10">
-          <td colSpan={6} className="px-4 py-3">
-            <div className="flex items-center gap-3">
-              <p className="text-[11px] font-semibold text-orange-700 dark:text-orange-400 shrink-0">Close {h.symbol} at price:</p>
-              <input
-                type="number" step="0.01" min="0"
-                value={closePriceStr}
-                onChange={(e) => setClosePriceStr(e.target.value)}
-                placeholder="e.g. 155.00"
-                className="w-36 text-xs px-2.5 py-1.5 rounded-lg border border-orange-300 dark:border-orange-700 bg-white dark:bg-orange-900/20 text-foreground focus:outline-none focus:ring-1 focus:ring-orange-400"
-                autoFocus
-              />
-              <button
-                onClick={() => {
-                  const p = parseFloat(closePriceStr);
-                  if (!closePriceStr || isNaN(p) || p <= 0) return;
-                  onClose(p);
-                  setShowClose(false);
-                  setClosePriceStr("");
-                }}
-                disabled={!closePriceStr || isNaN(parseFloat(closePriceStr))}
-                className="text-[10px] px-3 py-1.5 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 disabled:opacity-40 transition"
-              >Confirm Close</button>
-              <button onClick={() => setShowClose(false)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] text-foreground/60 font-semibold hover:bg-[var(--surface-3,var(--surface-2))] transition">Cancel</button>
-            </div>
-          </td>
-        </tr>
-      )}
-      {expanded && (
-        <tr className="hidden sm:table-row border-b border-[var(--border)] bg-[var(--surface-2)]/40">
-          <td colSpan={6} className="px-4 pb-3 pt-2">
-            <EventList desktop />
-          </td>
-        </tr>
+              </div>
+            </td>
+          </tr>
+          {expanded && (
+            <tr className="hidden sm:table-row border-b border-[var(--border)] bg-[var(--surface-2)]/40">
+              <td colSpan={4} className="px-4 pb-3 pt-2">
+                <EventList desktop />
+              </td>
+            </tr>
+          )}
+        </>
+      ) : (
+        /* Active — full 6-column row */
+        <>
+          <tr className="hidden sm:table-row border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+            <td className="px-3 py-2.5 w-32 max-w-[8rem]">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-foreground">{h.symbol}</span>
+                <ReopenedBadge />
+              </div>
+              {h.company_name && <div className="text-[10px] text-foreground/50 truncate max-w-[7rem]">{h.company_name}</div>}
+              <BasisCarryHint />
+            </td>
+            <td className="px-3 py-2.5 text-foreground font-semibold">{h.shares.toLocaleString()}</td>
+            <td className="px-3 py-2.5 text-foreground/70 text-sm">${h.cost_basis.toFixed(2)}</td>
+            <td className="px-3 py-2.5 text-sm">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-blue-500">${liveAdj.toFixed(2)}</span>
+                <span className="text-[9px] text-foreground/40 font-normal">live</span>
+                {storedAdj !== liveAdj && (
+                  <span className="text-[9px] text-foreground/40" title="Stored adj basis">(stored: ${storedAdj.toFixed(2)})</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {realizedPrem > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-semibold"
+                    title={`Per share: -$${realizedPerShare.toFixed(4)}`}>
+                    ✓ -${realizedPerShare.toFixed(2)}/sh realized
+                  </span>
+                )}
+                {unrealizedPrem > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold"
+                    title={`Per share: -$${unrealizedPerShare.toFixed(4)}`}>
+                    ⏳ -${unrealizedPerShare.toFixed(2)}/sh in-flight
+                  </span>
+                )}
+              </div>
+              {basisReduction > 0 && <div className="text-[9px] text-green-500 font-semibold mt-0.5">↓ ${basisReduction.toFixed(2)} total saved</div>}
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-[9px] text-foreground/50">▼ BE: <span className="text-red-400 font-semibold">${downsideBasis.toFixed(2)}</span></span>
+                {upsideBasis != null && (
+                  <span className="text-[9px] text-foreground/50">▲ CC: <span className="text-green-500 font-semibold">${upsideBasis.toFixed(2)}</span></span>
+                )}
+              </div>
+            </td>
+            <HoldingLivePrice symbol={h.symbol} liveAdjBasis={liveAdj} shares={h.shares} status={h.status} realizedGain={h.realized_gain} />
+            <td className="px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setExpanded((v) => !v)}
+                  className="text-[10px] px-2 py-1 rounded-lg bg-[var(--surface-2)] text-foreground/70 font-semibold hover:bg-[var(--surface-3,var(--surface-2))] transition flex items-center gap-1"
+                >
+                  {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />} History
+                </button>
+                <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
+                <button
+                  onClick={() => { setShowClose((v) => !v); setClosePriceStr(""); }}
+                  className="text-[10px] px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 font-semibold hover:bg-orange-100 transition"
+                >Close</button>
+              </div>
+            </td>
+          </tr>
+          {showClose && (
+            <tr className="hidden sm:table-row border-b border-orange-200 dark:border-orange-800/40 bg-orange-50/60 dark:bg-orange-900/10">
+              <td colSpan={6} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <p className="text-[11px] font-semibold text-orange-700 dark:text-orange-400 shrink-0">Close {h.symbol} at price:</p>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={closePriceStr}
+                    onChange={(e) => setClosePriceStr(e.target.value)}
+                    placeholder="e.g. 155.00"
+                    className="w-36 text-xs px-2.5 py-1.5 rounded-lg border border-orange-300 dark:border-orange-700 bg-white dark:bg-orange-900/20 text-foreground focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      const p = parseFloat(closePriceStr);
+                      if (!closePriceStr || isNaN(p) || p <= 0) return;
+                      onClose(p);
+                      setShowClose(false);
+                      setClosePriceStr("");
+                    }}
+                    disabled={!closePriceStr || isNaN(parseFloat(closePriceStr))}
+                    className="text-[10px] px-3 py-1.5 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 disabled:opacity-40 transition"
+                  >Confirm Close</button>
+                  <button onClick={() => setShowClose(false)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] text-foreground/60 font-semibold hover:bg-[var(--surface-3,var(--surface-2))] transition">Cancel</button>
+                </div>
+              </td>
+            </tr>
+          )}
+          {expanded && (
+            <tr className="hidden sm:table-row border-b border-[var(--border)] bg-[var(--surface-2)]/40">
+              <td colSpan={6} className="px-4 pb-3 pt-2">
+                <EventList desktop />
+              </td>
+            </tr>
+          )}
+        </>
       )}
     </>
   );
@@ -421,6 +493,7 @@ export function HoldingsTab() {
     mutationFn: ({ id, closePrice, currentNotes }: { id: number; closePrice: number; currentNotes: string | null }) =>
       updateHolding(id, {
         status: "CLOSED",
+        shares: 0,
         close_price: closePrice,
         notes: [currentNotes, `Closed @ $${closePrice.toFixed(2)}`].filter(Boolean).join(" · "),
       } as Partial<StockHolding> & { close_price: number }),
@@ -663,11 +736,15 @@ export function HoldingsTab() {
         const activeHoldings = filtered.filter((h) => h.status === "ACTIVE");
         const closedHoldings = filtered.filter((h) => h.status === "CLOSED");
 
-        const HoldingsCard = ({ rows, label, sublabel, headerClass }: {
+        const ACTIVE_COLS = ["Company", "Shares", "Avg Cost", "Adj Basis", "Current Price / P&L", "Actions"];
+        const CLOSED_COLS = ["Company", "Adj Basis", "Realized P&L", "Actions"];
+
+        const HoldingsCard = ({ rows, label, sublabel, headerClass, closed }: {
           rows: typeof filtered;
           label: string;
           sublabel?: string;
           headerClass?: string;
+          closed?: boolean;
         }) => (
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
             {/* Card header */}
@@ -685,6 +762,7 @@ export function HoldingsTab() {
                   onClose={(price) => closeMut.mutate({ id: h.id, closePrice: price, currentNotes: h.notes })}
                   onDelete={() => deleteMut.mutate(h.id)}
                   onReenter={() => startReenter(h)}
+                  closedTable={closed}
                 />
               ))}
             </div>
@@ -693,7 +771,7 @@ export function HoldingsTab() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
-                    {["Company", "Shares", "Avg Cost", "Adj Basis", "Current Price / P&L", "Actions"].map((col) => (
+                    {(closed ? CLOSED_COLS : ACTIVE_COLS).map((col) => (
                       <th key={col} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">{col}</th>
                     ))}
                   </tr>
@@ -706,6 +784,7 @@ export function HoldingsTab() {
                       onClose={(price) => closeMut.mutate({ id: h.id, closePrice: price, currentNotes: h.notes })}
                       onDelete={() => deleteMut.mutate(h.id)}
                       onReenter={() => startReenter(h)}
+                      closedTable={closed}
                     />
                   ))}
                 </tbody>
@@ -729,6 +808,7 @@ export function HoldingsTab() {
                 label="Closed / Called Away"
                 sublabel="re-enter any symbol to carry adj basis forward"
                 headerClass="bg-gray-50/80 dark:bg-gray-900/20 border-gray-200/60 dark:border-gray-700/40"
+                closed
               />
             )}
             {activeHoldings.length === 0 && closedHoldings.length === 0 && (
