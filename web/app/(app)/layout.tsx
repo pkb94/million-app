@@ -21,7 +21,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <BottomNav />
-      <AiChat />
+      {/* AI Chat — hidden for now, do not delete */}
+      <div className="hidden"><AiChat /></div>
     </div>
   );
 }
