@@ -799,13 +799,14 @@ def portfolio_summary(*, user_id: int) -> dict:
             net   = _net_premium(p) * p.contracts * 100
             total_premium += gross
 
-            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
-                realized_pnl += net  # realized P&L stays net (accounts for buyback cost)
+            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED,
+                            OptionPositionStatus.ASSIGNED):
+                # ASSIGNED premium is fully realized — you keep it when shares are put to you
+                realized_pnl += net
+                if p.status == OptionPositionStatus.ASSIGNED:
+                    assigned_count += 1
             elif p.status == OptionPositionStatus.ACTIVE:
-                if p.week_id in open_week_ids:
-                    active_count += 1
-            elif p.status == OptionPositionStatus.ASSIGNED:
-                assigned_count += 1
+                active_count += 1
 
         # Per-week breakdown for the Year tab
         week_premium: dict[int, float] = {w.id: 0.0 for w in all_weeks}
