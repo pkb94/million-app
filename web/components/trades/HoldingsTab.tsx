@@ -201,7 +201,6 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter, closedTable }: {
                 <ReopenedBadge />
               </div>
               {h.company_name && <div className="text-[10px] text-foreground/50">{h.company_name}</div>}
-              <BasisCarryHint />
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button onClick={() => setExpanded((v) => !v)} className="text-[10px] px-2 py-1 rounded-lg bg-[var(--surface-2)] text-foreground/70 font-semibold flex items-center gap-1">
@@ -311,14 +310,6 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter, closedTable }: {
                 <ReopenedBadge />
               </div>
               {h.company_name && <div className="text-[10px] text-foreground/50 truncate max-w-[7rem]">{h.company_name}</div>}
-              <BasisCarryHint />
-            </td>
-            {/* Adj Basis */}
-            <td className="px-3 py-2.5 text-sm">
-              <span className="font-semibold text-foreground">${storedAdj.toFixed(2)}</span>
-              {basisReduction > 0 && (
-                <div className="text-[9px] text-green-500 font-semibold">↓ ${basisReduction.toFixed(2)} saved</div>
-              )}
             </td>
             {/* Realized P&L */}
             <td className="px-3 py-2.5 text-sm">
@@ -353,7 +344,7 @@ function HoldingRow({ h, onEdit, onClose, onDelete, onReenter, closedTable }: {
           </tr>
           {expanded && (
             <tr className="hidden sm:table-row border-b border-[var(--border)] bg-[var(--surface-2)]/40">
-              <td colSpan={4} className="px-4 pb-3 pt-2">
+              <td colSpan={3} className="px-4 pb-3 pt-2">
                 <EventList desktop />
               </td>
             </tr>
@@ -737,7 +728,7 @@ export function HoldingsTab() {
         const closedHoldings = filtered.filter((h) => h.status === "CLOSED");
 
         const ACTIVE_COLS = ["Company", "Shares", "Avg Cost", "Adj Basis", "Current Price / P&L", "Actions"];
-        const CLOSED_COLS = ["Company", "Adj Basis", "Realized P&L", "Actions"];
+        const CLOSED_COLS = ["Company", "Realized P&L", "Actions"];
 
         const HoldingsCard = ({ rows, label, sublabel, headerClass, closed }: {
           rows: typeof filtered;
@@ -803,13 +794,15 @@ export function HoldingsTab() {
               />
             )}
             {closedHoldings.length > 0 && (
-              <HoldingsCard
-                rows={closedHoldings}
-                label="Closed / Called Away"
-                sublabel="re-enter any symbol to carry adj basis forward"
-                headerClass="bg-gray-50/80 dark:bg-gray-900/20 border-gray-200/60 dark:border-gray-700/40"
-                closed
-              />
+              <div className="md:w-1/2">
+                <HoldingsCard
+                  rows={closedHoldings}
+                  label="Closed / Called Away"
+                  sublabel="re-enter any symbol to carry adj basis forward"
+                  headerClass="bg-gray-50/80 dark:bg-gray-900/20 border-gray-200/60 dark:border-gray-700/40"
+                  closed
+                />
+              </div>
             )}
             {activeHoldings.length === 0 && closedHoldings.length === 0 && (
               <EmptyState icon={Wallet} title="No holdings match" body="Try a different search." />
