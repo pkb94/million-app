@@ -28,7 +28,6 @@ DB_FILES = [
     "portfolio.db",
     "budget.db",
     "markets.db",
-    "trading_journal.db",  # legacy source — keep backed up too
 ]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

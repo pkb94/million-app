@@ -5,8 +5,10 @@ import { updatePosition, OptionPosition, PositionStatus } from "@/lib/api";
 import { STATUS_COLORS } from "./TradesHelpers";
 
 const PREM_OUT_STATUSES: PositionStatus[] = ["CLOSED", "EXPIRED", "ROLLED"];
+// ASSIGNED is intentionally omitted: assignment happens at the strike price —
+// no buyback cost, full premium collected is kept. premium_out = 0 is sent automatically.
 
-export function StatusSelect({ pos }: { pos: OptionPosition }) {
+export function StatusSelect({ pos, isCarried = false }: { pos: OptionPosition; isCarried?: boolean }) {
   const qc = useQueryClient();
   const [pendingStatus, setPendingStatus] = useState<PositionStatus | null>(null);
   const [premOut, setPremOut] = useState(
@@ -28,9 +30,19 @@ export function StatusSelect({ pos }: { pos: OptionPosition }) {
   });
 
   function handleStatusChange(newStatus: PositionStatus) {
+    // For carried positions, warn the user before changing away from ACTIVE
+    if (isCarried && newStatus !== "ACTIVE" && pos.status === "ACTIVE") {
+      if (!window.confirm(
+        `This position was opened in a prior week.\n\nChanging it to "${newStatus}" will update the original trade.\n\nAre you sure?`
+      )) return;
+    }
     if (needsPremOut(newStatus)) {
       setPendingStatus(newStatus);
       setPremOut(pos.premium_out != null ? String(pos.premium_out) : "");
+    } else if (newStatus === "ASSIGNED") {
+      // Assignment is exercised at strike — no buyback, full premium is kept.
+      // Send premium_out=0 so the ledger treats the full premium_in as realized.
+      saveMut.mutate({ status: newStatus, premium_out: 0 });
     } else {
       saveMut.mutate({ status: newStatus, premium_out: null });
     }

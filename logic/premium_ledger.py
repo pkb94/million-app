@@ -25,6 +25,7 @@ Derived holdings basis:
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -32,6 +33,7 @@ from logic.services import get_session, _portfolio_session
 from database.models import (
     PremiumLedger,
     StockHolding,
+    HoldingEvent,
     OptionPosition,
     OptionPositionStatus,
 )
@@ -332,7 +334,106 @@ def get_premium_dashboard(*, user_id: int) -> dict:
             if r.holding_id not in holding_map:
                 h = session.query(StockHolding).filter(StockHolding.id == r.holding_id).first()
                 if h:
-                    holding_map[r.holding_id] = {"cost_basis": h.cost_basis, "shares": h.shares, "symbol": h.symbol}
+                    # For exited holdings (shares=0), the stored adjusted_cost_basis is stale
+                    # (it doesn't get updated when assignment zeroes out shares).
+                    # Reconstruct the adj basis at exit by replaying all basis_delta events.
+                    adj_at_exit = h.adjusted_cost_basis
+                    if h.shares == 0:
+                        events = (
+                            session.query(HoldingEvent)
+                            .filter(
+                                HoldingEvent.holding_id == h.id,
+                                HoldingEvent.user_id == h.user_id,
+                            )
+                            .order_by(HoldingEvent.id)
+                            .all()
+                        )
+                        # Start from original cost and apply all basis reductions
+                        reconstructed = h.cost_basis
+                        for ev in events:
+                            if ev.basis_delta and ev.basis_delta != 0:
+                                reconstructed = round(reconstructed + ev.basis_delta, 4)
+                        adj_at_exit = reconstructed
+                    holding_map[r.holding_id] = {
+                        "cost_basis":          h.cost_basis,
+                        "adjusted_cost_basis": h.adjusted_cost_basis,
+                        "adj_at_exit":         adj_at_exit,   # correct for exited holdings
+                        "shares":              h.shares,
+                        "symbol":              h.symbol,
+                    }
+                else:
+                    # Holding was hard-deleted (orphaned ledger row).
+                    # Reconstruct cost_basis and adj_at_exit from HoldingEvents using
+                    # the holding_id — events survive even when the holding row is gone.
+                    orphan_events = (
+                        session.query(HoldingEvent)
+                        .filter(
+                            HoldingEvent.holding_id == r.holding_id,
+                            HoldingEvent.user_id == user_id,
+                        )
+                        .order_by(HoldingEvent.id)
+                        .all()
+                    )
+                    total_basis_delta = sum(
+                        (ev.basis_delta or 0.0) for ev in orphan_events
+                    )
+                    # Derive original cost_basis from the first event's description if possible.
+                    # Fall back to spot_price from an associated option_position.
+                    original_cost_basis: float = 0.0
+                    adj_at_exit: float = 0.0
+                    if orphan_events:
+                        # Parse "basis $X.XXXX →" from the first description
+                        desc = orphan_events[0].description or ""
+                        m = re.search(r"basis \$?([\d.]+)\s*→", desc)
+                        if m:
+                            original_cost_basis = float(m.group(1))
+                        else:
+                            # Fallback: reconstruct from last known adj delta
+                            # adj_at_exit = cost_basis + sum(deltas) → cost_basis = adj_at_exit - sum(deltas)
+                            # Use spot_price from a linked option_position as proxy for adj_at_exit
+                            pos = (
+                                session.query(OptionPosition)
+                                .filter(
+                                    OptionPosition.holding_id == r.holding_id,
+                                    OptionPosition.user_id == user_id,
+                                )
+                                .first()
+                            )
+                            adj_at_exit_proxy = pos.spot_price if pos and pos.spot_price else 0.0
+                            original_cost_basis = round(adj_at_exit_proxy - total_basis_delta, 4)
+                        adj_at_exit = round(original_cost_basis + total_basis_delta, 4)
+                    holding_map[r.holding_id] = {
+                        "cost_basis":          original_cost_basis,
+                        "adjusted_cost_basis": adj_at_exit,
+                        "adj_at_exit":         adj_at_exit,
+                        "shares":              0.0,   # holding is gone → exited
+                        "symbol":              r.symbol,
+                    }
+
+        # Build a lookup: symbol → active holding info (shares > 0, status=ACTIVE).
+        # This is used to correctly classify a symbol as active vs exited even when
+        # the PremiumLedger rows reference an older (hard-deleted) holding_id.
+        active_holding_by_symbol: dict[str, Any] = {}
+        all_symbols = {r.symbol for r in rows}
+        for sym in all_symbols:
+            active_h = (
+                session.query(StockHolding)
+                .filter(
+                    StockHolding.user_id == user_id,
+                    StockHolding.symbol == sym,
+                    StockHolding.status == "ACTIVE",
+                    StockHolding.shares > 0,
+                )
+                .first()
+            )
+            if active_h:
+                active_holding_by_symbol[sym] = {
+                    "cost_basis":          active_h.cost_basis,
+                    "adjusted_cost_basis": active_h.adjusted_cost_basis,
+                    "adj_at_exit":         active_h.adjusted_cost_basis,
+                    "shares":              active_h.shares,
+                    "holding_id":          active_h.id,
+                }
 
         # by_symbol
         by_symbol: dict[str, dict] = {}
@@ -341,11 +442,16 @@ def get_premium_dashboard(*, user_id: int) -> dict:
         for r in rows:
             sym = r.symbol
             if sym not in by_symbol:
-                hinfo = holding_map.get(r.holding_id, {})
+                # Prefer the live active holding for this symbol; fall back to the
+                # holding referenced by this ledger row (may be hard-deleted).
+                hinfo = active_holding_by_symbol.get(sym) or holding_map.get(r.holding_id, {})
+                best_hid = hinfo.get("holding_id", r.holding_id)
                 by_symbol[sym] = {
                     "symbol":             sym,
-                    "holding_id":         r.holding_id,
+                    "holding_id":         best_hid,
                     "cost_basis":         hinfo.get("cost_basis", 0.0),
+                    "adj_basis_db":       hinfo.get("adjusted_cost_basis") or hinfo.get("cost_basis", 0.0),
+                    "adj_at_exit":        hinfo.get("adj_at_exit", hinfo.get("cost_basis", 0.0)),
                     "shares":             hinfo.get("shares", 0.0),
                     "realized_premium":   0.0,
                     "unrealized_premium": 0.0,
@@ -381,10 +487,18 @@ def get_premium_dashboard(*, user_id: int) -> dict:
         # Compute adj_basis_impact per symbol
         for sym, d in by_symbol.items():
             shares = d["shares"]
-            d["realized_per_share"]   = round(d["realized_premium"]   / shares, 4) if shares > 0 else 0.0
-            d["unrealized_per_share"] = round(d["unrealized_premium"] / shares, 4) if shares > 0 else 0.0
-            d["live_adj_basis"]       = round(max(0.0, d["cost_basis"] - d["realized_per_share"] - d["unrealized_per_share"]), 4)
-            d["adj_basis_stored"]     = round(max(0.0, d["cost_basis"] - d["realized_per_share"]), 4)
+            if shares > 0:
+                # Active holding: use stored adjusted_cost_basis (authoritative)
+                d["adj_basis_stored"]     = round(d["adj_basis_db"], 4)
+                d["unrealized_per_share"] = round(d["unrealized_premium"] / shares, 4)
+                d["live_adj_basis"]       = round(max(0.0, d["adj_basis_stored"] - d["unrealized_per_share"]), 4)
+                d["realized_per_share"]   = round(d["cost_basis"] - d["adj_basis_stored"], 4)
+            else:
+                # Exited holding: reconstruct adj basis at exit from holding_events
+                d["adj_basis_stored"]     = round(d["adj_at_exit"], 4)  # adj basis at point of exit
+                d["unrealized_per_share"] = 0.0
+                d["live_adj_basis"]       = round(d["adj_at_exit"], 4)  # same — no more in-flight
+                d["realized_per_share"]   = 0.0
             d["realized_premium"]     = round(d["realized_premium"],   2)
             d["unrealized_premium"]   = round(d["unrealized_premium"], 2)
             d["total_premium_sold"]   = round(d["total_premium_sold"], 2)

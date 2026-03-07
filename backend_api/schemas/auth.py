@@ -65,7 +65,9 @@ class AuthSessionOut(BaseModel):
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
 class AdminUserOut(BaseModel):
-    user_id: int
+    model_config = {"from_attributes": True, "populate_by_name": True}
+
+    user_id: int = Field(validation_alias="id")
     username: str
     role: str
     is_active: bool

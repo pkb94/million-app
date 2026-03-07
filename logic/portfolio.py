@@ -19,6 +19,7 @@ from database.models import (
     OptionPosition,
     OptionPositionStatus,
     StockAssignment,
+    PremiumLedger,
 )
 
 
@@ -605,6 +606,17 @@ def update_position(*, user_id: int, position_id: int, data: dict) -> dict:
 
 
 def delete_position(*, user_id: int, position_id: int) -> None:
+    """
+    Delete a position and ALL related carry-forward copies / the origin.
+
+    - If deleting an original (carried_from_id=None): also delete every
+      carry-copy that points to it across all weeks.
+    - If deleting a carry-copy (carried_from_id != None): resolve to the
+      original, then delete the original AND all its carry-copies.
+
+    This ensures a "wrong trade" entered in week 1 is fully removed and
+    never resurfaces as a ghost in the 'Carried from prior weeks' section.
+    """
     session = _portfolio_session()
     try:
         pos = session.query(OptionPosition).filter(
@@ -613,7 +625,37 @@ def delete_position(*, user_id: int, position_id: int) -> None:
         ).first()
         if pos is None:
             raise ValueError("Position not found")
-        session.delete(pos)
+
+        # Resolve to the true origin
+        origin_id = pos.carried_from_id if pos.carried_from_id else pos.id
+
+        # Collect all carry-copies of this origin across all weeks
+        copies = session.query(OptionPosition).filter(
+            OptionPosition.user_id == user_id,
+            OptionPosition.carried_from_id == origin_id,
+        ).all()
+
+        # Collect all IDs to delete (origin + carry-copies) for ledger cleanup
+        ids_to_delete = [origin_id] + [copy.id for copy in copies]
+
+        # Delete any PremiumLedger rows for these positions so no ghost totals remain
+        session.query(PremiumLedger).filter(
+            PremiumLedger.user_id == user_id,
+            PremiumLedger.position_id.in_(ids_to_delete),
+        ).delete(synchronize_session=False)
+
+        # Delete carry-copies and origin
+        for copy in copies:
+            session.delete(copy)
+
+        # Delete the origin itself
+        origin = session.query(OptionPosition).filter(
+            OptionPosition.id == origin_id,
+            OptionPosition.user_id == user_id,
+        ).first()
+        if origin:
+            session.delete(origin)
+
         session.commit()
     finally:
         session.close()
@@ -752,16 +794,19 @@ def portfolio_summary(*, user_id: int) -> dict:
                 continue
             seen_origin.add(origin_id)
 
-            net = _net_premium(p) * p.contracts * 100
-            total_premium += net
+            # Use gross premium_in for total (consistent with Premium tab)
+            gross = (p.premium_in or 0.0) * p.contracts * 100
+            net   = _net_premium(p) * p.contracts * 100
+            total_premium += gross
 
-            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
+            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED,
+                            OptionPositionStatus.ASSIGNED):
+                # ASSIGNED premium is fully realized — you keep it when shares are put to you
                 realized_pnl += net
+                if p.status == OptionPositionStatus.ASSIGNED:
+                    assigned_count += 1
             elif p.status == OptionPositionStatus.ACTIVE:
-                if p.week_id in open_week_ids:
-                    active_count += 1
-            elif p.status == OptionPositionStatus.ASSIGNED:
-                assigned_count += 1
+                active_count += 1
 
         # Per-week breakdown for the Year tab
         week_premium: dict[int, float] = {w.id: 0.0 for w in all_weeks}
@@ -776,8 +821,11 @@ def portfolio_summary(*, user_id: int) -> dict:
             seen_origin2.add(origin_id)
             if p.week_id not in week_premium:
                 continue
-            net = _net_premium(p) * p.contracts * 100
-            week_premium[p.week_id] += net
+            # Use gross premium_in (same as Premium tab's total_premium_sold)
+            # so the week-by-week figure matches what you actually collected.
+            gross = (p.premium_in or 0.0) * p.contracts * 100
+            net   = _net_premium(p) * p.contracts * 100
+            week_premium[p.week_id] += gross
             week_pos_count[p.week_id] += 1
             if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
                 week_realized[p.week_id] += net
@@ -807,11 +855,13 @@ def portfolio_summary(*, user_id: int) -> dict:
                 monthly_premium.get(key, 0.0) + week_premium.get(w.id, 0.0), 2
             )
 
-        # Always return all 12 months of the current calendar year so the chart
-        # shows a complete Jan–Dec skeleton even when only a few weeks exist.
+        # Pad months from January up to (and including) the current month so the chart
+        # shows a YTD skeleton without rendering future empty bars.
         import datetime as _dt
-        _cy = _dt.datetime.utcnow().year
-        for _m in range(1, 13):
+        _now = _dt.datetime.utcnow()
+        _cy  = _now.year
+        _cm  = _now.month
+        for _m in range(1, _cm + 1):
             _k = f"{_cy}-{_m:02d}"
             if _k not in monthly_premium:
                 monthly_premium[_k] = 0.0
@@ -823,8 +873,9 @@ def portfolio_summary(*, user_id: int) -> dict:
         winning_weeks = sum(1 for w in complete_weeks if week_premium.get(w.id, 0) > 0)
         win_rate = round(winning_weeks / len(complete_weeks) * 100, 1) if complete_weeks else 0.0
 
-        best_week = max(weeks_breakdown, key=lambda x: x["premium"], default=None)
-        worst_week = min(weeks_breakdown, key=lambda x: x["premium"], default=None)
+        complete_breakdown = [w for w in weeks_breakdown if w["is_complete"]]
+        best_week = max(complete_breakdown, key=lambda x: x["premium"], default=None)
+        worst_week = min(complete_breakdown, key=lambda x: x["premium"], default=None)
 
         # Estimated capital gains tax (short-term: 22% bracket default)
         cap_gains_tax_rate = 0.22
@@ -879,18 +930,22 @@ def symbol_summary(*, user_id: int) -> list[dict]:
                     "expired":       0,
                     "assigned":      0,
                 }
-            net = _net_premium(p) * p.contracts * 100
-            by_symbol[sym]["total_premium"] += net
-            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
+            gross = (p.premium_in or 0.0) * p.contracts * 100
+            net   = _net_premium(p) * p.contracts * 100
+            by_symbol[sym]["total_premium"] += gross
+            if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED,
+                            OptionPositionStatus.ASSIGNED):
+                # Premium is fully realized for closed, expired, and assigned positions
+                # (assigned = option exercised against you; premium collected is kept)
                 by_symbol[sym]["realized_pnl"] += net
                 if p.status == OptionPositionStatus.CLOSED:
                     by_symbol[sym]["closed"] += 1
-                else:
+                elif p.status == OptionPositionStatus.EXPIRED:
                     by_symbol[sym]["expired"] += 1
+                else:
+                    by_symbol[sym]["assigned"] += 1
             elif p.status == OptionPositionStatus.ACTIVE:
                 by_symbol[sym]["active"] += 1
-            elif p.status == OptionPositionStatus.ASSIGNED:
-                by_symbol[sym]["assigned"] += 1
 
         result = list(by_symbol.values())
         result.sort(key=lambda x: x["symbol"])

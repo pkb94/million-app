@@ -83,74 +83,154 @@ export function PremiumTab() {
         <span><span className="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1" />In-Flight = active positions, reduces live adj basis until settled</span>
       </div>
 
-      {/* ── By-symbol table ── */}
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-          <h3 className="text-sm font-bold text-foreground">By Symbol</h3>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="text-[11px] px-3 py-1.5 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 transition-colors"
-          >
-            {syncing ? "Syncing…" : "Sync Ledger"}
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
-                {["Symbol", "Avg Cost", "Adj Basis", "Live Adj", "Sold $", "Realized $", "In-Flight $", "# Pos"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-right first:text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {by_symbol.map((row: PremiumSymbolRow) => (
-                <tr key={row.holding_id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
-                  <td className="px-4 py-3 font-bold text-foreground">{row.symbol}</td>
-                  <td className="px-4 py-3 text-right text-foreground/70">${row.cost_basis.toFixed(4)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={row.adj_basis_stored < row.cost_basis ? "text-blue-500 font-semibold" : "text-foreground/70"}>
-                      ${row.adj_basis_stored.toFixed(4)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={row.live_adj_basis < row.cost_basis ? "text-green-500 font-semibold" : "text-foreground/70"}>
-                      ${row.live_adj_basis.toFixed(4)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-green-500">${row.total_premium_sold.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right">
-                    {row.realized_premium > 0
-                      ? <span className="text-blue-500 font-semibold">${row.realized_premium.toFixed(2)}</span>
-                      : <span className="text-foreground/30">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {row.unrealized_premium > 0
-                      ? <span className="text-orange-400 font-semibold">${row.unrealized_premium.toFixed(2)}</span>
-                      : <span className="text-foreground/30">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right text-foreground/60">{row.positions}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-[var(--border)] bg-[var(--surface-2)] font-bold">
-                <td className="px-4 py-3 text-foreground text-[11px] uppercase tracking-wide">Total</td>
-                <td colSpan={3} />
-                <td className="px-4 py-3 text-right text-green-500">${grand_total.total_premium_sold.toFixed(2)}</td>
-                <td className="px-4 py-3 text-right text-blue-500">
-                  {grand_total.realized_premium > 0 ? `$${grand_total.realized_premium.toFixed(2)}` : "—"}
-                </td>
-                <td className="px-4 py-3 text-right text-orange-400">
-                  {grand_total.unrealized_premium > 0 ? `$${grand_total.unrealized_premium.toFixed(2)}` : "—"}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+      {/* ── By-symbol table (active holdings only) ── */}
+      {(() => {
+        const activeRows = by_symbol.filter((r: PremiumSymbolRow) => r.shares > 0);
+        const exitedRows = by_symbol.filter((r: PremiumSymbolRow) => r.shares === 0);
+        return (
+          <>
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+                <h3 className="text-sm font-bold text-foreground">By Symbol</h3>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="text-[11px] px-3 py-1.5 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {syncing ? "Syncing…" : "Sync Ledger"}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
+                      {(["Symbol", "Avg Cost", "Adj Basis", "Live Adj"] as const).map((h) => (
+                        <th key={h} className="px-4 py-2.5 text-right first:text-left font-semibold whitespace-nowrap">{h}</th>
+                      ))}
+                      <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          Sold $
+                          <span title="Gross premium collected when positions were opened. Difference vs Realized = in-flight unrealized premium (active positions) + any buyback debits paid to close early." className="cursor-help text-foreground/40 hover:text-foreground/70 text-[10px] leading-none">ⓘ</span>
+                        </span>
+                      </th>
+                      <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          Realized $
+                          <span title="Net premium locked in from closed/expired positions only. Lower than Sold$ when: (1) positions are still active (in-flight), or (2) a position was bought back early at a loss." className="cursor-help text-foreground/40 hover:text-foreground/70 text-[10px] leading-none">ⓘ</span>
+                        </span>
+                      </th>
+                      {(["In-Flight $", "# Pos"] as const).map((h) => (
+                        <th key={h} className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeRows.map((row: PremiumSymbolRow) => {
+                      const hasRealized    = row.realized_premium > 0;
+                      const hasUnrealized  = row.unrealized_premium > 0;
+                      return (
+                      <tr key={row.holding_id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="px-4 py-3 font-bold text-foreground">{row.symbol}</td>
+                        <td className="px-4 py-3 text-right text-foreground/70">${row.cost_basis.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {hasRealized
+                            ? <span className="text-blue-500 font-semibold">${row.adj_basis_stored.toFixed(2)}</span>
+                            : <span className="text-foreground/40">${row.adj_basis_stored.toFixed(2)}</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {hasUnrealized || hasRealized ? (
+                            <span className={hasRealized ? "text-green-500 font-semibold" : "text-orange-400 font-semibold"}>
+                              ${row.live_adj_basis.toFixed(2)}
+                              {!hasRealized && <span className="ml-1 text-[9px] font-normal opacity-60">in-flight</span>}
+                            </span>
+                          ) : (
+                            <span className="text-foreground/30">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-green-500">${row.total_premium_sold.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {row.realized_premium > 0
+                            ? <span className="text-blue-500 font-semibold">${row.realized_premium.toFixed(2)}</span>
+                            : <span className="text-foreground/30">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {row.unrealized_premium > 0
+                            ? <span className="text-orange-400 font-semibold">${row.unrealized_premium.toFixed(2)}</span>
+                            : <span className="text-foreground/30">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right text-foreground/60">{row.positions}</td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-[var(--border)] bg-[var(--surface-2)] font-bold">
+                      <td className="px-4 py-3 text-foreground text-[11px] uppercase tracking-wide">Total</td>
+                      <td colSpan={3} />
+                      <td className="px-4 py-3 text-right text-green-500">${grand_total.total_premium_sold.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-blue-500">
+                        {grand_total.realized_premium > 0 ? `$${grand_total.realized_premium.toFixed(2)}` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-orange-400">
+                        {grand_total.unrealized_premium > 0 ? `$${grand_total.unrealized_premium.toFixed(2)}` : "—"}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* ── Exited positions card ── */}
+            {exitedRows.length > 0 && (
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--border)]">
+                  <h3 className="text-sm font-bold text-foreground">Exited Positions</h3>
+                  <p className="text-[10px] text-foreground/40 mt-0.5">No shares held — shows adj basis at time of exit</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] text-[10px] text-foreground/60 uppercase tracking-wide bg-[var(--surface-2)]">
+                        {["Symbol", "Orig Cost", "Adj at Exit", "Total Sold $", "Realized $", "# Pos"].map((h) => (
+                          <th key={h} className="px-4 py-2.5 text-right first:text-left font-semibold whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {exitedRows.map((row: PremiumSymbolRow) => {
+                        const basisReduction = row.cost_basis - row.adj_basis_stored;
+                        return (
+                          <tr key={row.holding_id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors">
+                            <td className="px-4 py-3 font-bold text-foreground">{row.symbol}</td>
+                            <td className="px-4 py-3 text-right text-foreground/50">${row.cost_basis.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={basisReduction > 0 ? "text-blue-500 font-semibold" : "text-foreground/70"}>
+                                ${row.adj_basis_stored.toFixed(2)}
+                              </span>
+                              {basisReduction > 0 && (
+                                <span className="ml-1 text-[10px] text-blue-400/70">(−${basisReduction.toFixed(2)})</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-green-500">${row.total_premium_sold.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right">
+                              {row.realized_premium > 0
+                                ? <span className="text-blue-500 font-semibold">${row.realized_premium.toFixed(2)}</span>
+                                : <span className="text-foreground/30">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-right text-foreground/60">{row.positions}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* ── By-week breakdown ── */}
       {by_week.length > 0 && (
@@ -167,12 +247,21 @@ export function PremiumTab() {
                   <span className="text-xs text-foreground/50">{week.week_label}</span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-green-500">${week.total_premium_sold.toFixed(2)}</span>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-green-500">${week.total_premium_sold.toFixed(2)}</span>
+                    <span className="text-[10px] text-foreground/40 ml-1">sold</span>
+                  </div>
                   {week.realized_premium > 0 && (
-                    <span className="text-xs text-blue-500 font-semibold">${week.realized_premium.toFixed(2)} realized</span>
+                    <div className="text-right">
+                      <span className="text-xs text-blue-500 font-semibold">${week.realized_premium.toFixed(2)}</span>
+                      <span className="text-[10px] text-foreground/40 ml-1">realized</span>
+                    </div>
                   )}
                   {week.unrealized_premium > 0 && (
-                    <span className="text-xs text-orange-400 font-semibold">${week.unrealized_premium.toFixed(2)} in-flight</span>
+                    <div className="text-right">
+                      <span className="text-xs text-orange-400 font-semibold">${week.unrealized_premium.toFixed(2)}</span>
+                      <span className="text-[10px] text-foreground/40 ml-1">in-flight</span>
+                    </div>
                   )}
                   {expandedWeeks.has(week.week_id)
                     ? <ChevronUp size={14} className="text-foreground/40" />
@@ -260,7 +349,7 @@ export function PremiumTab() {
         <p className="text-[11px] font-bold text-foreground/80 uppercase tracking-wide mb-2">Notation</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
           <div><span className="font-semibold text-foreground/80">Avg Cost</span> — original purchase price per share (never changes)</div>
-          <div><span className="font-semibold text-foreground/80">Adj Basis</span> — cost basis permanently reduced by <span className="text-blue-400">realized</span> premium only</div>
+          <div><span className="font-semibold text-foreground/80">Adj Basis</span> — cost basis after <span className="text-blue-400">closed/expired</span> premium locks in. Shown dimmed when no options have closed yet (equals original cost until then)</div>
           <div><span className="font-semibold text-foreground/80">Live Adj</span> — true current breakeven = Adj Basis − in-flight premium/share</div>
           <div><span className="font-semibold text-foreground/80">BE (Breakeven)</span> — same as Live Adj; price below which you start losing money today</div>
           <div><span className="font-semibold text-foreground/80">CC (Covered Call)</span> — sell a call against shares you own</div>

@@ -142,7 +142,9 @@ export function PositionForm({
         );
       })()}
 
-      {(f.is_roll || ["CLOSED", "EXPIRED", "ASSIGNED", "ROLLED"].includes(f.status)) && (() => {
+      {(f.is_roll || ["CLOSED", "EXPIRED", "ROLLED"].includes(f.status)) && (() => {
+        // ASSIGNED is intentionally excluded: assignment happens at the strike price,
+        // there is no buyback cost — the full premium collected is kept.
         const premIn  = parseFloat(f.premium_in)  || 0;
         const premOut = parseFloat(f.premium_out) || 0;
         const contracts = parseInt(f.contracts) || 1;

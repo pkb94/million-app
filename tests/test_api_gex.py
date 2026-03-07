@@ -27,8 +27,8 @@ from sqlalchemy.pool import StaticPool
 
 # ── Force a test JWT secret so tokens are predictable ────────────────────────
 os.environ.setdefault("JWT_SECRET", "test-secret-do-not-use-in-prod")
-os.environ.setdefault("JWT_AUDIENCE", "million-app")
-os.environ.setdefault("JWT_ISSUER",   "million-api")
+os.environ.setdefault("JWT_AUDIENCE", "optionflow-app")
+os.environ.setdefault("JWT_ISSUER",   "optionflow-api")
 
 from backend_api.main import app
 from backend_api.security import create_access_token
@@ -55,7 +55,15 @@ def db():
         poolclass=StaticPool,
     )
     Session = sessionmaker(bind=engine)
-    dbmodels.Base.metadata.create_all(engine)
+    # Create all domain tables on the shared in-memory engine
+    for base in (
+        dbmodels.UsersBase,
+        dbmodels.TradesBase,
+        dbmodels.PortfolioBase,
+        dbmodels.BudgetBase,
+        dbmodels.MarketsBase,
+    ):
+        base.metadata.create_all(engine)
     # Patch services to use this engine
     original_engine  = services.engine
     original_session = services.Session

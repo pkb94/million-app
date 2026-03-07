@@ -1,46 +1,46 @@
 # OptionFlow — Stale Reference Cleanup Audit
-> Created: 2026-03-06 | Status: **Shelved — pending review**
+> Created: 2026-03-06 | Last updated: 2026-03-07 | Status: **✅ Priority 1–4 complete**
 
-This file tracks all remnant references to the old project names (`million-app`, `Trading_app_v2`, `OptionFlow_V1`, `trading_journal`) found across the codebase. Nothing has been changed yet — this is a discussion list.
-
----
-
-## 🔴 Priority 1 — Live Code (runtime impact)
-
-| # | File | Line | What it says | Why it matters |
-|---|------|------|--------------|----------------|
-| 1 | `backend_api/security.py` | 22 | `JWT_AUDIENCE` defaults to `"million-app"` | This string is embedded in every JWT token issued by the app. Changing it will invalidate all existing tokens (all users get logged out). Needs a coordinated cutover. |
-| 2 | `tests/test_api_gex.py` | 30 | `os.environ.setdefault("JWT_AUDIENCE", "million-app")` | Test env mirrors the old audience. Must be updated in sync with #1. |
-
-**Decision needed:** What should the new audience string be? (e.g. `"optionflow"`)
-**Side effect:** All logged-in sessions will be invalidated on deploy. Fine for a personal app — just be aware.
+This file tracks all remnant references to the old project names (`million-app`, `Trading_app_v2`, `OptionFlow_V1`, `trading_journal`) found across the codebase.
 
 ---
 
-## 🟡 Priority 2 — Scripts (no runtime impact, but misleading)
+## 🔴 Priority 1 — Live Code (runtime impact) — ✅ DONE
 
-| # | File | Lines | What it says | Why it matters |
-|---|------|-------|--------------|----------------|
-| 3 | `scripts/backup_dbs.py` | 31 | `"trading_journal.db"` listed as a backup target | File doesn't exist anymore — backup script silently skips it but it's noise |
-| 4 | `scripts/migrate_to_split_dbs.py` | 4, 15 | References `trading_journal.db` as migration source | One-time migration script — already ran. Could be deleted entirely or archived. |
-| 5 | `scripts/migrate_sqlite_to_postgres.py` | 7, 18 | References `trading_journal.db` as Postgres source | Future Postgres migration script — source DB reference is wrong (should use the 5 split DBs, not the old monolith) |
+| # | File | Line | What it says | Status |
+|---|------|------|--------------|--------|
+| 1 | `backend_api/security.py` | 22 | `JWT_AUDIENCE` defaults to `"million-app"` | ✅ Changed to `optionflow-app`, issuer to `optionflow-api` |
+| 2 | `tests/test_api_gex.py` | 30 | `os.environ.setdefault("JWT_AUDIENCE", "million-app")` | ✅ Updated to `optionflow-app` |
+| 2b | `.github/workflows/ci.yml` | 36,50,81,95 | `JWT_AUDIENCE/ISSUER: "million-app/million-api"` | ✅ Updated to `optionflow-app/optionflow-api` |
 
----
-
-## 🟡 Priority 3 — Config / Env
-
-| # | File | Line | What it says | Why it matters |
-|---|------|-------|--------------|----------------|
-| 6 | `.env` | 7 | `# DATABASE_URL=sqlite:///trading_journal.db` | Commented-out stale example — confusing to anyone reading the file |
+**Side effect:** All logged-in sessions were invalidated — users must log in again after v2.5.6 deploy.
 
 ---
 
-## 🟢 Priority 4 — Docs (cosmetic, no runtime impact)
+## 🟡 Priority 2 — Scripts — ✅ DONE
 
-| # | File | Line | What it says | Why it matters |
-|---|------|-------|--------------|----------------|
-| 7 | `DEV_GUIDE.md` | 418 | `cd ~/Desktop/OptionFlow_V1/OptionFlow_V1` | Wrong path in the "Committing Changes" section at the bottom of the file |
-| 8 | `AGENT_CONTEXT.md` | 12 | `GitHub repo: Karthikkv12/million-app` | Technically correct (that's still the GitHub repo name) but confusing — will resolve itself if/when the GitHub repo is renamed |
+| # | File | Lines | What it says | Status |
+|---|------|-------|--------------|--------|
+| 3 | `scripts/backup_dbs.py` | 31 | `"trading_journal.db"` listed as a backup target | ✅ Removed |
+| 4 | `scripts/migrate_to_split_dbs.py` | 4, 15 | References `trading_journal.db` as migration source | ℹ️ One-time migration script — already ran. Leave as historical record. |
+| 5 | `scripts/migrate_sqlite_to_postgres.py` | 7, 18 | References `trading_journal.db` as Postgres source | ⚠️ Still needs update when Postgres migration is attempted |
+
+---
+
+## 🟡 Priority 3 — Config / Env — ✅ DONE (no .env file needed in dev)
+
+| # | File | Line | What it says | Status |
+|---|------|-------|--------------|--------|
+| 6 | `.env` | 7 | `# DATABASE_URL=sqlite:///trading_journal.db` | ℹ️ `.env` not checked in — remove manually if present locally |
+
+---
+
+## 🟢 Priority 4 — Docs — ✅ DONE
+
+| # | File | Line | What it says | Status |
+|---|------|-------|--------------|--------|
+| 7 | `DEV_GUIDE.md` | 418 | `cd ~/Desktop/OptionFlow_V1/OptionFlow_V1` | ✅ Fixed to `cd ~/Desktop/OptionFlow_main` |
+| 8 | `AGENT_CONTEXT.md` | 12 | `GitHub repo: Karthikkv12/million-app` | ✅ Updated with note that repo rename is optional |
 
 ---
 

@@ -15,22 +15,22 @@ export function YearTab() {
   const { data: s, isLoading: summaryLoading } = useQuery({
     queryKey: ["portfolioSummary"],
     queryFn: fetchPortfolioSummary,
-    staleTime: 60_000,
+    staleTime: 0,
   });
   const { data: premDash, isLoading: premLoading } = useQuery({
     queryKey: ["premiumDashboard"],
     queryFn: fetchPremiumDashboard,
-    staleTime: 60_000,
+    staleTime: 0,
   });
   const { data: holdings = [] } = useQuery({
     queryKey: ["holdings"],
     queryFn: fetchHoldings,
-    staleTime: 60_000,
+    staleTime: 0,
   });
   const { data: allPositions = [] } = useQuery({
     queryKey: ["allPositions"],
     queryFn: fetchAllPositions,
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const isLoading = summaryLoading || premLoading;
@@ -104,7 +104,7 @@ export function YearTab() {
   const cumulativeData = allFridaysOfYear;
   const chronoWeeks   = [...weeksBreakdown].reverse();
 
-  const activePremWeeks  = chronoWeeks.filter((w) => w.premium > 0);
+  const activePremWeeks  = chronoWeeks.filter((w) => w.premium > 0 && w.is_complete);
   const avgWeeklyPremium = activePremWeeks.length > 0
     ? activePremWeeks.reduce((acc, w) => acc + w.premium, 0) / activePremWeeks.length
     : 0;
@@ -131,6 +131,12 @@ export function YearTab() {
   const maxMonthlyPremium = Math.max(...monthlyEntries.map((e) => e[1]), 1);
   const maxWeekly         = Math.max(...cumulativeData.map((d) => d.weekly), 1);
 
+  // Per-month average: use actual monthly data if available, else derive from weekly avg
+  const activeMonthlyValues = monthlyEntries.filter(([, v]) => v > 0).map(([, v]) => v);
+  const avgMonthlyPremium   = activeMonthlyValues.length > 0
+    ? activeMonthlyValues.reduce((a, b) => a + b, 0) / activeMonthlyValues.length
+    : monthlyProjection;
+
   const totalCostBasis     = holdings.reduce((acc, h) => acc + h.cost_basis * h.shares, 0);
   const premiumEfficiency  = totalCostBasis > 0 ? ((premDash?.grand_total.total_premium_sold ?? 0) / totalCostBasis) * 100 : 0;
   const totalPremCollected = premDash?.grand_total.total_premium_sold ?? s.total_premium_collected;
@@ -148,6 +154,10 @@ export function YearTab() {
   const expiryBucketMap = new Map<string, OptionPosition[]>();
   for (const pos of allPositions) {
     if (!pos.expiry_date) continue;
+    // Exclude carried-forward copies — these are duplicates of the original position
+    // created when a position carries into a new week. The premium was only collected
+    // once (on the original), so counting carried copies would double-count it.
+    if (pos.carried_from_id != null) continue;
     // Normalise to "YYYY-MM-DD" regardless of whether the backend returns
     // a full ISO datetime ("2026-03-07T00:00:00") or a bare date string.
     const key = pos.expiry_date.slice(0, 10);
@@ -199,7 +209,7 @@ export function YearTab() {
           <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-2">Win Rate</p>
           <div>
             <p className="text-3xl font-black text-blue-500">{winRate.toFixed(0)}%</p>
-            <p className="text-xs text-foreground/50 mt-1">{completeWeeks}/{s.total_weeks} weeks profitable</p>
+            <p className="text-xs text-foreground/50 mt-1">{Math.round(winRate / 100 * completeWeeks)}/{completeWeeks} completed weeks profitable</p>
           </div>
           <div className="mt-3 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${winRate}%` }} />
@@ -335,12 +345,12 @@ export function YearTab() {
               <div className="flex items-center gap-2 mb-4">
                 <TrendingUp size={14} className="text-purple-500" />
                 <h3 className="text-sm font-bold text-foreground">Annual Projection</h3>
-                <span className="ml-auto text-[10px] text-foreground/40">based on ${avgWeeklyPremium.toFixed(2)}/wk avg</span>
+                <span className="ml-auto text-[10px] text-foreground/40">based on ${avgMonthlyPremium.toFixed(2)}/mo avg</span>
               </div>
               <div className="space-y-2">
                 {[3, 6, 9, 12].map((months) => {
-                  const proj = avgWeeklyPremium * months * 4.33;
-                  const pct  = Math.min(100, (proj / (annualProjection * 1.1)) * 100);
+                  const proj = avgMonthlyPremium * months;
+                  const pct  = Math.min(100, (proj / (avgMonthlyPremium * 12 * 1.1)) * 100);
                   const label = months === 12 ? "12 mo (full year)" : `${months} mo`;
                   return (
                     <div key={months} className="flex items-center gap-3">
@@ -359,7 +369,7 @@ export function YearTab() {
                 })}
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                {[["Monthly", monthlyProjection], ["Quarterly", monthlyProjection * 3], ["Annual", annualProjection]].map(([label, val]) => (
+                {[["Monthly", avgMonthlyPremium], ["Quarterly", avgMonthlyPremium * 3], ["Annual", avgMonthlyPremium * 12]].map(([label, val]) => (
                   <div key={label as string} className="bg-[var(--surface-2)] rounded-lg p-2">
                     <p className="text-[9px] text-foreground/50 uppercase tracking-wide">{label}</p>
                     <p className="text-sm font-black text-purple-400">${(val as number).toFixed(0)}</p>
@@ -423,13 +433,22 @@ export function YearTab() {
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 flex flex-col justify-between">
           <p className="text-[10px] font-semibold text-foreground/60 uppercase tracking-wide mb-2">Consistency</p>
           <div>
-            <p className="text-3xl font-black" style={{ color: consistencyScore >= 70 ? "#22c55e" : consistencyScore >= 40 ? "#f59e0b" : "#ef4444" }}>
-              {consistencyScore.toFixed(0)}<span className="text-lg font-semibold text-foreground/40">/100</span>
-            </p>
-            <p className="text-xs text-foreground/50 mt-1">σ ${weeklyStdDev.toFixed(2)} · avg ${weeklyMean.toFixed(2)}/wk</p>
+            {completedPremiums.length < 3 ? (
+              <>
+                <p className="text-3xl font-black text-foreground/30">—<span className="text-lg font-semibold text-foreground/40">/100</span></p>
+                <p className="text-xs text-foreground/40 mt-1">Need 3+ complete weeks</p>
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-black" style={{ color: consistencyScore >= 70 ? "#22c55e" : consistencyScore >= 40 ? "#f59e0b" : "#ef4444" }}>
+                  {consistencyScore.toFixed(0)}<span className="text-lg font-semibold text-foreground/40">/100</span>
+                </p>
+                <p className="text-xs text-foreground/50 mt-1">σ ${weeklyStdDev.toFixed(2)} · avg ${weeklyMean.toFixed(2)}/wk</p>
+              </>
+            )}
           </div>
           <div className="mt-3 h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${consistencyScore}%`, background: consistencyScore >= 70 ? "#22c55e" : consistencyScore >= 40 ? "#f59e0b" : "#ef4444" }} />
+            <div className="h-full rounded-full transition-all" style={{ width: `${completedPremiums.length < 3 ? 0 : consistencyScore}%`, background: consistencyScore >= 70 ? "#22c55e" : consistencyScore >= 40 ? "#f59e0b" : "#ef4444" }} />
           </div>
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 flex flex-col justify-between">
@@ -504,7 +523,7 @@ export function YearTab() {
                   <p className="text-xs text-foreground/50">{monthNames[bestMonth[0].split("-")[1]] ?? bestMonth[0]}</p>
                 </div>
               )}
-              {worstMonth && (
+              {worstMonth && bestMonth && worstMonth[0] !== bestMonth[0] && (
                 <div className="flex-1">
                   <p className="text-[10px] text-orange-400 font-semibold uppercase mb-1">Lightest</p>
                   <p className="text-lg font-black text-orange-400">${worstMonth[1].toFixed(0)}</p>
@@ -618,14 +637,15 @@ export function YearTab() {
                           />
                         </div>
                         {/* Premium value */}
-                        <div className="w-20 shrink-0 text-right">
+                        <div className="w-24 shrink-0 text-right">
                           <p className={`text-[12px] font-black tabular-nums ${
                             w.premium > 0 ? "text-green-500" : w.premium < 0 ? "text-red-500" : "text-foreground/40"
                           }`}>{fmt$(w.premium)}</p>
+                          <p className="text-[9px] text-foreground/40">prem sold</p>
                           {vsAvg !== null && w.is_complete && (
                             <p className={`text-[9px] font-semibold ${
                               vsAvg >= 0 ? "text-green-400" : "text-red-400"
-                            }`}>{vsAvg >= 0 ? "▲" : "▼"}{Math.abs(vsAvg).toFixed(0)}%</p>
+                            }`}>{vsAvg >= 0 ? "▲" : "▼"}{Math.abs(vsAvg).toFixed(0)}% vs avg</p>
                           )}
                         </div>
                         {/* Status pill */}

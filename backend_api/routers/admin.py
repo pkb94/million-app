@@ -1,7 +1,7 @@
 """backend_api/routers/admin.py — Admin user-management routes."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -15,7 +15,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/users", response_model=List[schemas.AdminUserOut])
 def admin_list_users(_admin=Depends(require_admin)) -> List[schemas.AdminUserOut]:
     """Return all users (admin only)."""
-    return [schemas.AdminUserOut.model_validate(u) for u in services.list_users()]
+    users = services.list_all_users()
+    return [schemas.AdminUserOut.model_validate(u) for u in users]
 
 
 @router.post("/users", response_model=schemas.AdminUserOut, status_code=201)
@@ -27,19 +28,23 @@ def admin_create_user(
     existing = services.get_user_by_username(body.username)
     if existing:
         raise HTTPException(status_code=409, detail="Username already exists")
-    user = services.create_user(
+    new_id = services.create_user(
         username=body.username,
         password=body.password,
         role=body.role or "user",
     )
+    user = services.get_user(new_id)
+    if not user:
+        raise HTTPException(status_code=500, detail="User created but could not be retrieved")
     return schemas.AdminUserOut.model_validate(user)
 
 
 @router.delete("/users/{user_id}", status_code=204)
 def admin_delete_user(user_id: int, _admin=Depends(require_admin)) -> None:
     """Delete a user by ID (admin only)."""
-    ok = services.delete_user(user_id=user_id)
-    if not ok:
+    try:
+        services.delete_user_admin(user_id=user_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="User not found")
 
 
@@ -50,18 +55,31 @@ def admin_patch_user(
     _admin=Depends(require_admin),
 ) -> Dict[str, Any]:
     """Patch a user's fields (admin only). Only provided fields are updated."""
-    updates: Dict[str, Any] = {}
-    if body.username is not None:
-        updates["username"] = body.username
-    if body.password is not None:
-        updates["password"] = body.password
-    if body.role is not None:
-        updates["role"] = body.role
-    if body.is_active is not None:
-        updates["is_active"] = body.is_active
-    if not updates:
+    if not any([body.username, body.password, body.role is not None, body.is_active is not None]):
         raise HTTPException(status_code=422, detail="No fields to update")
-    user = services.update_user(user_id=user_id, **updates)
+
+    # Handle username change
+    if body.username is not None:
+        try:
+            services.update_username_admin(user_id, body.username)
+        except ValueError as e:
+            raise HTTPException(status_code=404 if "not found" in str(e) else 409, detail=str(e))
+
+    # Handle password change (admin force-set)
+    if body.password is not None:
+        try:
+            services.admin_set_password(user_id, body.password)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # Handle role / is_active
+    if body.role is not None or body.is_active is not None:
+        try:
+            services.patch_user_admin(user_id, role=body.role, is_active=body.is_active)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    user = services.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return schemas.AdminUserOut.model_validate(user)

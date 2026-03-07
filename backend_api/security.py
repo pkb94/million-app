@@ -15,11 +15,11 @@ def _jwt_secret() -> str:
 
 
 def _jwt_issuer() -> str:
-    return os.getenv("JWT_ISSUER", "million-api")
+    return os.getenv("JWT_ISSUER", "optionflow-api")
 
 
 def _jwt_audience() -> str:
-    return os.getenv("JWT_AUDIENCE", "million-app")
+    return os.getenv("JWT_AUDIENCE", "optionflow-app")
 
 
 def _default_access_minutes() -> int:
