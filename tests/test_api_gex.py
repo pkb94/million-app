@@ -27,8 +27,8 @@ from sqlalchemy.pool import StaticPool
 
 # ── Force a test JWT secret so tokens are predictable ────────────────────────
 os.environ.setdefault("JWT_SECRET", "test-secret-do-not-use-in-prod")
-os.environ.setdefault("JWT_AUDIENCE", "million-app")
-os.environ.setdefault("JWT_ISSUER",   "million-api")
+os.environ.setdefault("JWT_AUDIENCE", "optionflow-app")
+os.environ.setdefault("JWT_ISSUER",   "optionflow-api")
 
 from backend_api.main import app
 from backend_api.security import create_access_token

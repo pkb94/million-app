@@ -9,7 +9,7 @@ It summarises the current state, architecture decisions, workflow rules, and wha
 
 **OptionFlow** — Personal finance + options trading portfolio tracker.
 - Owner: Karthik Kondajji Vidyaranya (`Karthikkv12`)
-- GitHub repo: `Karthikkv12/million-app`
+- GitHub repo: `Karthikkv12/million-app` (GitHub repo name — rename optional)
 - Stack: FastAPI (Python 3.11) backend · Next.js 14 (TypeScript) frontend · SQLite (5 DBs)
 
 ---
@@ -209,6 +209,7 @@ source .venv/bin/activate && python -m pytest tests/ -q --ignore=tests/test_api_
 
 | Version | What |
 |---------|------|
+| v2.5.6 | Holdings: soft-delete guard (lots with event history → CLOSED not destroyed), ↻ Re-enter button on closed holdings, _recalculate_adj_basis dual-path (PremiumLedger primary, HoldingEvent basis_delta fallback). Fixed SOFI/EOSE/BBAI closed adj_basis in DB. Fixed admin/users page (was 500 — mismatched service function names, wrong schema alias). Audit cleanup: JWT renamed million-* → optionflow-*, trading_journal.db removed from backup list, DEV_GUIDE wrong path fixed. |
 | v2.5.5 | Performance tab: expiry-bucketed Premium by Expiry table (grouped by expiry_date, DTE colour badges, Settled dimming). New GET /portfolio/positions endpoint + fetchAllPositions(). Bug fix: ISO datetime normalisation (.slice(0,10)) for valid dates. Positions tab: live ITM Assignment Risk card (assignment value, net proceeds, per-symbol depth pills, 30s refresh). |
 | v2.5.4 | Build fix: ESLint no-unused-expressions in PremiumTab (ternary→if/else); TypeScript labelFormatter type in AccountTab (string→unknown). Fixes iOS/Safari breakage from stale compiled output. |
 | v2.5.3 | Budget: Income rows → Source dropdown (Salary/Stock Market), no Merchant, no Type. Type column removed from all 3 budget sections. 2-column page layout (Income+One-off left, Recurring+CC right). Robinhood Gold week cards redesign + flush stat tiles. Two new charts: CashFlowWaterfall + FixedVsVariableDonut in 50/50 row. |
@@ -261,6 +262,9 @@ These are the highest-impact features in priority order:
 6. **Zoom locked on iOS/iPadOS** — `maximumScale=1, userScalable=no` is intentional (app-like feel).
 7. **schemas is a package, not a file** — `backend_api/schemas/` is a directory with `__init__.py`. Import from `backend_api.schemas` as before; do NOT create a new `schemas.py` file.
 8. **brokers/ folder is gone** — broker abstraction and order system removed in v2.4.0. Do not re-add.
+9. **Holdings soft-delete** — `delete_holding()` in `logic/holdings.py` soft-closes lots that have HoldingEvent history (sets status=CLOSED, shares=0) instead of hard-deleting. Only hard-deletes fresh lots with zero event history. Use the "↻ Re-enter" button in HoldingsTab to reactivate a closed lot.
+10. **adj_basis = f(avg_cost)** — `_recalculate_adj_basis` uses PremiumLedger rows as primary source; falls back to summing `basis_delta` from HoldingEvents. This means editing avg_cost on any holding (active or closed) correctly recomputes adj_basis.
+11. **JWT audience** — Changed from `million-app` → `optionflow-app` (issuer: `million-api` → `optionflow-api`) in v2.5.6. Existing sessions were invalidated — users must log in again after this deploy.
 
 ---
 

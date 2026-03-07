@@ -43,7 +43,17 @@ export function PositionRow({ pos, onEdit, onDelete, liveSpot }: { pos: OptionPo
     : premIn * pos.contracts * 100;
   const roi = capitalAtRisk > 0 ? (netForRoi / capitalAtRisk) * 100 : null;
   const dte = pos.expiry_date
-    ? Math.round((new Date(pos.expiry_date).getTime() - Date.now()) / 86_400_000)
+    ? (() => {
+        // Slice first 10 chars to handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss".
+        // Parse as LOCAL midnight to avoid UTC offset shifting the date (e.g.
+        // "2026-03-07T00:00:00Z" would be March 6 evening in US timezones).
+        const dateStr = pos.expiry_date.slice(0, 10);
+        const [y, m, d] = dateStr.split("-").map(Number);
+        const expiryLocal = new Date(y, m - 1, d); // local midnight
+        const todayLocal = new Date();
+        todayLocal.setHours(0, 0, 0, 0);
+        return Math.round((expiryLocal.getTime() - todayLocal.getTime()) / 86_400_000);
+      })()
     : null;
   const dteColor = dte == null ? "" : dte <= 0 ? "text-red-500" : dte <= 3 ? "text-orange-500" : dte <= 7 ? "text-yellow-500" : "text-foreground/60";
 
@@ -63,7 +73,7 @@ Strike: $${pos.strike}
 Type: ${pos.option_type}
 Contracts: ${pos.contracts}
 Status: ${pos.status}
-DTE: ${dte != null ? (dte <= 0 ? `${Math.abs(dte)} days past expiry` : `${dte} days left`) : "unknown"}
+DTE: ${dte != null ? (dte === 0 ? `Expires today` : dte < 0 ? `Expired` : `${dte} days left`) : "unknown"}
 Premium In: ${pos.premium_in != null ? `$${pos.premium_in.toFixed(2)}/share` : "unknown"}
 ${pos.moneyness ? `Moneyness: ${pos.moneyness} (spot at sale: $${pos.spot_price?.toFixed(2) ?? "unknown"})` : ""}
 ${pos.extrinsic_value != null && pos.intrinsic_value != null ? `Extrinsic (theta income): $${pos.extrinsic_value.toFixed(2)}/sh | Intrinsic: $${pos.intrinsic_value.toFixed(2)}/sh` : ""}
@@ -145,7 +155,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
           {pos.expiry_date && <span>Exp {fmtDate(pos.expiry_date)}</span>}
           {dte != null && (
             <span className={`font-semibold ${dteColor}`}>
-              {dte <= 0 ? `${Math.abs(dte)}d ago` : `${dte}d left`}
+              {dte === 0 ? `0d` : dte < 0 ? `Expired` : `${dte}d left`}
             </span>
           )}
         </div>
@@ -205,11 +215,15 @@ What do you think of this position? Should I roll, close early, or hold to expir
                 {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />} Stock
               </button>
             )}
-            <button onClick={onEdit} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
-            <button
-              onClick={() => { if (window.confirm(`Delete ${pos.symbol} $${pos.strike} ${pos.option_type}?`)) onDelete(); }}
-              className="text-[10px] px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
-            >Delete</button>
+            {!isCarriedForward && (
+              <>
+                <button onClick={onEdit} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
+                <button
+                  onClick={() => { if (window.confirm(`Delete ${pos.symbol} $${pos.strike} ${pos.option_type}?\n\nThis will permanently remove this trade from all weeks.`)) onDelete(); }}
+                  className="text-[10px] px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
+                >Delete</button>
+              </>
+            )}
             <button
               onClick={fetchAiAnalysis}
               className="text-[10px] px-2.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-500 font-semibold hover:bg-purple-100 transition flex items-center gap-1"
@@ -276,7 +290,7 @@ What do you think of this position? Should I roll, close early, or hold to expir
         <td className="px-3 py-2.5 text-foreground/70 text-xs whitespace-nowrap">{fmtDate(pos.expiry_date)}</td>
         <td className="px-3 py-2.5 text-xs font-semibold whitespace-nowrap">
           {dte != null
-            ? <span className={dteColor}>{dte <= 0 ? `${Math.abs(dte)}d ago` : `${dte}d`}</span>
+            ? <span className={dteColor}>{dte === 0 ? `0d` : dte < 0 ? `Expired` : `${dte}d`}</span>
             : <span className="text-foreground/30">—</span>}
         </td>
         <td className="px-3 py-2.5 text-green-600 font-semibold text-sm">
@@ -348,11 +362,15 @@ What do you think of this position? Should I roll, close early, or hold to expir
                 className="text-[10px] px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-500 font-semibold hover:bg-purple-100 transition"
                 title="AI Analysis"
               >✨</button>
-              <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
-              <button
-                onClick={() => { if (window.confirm(`Delete ${pos.symbol} $${pos.strike} ${pos.option_type}?`)) onDelete(); }}
-                className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
-              >Del</button>
+              {!isCarriedForward && (
+                <>
+                  <button onClick={onEdit} className="text-[10px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 font-semibold hover:bg-blue-100 transition">Edit</button>
+                  <button
+                    onClick={() => { if (window.confirm(`Delete ${pos.symbol} $${pos.strike} ${pos.option_type}?\n\nThis will permanently remove this trade from all weeks.`)) onDelete(); }}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold hover:bg-red-100 transition"
+                  >Del</button>
+                </>
+              )}
             </div>
           </td>
         )}

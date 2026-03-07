@@ -78,6 +78,50 @@ def _holding_to_dict(h: StockHolding, session=None) -> dict:
     basis_reduction_stored = round((h.cost_basis - adj)      * h.shares, 2)
     basis_reduction_live   = round((h.cost_basis - live_adj) * h.shares, 2)
 
+    # ── Assignment status ─────────────────────────────────────────────────────
+    # Look up the most recent CC_ASSIGNED or CSP_ASSIGNED event for this holding.
+    last_assignment_type: str | None = None
+    last_assignment_date: str | None = None
+    called_away = False
+    if session is not None and h.id:
+        assign_event = (
+            session.query(HoldingEvent)
+            .filter(
+                HoldingEvent.holding_id == h.id,
+                HoldingEvent.event_type.in_([
+                    HoldingEventType.CC_ASSIGNED,
+                    HoldingEventType.CSP_ASSIGNED,
+                ]),
+            )
+            .order_by(HoldingEvent.created_at.desc())
+            .first()
+        )
+        if assign_event is not None:
+            last_assignment_type = assign_event.event_type.value
+            last_assignment_date = assign_event.created_at.isoformat()
+            # A holding is "called away" when it was closed via CC assignment
+            # and is currently CLOSED (shares == 0 / status CLOSED).
+            called_away = (
+                assign_event.event_type == HoldingEventType.CC_ASSIGNED
+                and h.status == "CLOSED"
+            )
+
+    # ── Realized gain for closed holdings ────────────────────────────────────
+    # Sum ALL realized_gain events for this holding so multi-assignment cases
+    # (e.g. two CC assignments on HIMS) are totalled correctly.
+    realized_gain_total: float | None = None
+    if session is not None and h.id and h.status == "CLOSED":
+        gain_events = (
+            session.query(HoldingEvent)
+            .filter(
+                HoldingEvent.holding_id == h.id,
+                HoldingEvent.realized_gain.isnot(None),
+            )
+            .all()
+        )
+        if gain_events:
+            realized_gain_total = round(sum(float(e.realized_gain) for e in gain_events), 2)
+
     return {
         "id":                    h.id,
         "symbol":                h.symbol,
@@ -104,6 +148,12 @@ def _holding_to_dict(h: StockHolding, session=None) -> dict:
         "total_adjusted_cost":   round(live_adj     * h.shares, 2),
         "basis_reduction":       basis_reduction_live,
         "basis_reduction_stored": basis_reduction_stored,
+        # Assignment tracking
+        "called_away":           called_away,
+        "last_assignment_type":  last_assignment_type,
+        "last_assignment_date":  last_assignment_date,
+        # Realized P&L for closed/called-away holdings (None for active)
+        "realized_gain":         realized_gain_total,
     }
 
 
@@ -123,20 +173,51 @@ def _event_to_dict(e: HoldingEvent) -> dict:
 
 def _recalculate_adj_basis(h: StockHolding, session) -> float:
     """
-    Compute correct adjusted_cost_basis from the PremiumLedger.
-    adj_basis = cost_basis - (total realized_premium / shares)
-    If no shares, returns cost_basis unchanged.
+    Recompute adjusted_cost_basis whenever the user changes the avg cost.
+
+    Formula: adj_basis = new_cost_basis - total_premium_savings_per_share
+
+    Premium savings come from two sources (in priority order):
+      1. PremiumLedger rows (realized_premium) — used for active holdings
+         that have linked option positions.
+      2. HoldingEvent basis_delta sum — fallback for closed/called-away lots
+         whose premium history lives only in the event log (no ledger rows).
+
+    This ensures that if the user edits 'Avg Cost' on ANY holding — active
+    or closed — the adj_basis always reflects: new_cost - historical_savings.
     """
-    if h.shares <= 0:
-        return h.cost_basis
-    rows = (
+    # PremiumLedger path (primary — active holdings with linked positions)
+    ledger_rows = (
         session.query(PremiumLedger)
         .filter(PremiumLedger.holding_id == h.id)
         .all()
     )
-    realized_total = sum(r.realized_premium for r in rows)
-    adj = h.cost_basis - (realized_total / h.shares)
-    return round(max(0.0, adj), 4)
+    if ledger_rows:
+        realized_total = sum(r.realized_premium for r in ledger_rows)
+        if h.shares > 0:
+            adj = h.cost_basis - (realized_total / h.shares)
+        else:
+            # shares=0 (fully called away): preserve per-share savings
+            adj = h.cost_basis - realized_total
+        return round(max(0.0, adj), 4)
+
+    # HoldingEvent fallback (closed lots / lots without a ledger)
+    # Sum ALL basis_delta values across the holding's lifetime:
+    #   CC_EXPIRED events  → negative delta (premium reductions)
+    #   MANUAL close event → positive delta (stock-gain adjustment on close)
+    # Together they give the true net adj_basis offset relative to cost_basis.
+    event_rows = (
+        session.query(HoldingEvent)
+        .filter(HoldingEvent.holding_id == h.id)
+        .all()
+    )
+    if event_rows:
+        total_delta = sum(e.basis_delta for e in event_rows if e.basis_delta is not None)
+        adj = h.cost_basis + total_delta
+        return round(max(0.0, adj), 4)
+
+    # No history at all — adj_basis equals cost_basis
+    return round(h.cost_basis, 4)
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -156,17 +237,103 @@ def list_holdings(*, user_id: int) -> list[dict]:
 
 
 def create_holding(*, user_id: int, data: dict) -> dict:
+    """
+    Create a new StockHolding, or reactivate a prior CLOSED one.
+
+    Reactivation logic:
+    When the user adds shares for a symbol that already has a CLOSED holding
+    (e.g. they were called away and are re-entering), instead of starting fresh
+    we reactivate the existing record so the accumulated adjusted_cost_basis
+    (reduced by all historical premium collected) continues to carry forward.
+
+    The new shares are blended into the existing holding using a weighted average:
+      new_cost_basis = (old_adj_basis × old_shares + new_price × new_shares)
+                       / (old_shares + new_shares)
+
+    This preserves the premium-reduction history, which is the user's real
+    advantage from running the covered-call wheel.
+    """
     session = _portfolio_session()
     try:
-        now = datetime.utcnow()
-        cost = float(data["cost_basis"])
+        symbol = str(data["symbol"]).upper().strip()
+        new_shares = float(data["shares"])
+        new_cost   = float(data["cost_basis"])
+        now        = datetime.utcnow()
+
+        # ── Check for an existing CLOSED holding for this symbol ─────────────
+        prior = (
+            session.query(StockHolding)
+            .filter(
+                StockHolding.user_id == user_id,
+                StockHolding.symbol  == symbol,
+                StockHolding.status  == "CLOSED",
+            )
+            .order_by(StockHolding.updated_at.desc())
+            .first()
+        )
+
+        if prior is not None:
+            # ── Reactivate: blend new shares into prior lot ───────────────────
+            old_adj    = prior.adjusted_cost_basis
+            old_shares = prior.shares  # may be 0 when fully called away
+
+            if old_shares > 0:
+                # Weighted average of prior adj basis + new purchase price
+                blended_basis = (old_adj * old_shares + new_cost * new_shares) / (old_shares + new_shares)
+            else:
+                # All shares were called away — start cost from new purchase,
+                # but the adj_basis offset earned from historical premium carries forward:
+                #   blended_adj = new_cost - (old_cost_basis - old_adj)
+                #   i.e. subtract the per-share premium saved historically
+                prior_savings_per_share = prior.cost_basis - old_adj
+                blended_basis = max(0.0, new_cost - prior_savings_per_share)
+
+            total_shares = old_shares + new_shares
+            blended_basis = round(blended_basis, 4)
+
+            prior.shares               = total_shares
+            prior.cost_basis           = round(new_cost, 4)   # latest purchase price as new raw basis
+            prior.adjusted_cost_basis  = blended_basis
+            prior.status               = "ACTIVE"
+            if data.get("acquired_date"):
+                prior.acquired_date    = _parse_dt(data["acquired_date"])
+            if data.get("company_name"):
+                prior.company_name     = data["company_name"]
+            if data.get("notes"):
+                prior.notes            = data["notes"]
+            prior.updated_at           = now
+
+            # Record this reactivation as a MANUAL HoldingEvent
+            savings = prior.cost_basis - blended_basis
+            event = HoldingEvent(
+                user_id      = user_id,
+                holding_id   = prior.id,
+                position_id  = None,
+                event_type   = HoldingEventType.MANUAL,
+                shares_delta = round(new_shares, 4),
+                basis_delta  = round(blended_basis - old_adj, 4),
+                realized_gain= None,
+                description  = (
+                    f"{symbol} re-entered: {new_shares:.0f} sh @ ${new_cost:.2f} blended into prior lot "
+                    f"({old_shares:.0f} sh, adj basis ${old_adj:.2f}) → "
+                    f"{total_shares:.0f} sh, new adj basis ${blended_basis:.2f}/sh "
+                    f"(carrying ${savings:.2f}/sh historical premium savings forward)"
+                ),
+                created_at   = now,
+            )
+            session.add(event)
+            session.commit()
+            session.refresh(prior)
+            return _holding_to_dict(prior, session)
+
+        # ── No prior CLOSED lot — create fresh ───────────────────────────────
         h = StockHolding(
             user_id             = user_id,
-            symbol              = str(data["symbol"]).upper().strip(),
+            symbol              = symbol,
             company_name        = data.get("company_name"),
-            shares              = float(data["shares"]),
-            cost_basis          = cost,
-            adjusted_cost_basis = cost,   # starts equal to cost basis
+            shares              = new_shares,
+            cost_basis          = new_cost,
+            adjusted_cost_basis = new_cost,   # starts equal to cost basis
             acquired_date       = _parse_dt(data.get("acquired_date")),
             status              = "ACTIVE",
             notes               = data.get("notes"),
@@ -193,7 +360,6 @@ def update_holding(*, user_id: int, holding_id: int, data: dict) -> dict:
         if "shares"               in data: h.shares               = float(data["shares"])
         if "acquired_date"        in data: h.acquired_date        = _parse_dt(data["acquired_date"])
         if "notes"                in data: h.notes                = data["notes"]
-        if "status"               in data: h.status               = data["status"]
         if "company_name"         in data: h.company_name         = data["company_name"]
         # When cost_basis changes, recalculate adj basis from event history
         # so accumulated premium reductions are preserved correctly.
@@ -203,7 +369,79 @@ def update_holding(*, user_id: int, holding_id: int, data: dict) -> dict:
         elif "adjusted_cost_basis" in data:
             # Allow direct override only if explicitly passed without cost_basis
             h.adjusted_cost_basis = float(data["adjusted_cost_basis"])
-        h.updated_at = datetime.utcnow()
+
+        # ── Manual close with exit price ──────────────────────────────────────
+        # Realized P&L decomposition:
+        #   stock_gain   = (close_price − cost_basis) × shares   ← did the stock go up or down?
+        #   premium_gain = (cost_basis  − adj_basis)  × shares   ← premium collected over time
+        #   total_gain   = (close_price − adj_basis)  × shares   ← what actually ended up in pocket
+        #
+        # Example (BMNR):
+        #   cost_basis=$18.96, adj_basis=$18.20 (net $0.76/sh premium), close=$18.88
+        #   stock_gain   = (18.88 − 18.96) × 100 = −$8   (sold below purchase price)
+        #   premium_gain = (18.96 − 18.20) × 100 = +$76  (from covered calls)
+        #   total_gain   = (18.88 − 18.20) × 100 = +$68  ✓
+        #
+        # Final adj_basis stored on the closed record:
+        #   closed_adj = cost_basis − total_gain_per_share
+        #              = cost_basis − (close_price − adj_basis)
+        #              = adj_basis + (cost_basis − close_price)    ← stock loss added back
+        #   BMNR: 18.20 + (18.96 − 18.88) = 18.20 + 0.08 = $18.28  ✓
+        #
+        # This means: "after all gains and losses, your net cost per share was $18.28".
+        # It preserves the re-entry blending correctly: when you re-buy at any price,
+        # prior_savings = cost_basis(new) − closed_adj carries the full net history.
+        now = datetime.utcnow()
+        close_event = None
+        if data.get("status") == "CLOSED" and "close_price" in data and data["close_price"] is not None:
+            close_price   = float(data["close_price"])
+            cost_basis    = h.cost_basis
+            adj_basis     = h.adjusted_cost_basis
+            shares        = h.shares
+
+            stock_gain_per_sh   = round(close_price - cost_basis, 4)
+            premium_gain_per_sh = round(cost_basis  - adj_basis,  4)
+            total_gain_per_sh   = round(close_price - adj_basis,  4)
+
+            stock_gain_total    = round(stock_gain_per_sh   * shares, 2)
+            premium_gain_total  = round(premium_gain_per_sh * shares, 2)
+            realized_gain       = round(total_gain_per_sh   * shares, 2)
+
+            # Update adj_basis to reflect the true net cost after close:
+            #   closed_adj = adj_basis + (cost_basis - close_price)
+            # This absorbs the stock-side gain/loss into the basis so the
+            # closed card shows the real net result, and re-entry blending
+            # correctly inherits the full wheel history.
+            closed_adj = round(adj_basis + (cost_basis - close_price), 4)
+            h.adjusted_cost_basis = closed_adj
+
+            close_event = HoldingEvent(
+                user_id       = user_id,
+                holding_id    = h.id,
+                position_id   = None,
+                event_type    = HoldingEventType.MANUAL,
+                shares_delta  = -shares,
+                basis_delta   = round(closed_adj - adj_basis, 4),
+                realized_gain = realized_gain,
+                description   = (
+                    f"{h.symbol} closed: {shares:.0f} sh sold @ ${close_price:.2f} "
+                    f"| stock {'+' if stock_gain_total >= 0 else ''}${stock_gain_total:.2f} "
+                    f"({stock_gain_per_sh:+.2f}/sh vs cost ${cost_basis:.2f}) "
+                    f"| premium +${premium_gain_total:.2f} "
+                    f"(adj basis ${adj_basis:.2f} → ${closed_adj:.2f}) "
+                    f"| total {'gain' if realized_gain >= 0 else 'loss'} "
+                    f"{'+' if realized_gain >= 0 else ''}${realized_gain:.2f}"
+                ),
+                created_at    = now,
+            )
+
+        if "status" in data:
+            h.status = data["status"]
+
+        if close_event:
+            session.add(close_event)
+
+        h.updated_at = now
         session.commit()
         session.refresh(h)
         return _holding_to_dict(h, session)
@@ -212,6 +450,17 @@ def update_holding(*, user_id: int, holding_id: int, data: dict) -> dict:
 
 
 def delete_holding(*, user_id: int, holding_id: int) -> None:
+    """
+    Delete a holding — with one important guard:
+
+    If the holding has any HoldingEvents (meaning premium history has accumulated),
+    we NEVER hard-delete it.  Instead we soft-delete it by setting status=CLOSED
+    and shares=0.  This preserves the adj_basis history so that if the user
+    re-enters the same symbol later, create_holding can inherit the premium savings.
+
+    If there are no events (a freshly-added lot with no option history), we
+    hard-delete as before.
+    """
     session = _portfolio_session()
     try:
         h = session.query(StockHolding).filter(
@@ -220,8 +469,23 @@ def delete_holding(*, user_id: int, holding_id: int) -> None:
         ).first()
         if h is None:
             raise ValueError("Holding not found")
-        session.delete(h)
-        session.commit()
+
+        # Check for premium/event history
+        event_count = (
+            session.query(HoldingEvent)
+            .filter(HoldingEvent.holding_id == holding_id)
+            .count()
+        )
+
+        if event_count > 0:
+            # Soft-delete: preserve record + adj_basis history for future re-entry
+            h.shares   = 0.0
+            h.status   = "CLOSED"
+            h.updated_at = datetime.utcnow()
+            session.commit()
+        else:
+            session.delete(h)
+            session.commit()
     finally:
         session.close()
 

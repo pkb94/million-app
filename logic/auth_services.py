@@ -180,6 +180,16 @@ def get_user(user_id: int):
         session.close()
 
 
+def get_user_by_username(username: str):
+    session = _users_session()
+    try:
+        from database.models import User
+        uname = str(username).strip().lower()
+        return session.query(User).filter(User.username == uname).first()
+    finally:
+        session.close()
+
+
 def list_all_users():
     session = _users_session()
     try:
@@ -217,6 +227,50 @@ def delete_user_admin(user_id: int) -> None:
         if not u:
             raise ValueError("user not found")
         session.delete(u)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def admin_set_password(user_id: int, new_password: str) -> None:
+    """Admin-only: forcibly set a user's password without knowing the old one."""
+    session = _users_session()
+    try:
+        from database.models import User
+        u = session.query(User).filter(User.id == int(user_id)).first()
+        if not u:
+            raise ValueError("user not found")
+        new_password = str(new_password)
+        if not new_password:
+            raise ValueError("new password is required")
+        _validate_password_policy(new_password)
+        u.password_hash = pwd_context.hash(new_password)
+        u.auth_valid_after = datetime.now(timezone.utc).replace(tzinfo=None)
+        session.add(u)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def update_username_admin(user_id: int, new_username: str) -> None:
+    """Admin-only: change a user's username."""
+    session = _users_session()
+    try:
+        from database.models import User
+        uname = str(new_username).strip().lower()
+        if not uname:
+            raise ValueError("username required")
+        u = session.query(User).filter(User.id == int(user_id)).first()
+        if not u:
+            raise ValueError("user not found")
+        u.username = uname
+        session.add(u)
         session.commit()
     except Exception:
         session.rollback()

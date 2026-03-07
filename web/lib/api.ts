@@ -491,6 +491,12 @@ export interface StockHolding {
   total_adjusted_cost: number;
   basis_reduction: number;
   basis_reduction_stored: number;
+  // assignment tracking
+  called_away: boolean;                              // true when CLOSED via CC assignment
+  last_assignment_type: HoldingEventType | null;     // most recent CC_ASSIGNED / CSP_ASSIGNED
+  last_assignment_date: string | null;               // ISO datetime of that event
+  // realized P&L for closed/called-away holdings (null for active)
+  realized_gain: number | null;
 }
 
 export type HoldingEventType = "CC_EXPIRED" | "CC_ASSIGNED" | "CSP_ASSIGNED" | "MANUAL";
@@ -541,6 +547,7 @@ export interface PremiumSymbolRow {
   unrealized_per_share: number;
   live_adj_basis: number;
   adj_basis_stored: number;
+  adj_at_exit: number;
   rows: PremiumLedgerRow[];
 }
 

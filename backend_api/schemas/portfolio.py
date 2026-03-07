@@ -84,8 +84,10 @@ class StockHoldingUpdateRequest(BaseModel):
     cost_basis: Optional[float] = None
     avg_cost: Optional[float] = None
     company_name: Optional[str] = None
+    acquired_date: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    close_price: Optional[float] = None  # exit price when manually closing a holding
 
 
 # ── Portfolio value history ───────────────────────────────────────────────────

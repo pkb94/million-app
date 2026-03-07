@@ -32,8 +32,8 @@ jobs:
         env:
           TRADIER_TOKEN: ""
           JWT_SECRET: "ci-test-secret"
-          JWT_AUDIENCE: "million-app"
-          JWT_ISSUER: "million-api"
+          JWT_AUDIENCE: "optionflow-app"
+          JWT_ISSUER: "optionflow-api"
 
       - name: Coverage report
         working-directory: OptionFlow_V1
@@ -46,8 +46,8 @@ jobs:
         env:
           TRADIER_TOKEN: ""
           JWT_SECRET: "ci-test-secret"
-          JWT_AUDIENCE: "million-app"
-          JWT_ISSUER: "million-api"
+          JWT_AUDIENCE: "optionflow-app"
+          JWT_ISSUER: "optionflow-api"
 
 # ── Job 2: Pre-release gate (blocks develop → main merges) ───────────────────
   pre-release-gate:
@@ -77,8 +77,8 @@ jobs:
         env:
           TRADIER_TOKEN: ""
           JWT_SECRET: "ci-test-secret"
-          JWT_AUDIENCE: "million-app"
-          JWT_ISSUER: "million-api"
+          JWT_AUDIENCE: "optionflow-app"
+          JWT_ISSUER: "optionflow-api"
 
       - name: Verify no test is skipped or xfailed
         working-directory: OptionFlow_V1
@@ -91,5 +91,5 @@ jobs:
         env:
           TRADIER_TOKEN: ""
           JWT_SECRET: "ci-test-secret"
-          JWT_AUDIENCE: "million-app"
-          JWT_ISSUER: "million-api"
+          JWT_AUDIENCE: "optionflow-app"
+          JWT_ISSUER: "optionflow-api"

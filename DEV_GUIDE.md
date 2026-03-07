@@ -415,7 +415,7 @@ Post-launch:            Observability → GEX caching → Tradier real-time → 
 ## Committing Changes
 
 ```bash
-cd ~/Desktop/OptionFlow_V1/OptionFlow_V1
+cd ~/Desktop/OptionFlow_main
 
 # Stage everything
 git add -A

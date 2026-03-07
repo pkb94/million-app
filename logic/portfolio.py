@@ -19,6 +19,7 @@ from database.models import (
     OptionPosition,
     OptionPositionStatus,
     StockAssignment,
+    PremiumLedger,
 )
 
 
@@ -605,6 +606,17 @@ def update_position(*, user_id: int, position_id: int, data: dict) -> dict:
 
 
 def delete_position(*, user_id: int, position_id: int) -> None:
+    """
+    Delete a position and ALL related carry-forward copies / the origin.
+
+    - If deleting an original (carried_from_id=None): also delete every
+      carry-copy that points to it across all weeks.
+    - If deleting a carry-copy (carried_from_id != None): resolve to the
+      original, then delete the original AND all its carry-copies.
+
+    This ensures a "wrong trade" entered in week 1 is fully removed and
+    never resurfaces as a ghost in the 'Carried from prior weeks' section.
+    """
     session = _portfolio_session()
     try:
         pos = session.query(OptionPosition).filter(
@@ -613,7 +625,37 @@ def delete_position(*, user_id: int, position_id: int) -> None:
         ).first()
         if pos is None:
             raise ValueError("Position not found")
-        session.delete(pos)
+
+        # Resolve to the true origin
+        origin_id = pos.carried_from_id if pos.carried_from_id else pos.id
+
+        # Collect all carry-copies of this origin across all weeks
+        copies = session.query(OptionPosition).filter(
+            OptionPosition.user_id == user_id,
+            OptionPosition.carried_from_id == origin_id,
+        ).all()
+
+        # Collect all IDs to delete (origin + carry-copies) for ledger cleanup
+        ids_to_delete = [origin_id] + [copy.id for copy in copies]
+
+        # Delete any PremiumLedger rows for these positions so no ghost totals remain
+        session.query(PremiumLedger).filter(
+            PremiumLedger.user_id == user_id,
+            PremiumLedger.position_id.in_(ids_to_delete),
+        ).delete(synchronize_session=False)
+
+        # Delete carry-copies and origin
+        for copy in copies:
+            session.delete(copy)
+
+        # Delete the origin itself
+        origin = session.query(OptionPosition).filter(
+            OptionPosition.id == origin_id,
+            OptionPosition.user_id == user_id,
+        ).first()
+        if origin:
+            session.delete(origin)
+
         session.commit()
     finally:
         session.close()
@@ -752,11 +794,13 @@ def portfolio_summary(*, user_id: int) -> dict:
                 continue
             seen_origin.add(origin_id)
 
-            net = _net_premium(p) * p.contracts * 100
-            total_premium += net
+            # Use gross premium_in for total (consistent with Premium tab)
+            gross = (p.premium_in or 0.0) * p.contracts * 100
+            net   = _net_premium(p) * p.contracts * 100
+            total_premium += gross
 
             if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
-                realized_pnl += net
+                realized_pnl += net  # realized P&L stays net (accounts for buyback cost)
             elif p.status == OptionPositionStatus.ACTIVE:
                 if p.week_id in open_week_ids:
                     active_count += 1
@@ -776,8 +820,11 @@ def portfolio_summary(*, user_id: int) -> dict:
             seen_origin2.add(origin_id)
             if p.week_id not in week_premium:
                 continue
-            net = _net_premium(p) * p.contracts * 100
-            week_premium[p.week_id] += net
+            # Use gross premium_in (same as Premium tab's total_premium_sold)
+            # so the week-by-week figure matches what you actually collected.
+            gross = (p.premium_in or 0.0) * p.contracts * 100
+            net   = _net_premium(p) * p.contracts * 100
+            week_premium[p.week_id] += gross
             week_pos_count[p.week_id] += 1
             if p.status in (OptionPositionStatus.CLOSED, OptionPositionStatus.EXPIRED):
                 week_realized[p.week_id] += net
