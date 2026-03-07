@@ -105,10 +105,12 @@ function MetricsPanel({ symbols, selected }: { symbols: SymbolSummary[]; selecte
         </div>
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={barData} margin={{ top: 2, right: 4, bottom: 2, left: -10 }} barCategoryGap="25%">
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--foreground)", opacity: 0.6 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 9, fill: "var(--foreground)", opacity: 0.4 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 9, fill: "#6b7280" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
             <Tooltip
-              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 11 }}
+              contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 10, fontSize: 11, color: "#f9fafb" }}
+              labelStyle={{ color: "#f9fafb" }}
+              itemStyle={{ color: "#d1fae5" }}
               formatter={(v: number | undefined) => [`$${(v ?? 0).toFixed(2)}`, "Premium"]}
             />
             <Bar dataKey="prem" radius={[4, 4, 0, 0]}>
@@ -128,7 +130,9 @@ function MetricsPanel({ symbols, selected }: { symbols: SymbolSummary[]; selecte
                 {pieData.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 11 }}
+                contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 10, fontSize: 11, color: "#f9fafb" }}
+                labelStyle={{ color: "#f9fafb" }}
+                itemStyle={{ color: "#d1fae5" }}
                 formatter={(v: number | undefined) => [`$${(v ?? 0).toFixed(2)}`, "Premium"]}
               />
             </PieChart>
