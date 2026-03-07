@@ -25,6 +25,7 @@ Derived holdings basis:
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -359,6 +360,54 @@ def get_premium_dashboard(*, user_id: int) -> dict:
                         "adj_at_exit":         adj_at_exit,   # correct for exited holdings
                         "shares":              h.shares,
                         "symbol":              h.symbol,
+                    }
+                else:
+                    # Holding was hard-deleted (orphaned ledger row).
+                    # Reconstruct cost_basis and adj_at_exit from HoldingEvents using
+                    # the holding_id — events survive even when the holding row is gone.
+                    orphan_events = (
+                        session.query(HoldingEvent)
+                        .filter(
+                            HoldingEvent.holding_id == r.holding_id,
+                            HoldingEvent.user_id == user_id,
+                        )
+                        .order_by(HoldingEvent.id)
+                        .all()
+                    )
+                    total_basis_delta = sum(
+                        (ev.basis_delta or 0.0) for ev in orphan_events
+                    )
+                    # Derive original cost_basis from the first event's description if possible.
+                    # Fall back to spot_price from an associated option_position.
+                    original_cost_basis: float = 0.0
+                    adj_at_exit: float = 0.0
+                    if orphan_events:
+                        # Parse "basis $X.XXXX →" from the first description
+                        desc = orphan_events[0].description or ""
+                        m = re.search(r"basis \$?([\d.]+)\s*→", desc)
+                        if m:
+                            original_cost_basis = float(m.group(1))
+                        else:
+                            # Fallback: reconstruct from last known adj delta
+                            # adj_at_exit = cost_basis + sum(deltas) → cost_basis = adj_at_exit - sum(deltas)
+                            # Use spot_price from a linked option_position as proxy for adj_at_exit
+                            pos = (
+                                session.query(OptionPosition)
+                                .filter(
+                                    OptionPosition.holding_id == r.holding_id,
+                                    OptionPosition.user_id == user_id,
+                                )
+                                .first()
+                            )
+                            adj_at_exit_proxy = pos.spot_price if pos and pos.spot_price else 0.0
+                            original_cost_basis = round(adj_at_exit_proxy - total_basis_delta, 4)
+                        adj_at_exit = round(original_cost_basis + total_basis_delta, 4)
+                    holding_map[r.holding_id] = {
+                        "cost_basis":          original_cost_basis,
+                        "adjusted_cost_basis": adj_at_exit,
+                        "adj_at_exit":         adj_at_exit,
+                        "shares":              0.0,   # holding is gone → exited
+                        "symbol":              r.symbol,
                     }
 
         # by_symbol
